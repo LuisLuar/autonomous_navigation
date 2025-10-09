@@ -1,0 +1,32 @@
+[0.690s] Invoking command in '/home/raynel/autonomous_navigation/src/robot_drivers': PYTHONPATH=/home/raynel/autonomous_navigation/build/robot_drivers/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/raynel/autonomous_navigation/install/robot_drivers/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/robot_drivers build --build-base /home/raynel/autonomous_navigation/build/robot_drivers/build install --record /home/raynel/autonomous_navigation/build/robot_drivers/install.log --single-version-externally-managed install_data
+[0.948s] running egg_info
+[0.948s] creating ../../build/robot_drivers/robot_drivers.egg-info
+[0.948s] writing ../../build/robot_drivers/robot_drivers.egg-info/PKG-INFO
+[0.949s] writing dependency_links to ../../build/robot_drivers/robot_drivers.egg-info/dependency_links.txt
+[0.949s] writing entry points to ../../build/robot_drivers/robot_drivers.egg-info/entry_points.txt
+[0.949s] writing requirements to ../../build/robot_drivers/robot_drivers.egg-info/requires.txt
+[0.949s] writing top-level names to ../../build/robot_drivers/robot_drivers.egg-info/top_level.txt
+[0.949s] writing manifest file '../../build/robot_drivers/robot_drivers.egg-info/SOURCES.txt'
+[0.951s] reading manifest file '../../build/robot_drivers/robot_drivers.egg-info/SOURCES.txt'
+[0.951s] adding license file 'LICENSE'
+[0.951s] writing manifest file '../../build/robot_drivers/robot_drivers.egg-info/SOURCES.txt'
+[0.951s] running build
+[0.951s] running build_py
+[0.952s] creating /home/raynel/autonomous_navigation/build/robot_drivers/build
+[0.952s] creating /home/raynel/autonomous_navigation/build/robot_drivers/build/lib
+[0.952s] creating /home/raynel/autonomous_navigation/build/robot_drivers/build/lib/robot_drivers
+[0.952s] copying robot_drivers/__init__.py -> /home/raynel/autonomous_navigation/build/robot_drivers/build/lib/robot_drivers
+[0.952s] running install
+[0.952s] running install_lib
+[0.953s] creating /home/raynel/autonomous_navigation/install/robot_drivers/lib/python3.10/site-packages/robot_drivers
+[0.953s] copying /home/raynel/autonomous_navigation/build/robot_drivers/build/lib/robot_drivers/__init__.py -> /home/raynel/autonomous_navigation/install/robot_drivers/lib/python3.10/site-packages/robot_drivers
+[0.953s] byte-compiling /home/raynel/autonomous_navigation/install/robot_drivers/lib/python3.10/site-packages/robot_drivers/__init__.py to __init__.cpython-310.pyc
+[0.953s] running install_data
+[0.953s] creating /home/raynel/autonomous_navigation/install/robot_drivers/share/ament_index
+[0.953s] creating /home/raynel/autonomous_navigation/install/robot_drivers/share/ament_index/resource_index
+[0.953s] creating /home/raynel/autonomous_navigation/install/robot_drivers/share/ament_index/resource_index/packages
+[0.954s] copying resource/robot_drivers -> /home/raynel/autonomous_navigation/install/robot_drivers/share/ament_index/resource_index/packages
+[0.954s] copying package.xml -> /home/raynel/autonomous_navigation/install/robot_drivers/share/robot_drivers
+[0.954s] creating /home/raynel/autonomous_navigation/install/robot_drivers/share/robot_drivers/launch
+[0.954s] error: can't copy 'launch/aus_xtion.launch.py': doesn't exist or not a regular file
+[0.974s] Invoked command in '/home/raynel/autonomous_navigation/src/robot_drivers' returned '1': PYTHONPATH=/home/raynel/autonomous_navigation/build/robot_drivers/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/raynel/autonomous_navigation/install/robot_drivers/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/robot_drivers build --build-base /home/raynel/autonomous_navigation/build/robot_drivers/build install --record /home/raynel/autonomous_navigation/build/robot_drivers/install.log --single-version-externally-managed install_data
