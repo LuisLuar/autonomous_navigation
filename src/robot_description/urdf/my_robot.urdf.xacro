@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<robot name="Nav2bot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- ================================================== -->
+    <!-- INCLUDES - Traer todos los componentes necesarios -->
+    <!-- ================================================== -->
+
+    <!-- Incluir propiedades comunes del robot diferencial -->
+    <xacro:include filename="$(find robot_description)/urdf/components/robot_structure/common_properties.xacro"/>
+
+    <!-- Incluir la base móvil del robot diferencial -->
+    <xacro:include filename="$(find robot_description)/urdf/components/robot_structure/mobile_base.xacro"/>
+
+    <!-- Incluir la cámara Asus Xtion -->
+    <xacro:include filename="$(find robot_description)/urdf/components/camera/asus_xtion.urdf.xacro"/>
+
+  <!-- sensore -->
+    <xacro:include filename="$(find robot_description)/urdf/components/imu/mpu6050.urdf.xacro"/>
+    <xacro:include filename="$(find robot_description)/urdf/components/distance_sensor/sharp.urdf.xacro"/>
+
+    <!-- ================================================== -->
+    <!-- ESTRUCTURA DEL ROBOT COMPLETO -->
+    <!-- ================================================== -->
+    
+    <!-- 
+    El mobile_base.xacro ya crea automáticamente:
+    - base_footprint (link de referencia)
+    - base_link (cuerpo principal del robot)
+    - left_wheel_link, right_wheel_link (ruedas)
+    - caster_wheel_link (rueda loca)
+    -->
+
+    <!-- ================================================== -->
+    <!-- MONTAJE DE LA CÁMARA EN EL ROBOT -->
+    <!-- ================================================== -->
+    
+    <!-- 
+    Montar la cámara Asus Xtion en el base_link del robot diferencial
+    Ajusta las coordenadas xyz y rpy según donde quieras posicionar la cámara
+    -->
+    <xacro:sensor_asus_xtion parent="base_link" name="camera">
+        <!-- 
+        xyz: posición relativa al base_link del robot
+          x: adelante/atrás (positivo = adelante)
+          y: izquierda/derecha (positivo = izquierda)
+          z: arriba/abajo (positivo = arriba)
+        
+        rpy: orientación (roll, pitch, yaw en radianes)
+        -->
+        <origin xyz="0.4 0.0 0.35" rpy="0.0 0.0 0.0"/>
+    </xacro:sensor_asus_xtion>
+
+     <!-- IMU (posición estable, cerca del centro de masa) -->
+    <xacro:sensor_mpu6050 parent="base_link" name="imu">
+        <origin xyz="0.0 0.0 0.05" rpy="0.0 0.0 0.0"/>
+    </xacro:sensor_mpu6050>
+
+    <!-- Sensores de distancia Sharp (múltiples posiciones) -->
+    <xacro:sensor_sharp_gp2y0a21yk parent="base_link" name="sharp_front">
+        <origin xyz="0.5 0.0 0.04" rpy="0.0 0.0 0.0"/>
+    </xacro:sensor_sharp_gp2y0a21yk>
+
+    <xacro:sensor_sharp_gp2y0a21yk parent="base_link" name="sharp_left">
+        <origin xyz="0.0 0.25 0.04" rpy="0.0 0.0 ${pi/2}"/>
+    </xacro:sensor_sharp_gp2y0a21yk>
+
+    <xacro:sensor_sharp_gp2y0a21yk parent="base_link" name="sharp_right">
+        <origin xyz="0.0 -0.25 0.04" rpy="0.0 0.0 ${-pi/2}"/>
+    </xacro:sensor_sharp_gp2y0a21yk>
+   
+</robot>
