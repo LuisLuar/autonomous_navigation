@@ -31,6 +31,7 @@ setup(
             'management_gui = gui.management_gui:main',
             'system_monitor = system_monitor.monitor_node:main',
             'safety_controller = safety_controller.safety_node:main',
+            'rele_combiner = safety_controller.rele_combiner_node:main',
         ],
     },
 )
