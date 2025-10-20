@@ -11,18 +11,18 @@ class ReleCombiner(Node):
 
         # Crear suscriptores
         self.subscribers = [
-            self.create_subscription(Bool, '/motor_left',   self.cb_left_motor, 10),
-            self.create_subscription(Bool, '/motor_right',  self.cb_right_motor, 10),
-            self.create_subscription(Bool, '/stop',         self.cb_stop, 10),
-            self.create_subscription(Bool, '/turn_left',    self.cb_turn_left, 10),
-            self.create_subscription(Bool, '/turn_right',   self.cb_turn_right, 10),
-            self.create_subscription(Bool, '/safety',       self.cb_safety, 10)
+            self.create_subscription(Bool, '/start_motor_left',   self.cb_left_motor, 10),
+            self.create_subscription(Bool, '/start_motor_right',  self.cb_right_motor, 10),
+            self.create_subscription(Bool, '/light_stop',         self.cb_stop, 10),
+            self.create_subscription(Bool, '/light_left',    self.cb_turn_left, 10),
+            self.create_subscription(Bool, '/light_right',   self.cb_turn_right, 10),
+            self.create_subscription(Bool, '/light_safety',       self.cb_safety, 10)
         ]
 
         # Publicador para enviar UInt8 a la ESP32
         self.rele_pub = self.create_publisher(UInt8, '/rele/control', 10)
 
-        self.get_logger().info("Nodo 'rele_combiner' iniciado. Escuchando 6 entradas booleanas.")
+        #self.get_logger().info("Nodo 'rele_combiner' iniciado. Escuchando 6 entradas booleanas.")
 
     # Callbacks de cada tópico
     def cb_left_motor(self, msg):
@@ -60,7 +60,7 @@ class ReleCombiner(Node):
         msg.data = combined_value
         self.rele_pub.publish(msg)
 
-        self.get_logger().info(f"Estado combinado publicado: {bin(combined_value)}")
+        #self.get_logger().info(f"Estado combinado publicado: {bin(combined_value)}")
 
 def main(args=None):
     rclpy.init(args=args)
@@ -70,8 +70,11 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            node.destroy_node()
+            rclpy.shutdown()
+        except:
+            pass  # Ignorar error si ya se hizo shutdown
 
 if __name__ == '__main__':
     main()

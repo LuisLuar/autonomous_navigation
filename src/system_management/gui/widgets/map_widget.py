@@ -11,8 +11,9 @@ import os
 from config.constants import Constants
 
 class MapWidget(QWidget):
-    def __init__(self):
+    def __init__(self, ros_node=None):
         super().__init__()
+        self.ros_node = ros_node
         self.map = None
         self.current_position = None
         self.destination = None
@@ -190,6 +191,13 @@ class MapWidget(QWidget):
         
         # Imprimir en terminal (para prueba)
         print(f"DESTINO_SELECCIONADO: {lat:.6f}, {lng:.6f}")
+
+        if self.ros_node:
+            try:
+                # Publicar directamente usando el método helper
+                self.ros_node.publish_goal(lat, lng)
+            except Exception as e:
+                print(f"[MapWidget] Error publicando goal: {e}")
     
     def clear_destination(self):
         if self.destination:

@@ -128,10 +128,10 @@ void setup() {
   while (!Serial && millis() - start < 2000) { delay(10); } // espera max 2s
 
 
-  if (!IMU_begin()) {
+  /*if (!IMU_begin()) {
     Serial.println("Error al inicializar el IMU");
     while (1);
-  }
+  }*/
 
   //_____________________MOTOR______________________
   SabertoothSerial.begin(9600, SERIAL_8N1, -1, SABERTOOTH_TX);
@@ -173,8 +173,9 @@ void setup() {
 }
 
 void loop() {
-  delay(10);
+  watchdog();
   RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(40)));
+  delay(10);
 }
 
 //_______FUNCION PARA EJECUTAR EN EL SEGUNDO NUCLEO_____________-
@@ -184,11 +185,11 @@ void ControlLoop(void *parameter) {
   
   while (1) {
 
-    dt_imu = millis() - lastTime_imu;
+    /*dt_imu = millis() - lastTime_imu;
     if (dt_imu >= 50) {
       lastTime_imu = millis();
       IMU_update();
-    }
+    }*/
 
     dt_enc = millis() - lastTime_enc; //milisegundos
     if (dt_enc >= sampleTime_enc) {// Se actualiza cada tiempo de muestreo

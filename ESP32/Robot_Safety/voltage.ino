@@ -1,3 +1,4 @@
+//voltage.ino
 #define ADC_RESOLUTION 4095.0
 #define VREF 3.3         // Voltaje de referencia de la ESP32
 // El módulo FZ0430 tiene una relación de 5:1

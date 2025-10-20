@@ -1,3 +1,4 @@
+//microros_configuration.ino
 /*Motor controller using micro_ros serial set_microros_transports*/
 #include <WiFi.h>  // ← Nueva librería
 
@@ -19,10 +20,20 @@ rcl_timer_t publish_timer;
 rcl_publisher_t battery_array_pub;
 rcl_publisher_t motors_array_pub;
 
+//__________VARIABLES PARA SEGURIDAD_________________________-
+unsigned long last_agent_check = 0;
+const unsigned long AGENT_TIMEOUT_MS = 10000;  // 10s sin respuesta → error
+bool agent_connected = true;
+//_________________________________________________
+
 //____________INTERNET_________________
-const char* ssid = "OMEN";
+/*const char* ssid = "OMEN";
 const char* password = "12345678";
-const char* agent_ip = "10.42.0.1";  // ← IP de tu PC (donde corre el agent)
+const char* agent_ip = "10.42.0.1";  // ← IP de tu PC (donde corre el agent)*/
+
+const char* ssid = "Fastnett-Fibra-ConstructoraVasqu";
+const char* password = "1706312434";
+const char* agent_ip = "192.168.100.167";
 
 const uint32_t agent_port = 8888;
 //___________________________m
@@ -43,6 +54,13 @@ void error_loop() {
 
     digitalWrite(led_error, !digitalRead(led_error));
     Serial.println("error..");
+    // Desactivar todos los relés
+    digitalWrite(GPIO_RELE_M_LEFT, LOW);
+    digitalWrite(GPIO_RELE_M_RIGHT, LOW);
+    digitalWrite(GPIO_RELE_STOP, LOW);
+    digitalWrite(GPIO_RELE_LEFT, LOW);
+    digitalWrite(GPIO_RELE_RIGHT, LOW);
+    digitalWrite(GPIO_RELE_SAFETY, LOW);
     delay(500);
 
     if (millis() - last_error_time > 3000) ESP.restart();
@@ -80,7 +98,7 @@ void beginMicroros() {
   //create init_options, node
   Serial.println("INICIANDO");
   RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
-  RCCHECK(rclc_node_init_default(&node, "robot_safety", "", &support));
+  RCCHECK(rclc_node_init_default(&node, "Robot_Safety", "", &support));
 
   // Configurar array de batería (2 elementos: voltage_12v, voltage_5v)
   setup_float32_multiarray(&battery_array_msg, 2, "battery_array");
@@ -218,3 +236,35 @@ void setup_float32_multiarray(std_msgs__msg__Float32MultiArray * msg,
 }
 
 //_________________________________________________________
+void watchdog(){
+  // Verificación periódica del agente micro-ROS
+  if (millis() - last_agent_check > 3000) {
+    last_agent_check = millis();
+    rcl_ret_t ret = rmw_uros_ping_agent(100, 1);  // Espera 100ms respuesta
+    if (ret != RCL_RET_OK) {
+      if (agent_connected) {
+        Serial.println("⚠️ Conexión con agente perdida. Esperando reconexión...");
+        agent_connected = false;
+      }
+    } else {
+      if (!agent_connected) {
+        Serial.println("✅ Conexión con agente restaurada.");
+      }
+      agent_connected = true;
+    }
+
+    // Si se perdió la conexión por más de 10s → entra en modo seguro
+    static unsigned long disconnected_since = 0;
+    if (!agent_connected) {
+      if (disconnected_since == 0)
+        disconnected_since = millis();
+
+      if (millis() - disconnected_since > AGENT_TIMEOUT_MS) {
+        Serial.println("🚨 Conexión perdida por más de 10s. Activando modo seguro.");
+        error_loop();  // Se queda parpadeando y reinicia tras unos segundos
+      }
+    } else {
+      disconnected_since = 0;
+    }
+  }
+}

@@ -2,12 +2,22 @@
 #include <WiFi.h>  // ← Nueva librería
 
 //____________INTERNET_________________
-const char* ssid = "OMEN";
+/*const char* ssid = "OMEN";
 const char* password = "12345678";
-const char* agent_ip = "10.42.0.1";  // ← IP de tu PC (donde corre el agent)
+const char* agent_ip = "10.42.0.1";  // ← IP de tu PC (donde corre el agent)*/
+
+const char* ssid = "Fastnett-Fibra-ConstructoraVasqu";
+const char* password = "1706312434";
+const char* agent_ip = "192.168.100.167";
 
 const uint32_t agent_port = 8888;
 //___________________________
+
+//___________variables de seguridad_______________
+unsigned long last_agent_check = 0;
+const unsigned long AGENT_TIMEOUT_MS = 10000;  // 10 s sin comunicación
+bool agent_connected = true;
+//_________________________________________________
 
 
 rcl_allocator_t allocator;
@@ -18,18 +28,18 @@ rcl_subscription_t subscriber;
 rcl_subscription_t reset_subscriber;
 rcl_publisher_t odom_publisher;
 rcl_publisher_t imu_publisher;
-rcl_publisher_t range1_publisher;
-rcl_publisher_t range2_publisher;
-rcl_publisher_t range3_publisher;
+rcl_publisher_t range_front_publisher;
+rcl_publisher_t range_left_publisher;
+rcl_publisher_t range_right_publisher;
 rcl_publisher_t reset_publisher;
 
 geometry_msgs__msg__Twist msg;
 nav_msgs__msg__Odometry odom_msg;
 sensor_msgs__msg__Imu imu_msg;
 
-sensor_msgs__msg__Range range1_msg;
-sensor_msgs__msg__Range range2_msg;
-sensor_msgs__msg__Range range3_msg;
+sensor_msgs__msg__Range range_front_msg;
+sensor_msgs__msg__Range range_left_msg;
+sensor_msgs__msg__Range range_right_msg;
 
 std_msgs__msg__Bool sub_msg;
 std_msgs__msg__Bool pub_msg;
@@ -57,9 +67,13 @@ void error_loop() {
   unsigned long long last_error_time = millis();
   while (1) {
 
+    ST.motor(1, 0);
+    ST.motor(2, 0);
+    
     digitalWrite(led_error, !digitalRead(led_error));
     Serial.println("error..");
     delay(500);
+    
 
     if (millis() - last_error_time > 3000) ESP.restart();
   }
@@ -102,10 +116,10 @@ void beginMicroros() {
   RCCHECK(rclc_publisher_init_default(&odom_publisher,  &node,ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry), "odom/unfiltered"));
   RCCHECK(rclc_publisher_init_default(&imu_publisher,   &node,ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu),   "imu/unfiltered"));
 
-  //create a range1 publisher
-  RCCHECK(rclc_publisher_init_default(&range1_publisher,  &node,ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Range),"range1/filtered"));
-  RCCHECK(rclc_publisher_init_default(&range2_publisher,  &node,ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Range),"range2/filtered"));
-  RCCHECK(rclc_publisher_init_default(&range3_publisher,  &node,ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Range),"range3/filtered"));
+  //create a range_front publisher
+  RCCHECK(rclc_publisher_init_default(&range_front_publisher,  &node,ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Range),"range/front"));
+  RCCHECK(rclc_publisher_init_default(&range_left_publisher,  &node,ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Range),"range/left"));
+  RCCHECK(rclc_publisher_init_default(&range_right_publisher,  &node,ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Range),"range/right"));
          
   RCCHECK(rclc_timer_init_default(&odom_timer,  &support,RCL_MS_TO_NS(50),publish_odom));
   RCCHECK(rclc_timer_init_default(&range_timer, &support,RCL_MS_TO_NS(60),publish_ranges_all));
@@ -124,25 +138,25 @@ void beginMicroros() {
 
   //________mensaje fijo______________
   // Mensaje fijo range 1
-  range1_msg.radiation_type = sensor_msgs__msg__Range__INFRARED;
-  range1_msg.field_of_view = 0.52;
-  range1_msg.min_range = 0.04;
-  range1_msg.max_range = 0.5;
-  micro_ros_string_utilities_set(range1_msg.header.frame_id, "range1_link");
+  range_front_msg.radiation_type = sensor_msgs__msg__Range__INFRARED;
+  range_front_msg.field_of_view = 0.52;
+  range_front_msg.min_range = 0.04;
+  range_front_msg.max_range = 0.5;
+  micro_ros_string_utilities_set(range_front_msg.header.frame_id, "range_front_link");
 
    // Mensaje fijo range 1
-  range2_msg.radiation_type = sensor_msgs__msg__Range__INFRARED;
-  range2_msg.field_of_view = 0.52;
-  range2_msg.min_range = 0.04;
-  range2_msg.max_range = 0.5;
-  micro_ros_string_utilities_set(range2_msg.header.frame_id, "range2_link");
+  range_left_msg.radiation_type = sensor_msgs__msg__Range__INFRARED;
+  range_left_msg.field_of_view = 0.52;
+  range_left_msg.min_range = 0.04;
+  range_left_msg.max_range = 0.5;
+  micro_ros_string_utilities_set(range_left_msg.header.frame_id, "range_left_link");
 
    // Mensaje fijo range 1
-  range3_msg.radiation_type = sensor_msgs__msg__Range__INFRARED;
-  range3_msg.field_of_view = 0.52;
-  range3_msg.min_range = 0.04;
-  range3_msg.max_range = 0.5;
-  micro_ros_string_utilities_set(range3_msg.header.frame_id, "range3_link");
+  range_right_msg.radiation_type = sensor_msgs__msg__Range__INFRARED;
+  range_right_msg.field_of_view = 0.52;
+  range_right_msg.min_range = 0.04;
+  range_right_msg.max_range = 0.5;
+  micro_ros_string_utilities_set(range_right_msg.header.frame_id, "range_right_link");
   //_________________________________________________________________
 
 }
@@ -193,26 +207,26 @@ void publish_odom(rcl_timer_t* timer, int64_t last_call_time) {
 //____________________RANGE______________________________________________-
 void publish_ranges_all(rcl_timer_t * timer, int64_t last_call_time) {
  
-  // Range1
+  // range_front
   struct timespec time_stamp = getTime();
-  range1_msg.header.stamp.sec = time_stamp.tv_sec;
-  range1_msg.header.stamp.nanosec = time_stamp.tv_nsec;
-  range1_msg.range = sensor1.distAnalog() / 100.0;
-  RCSOFTCHECK(rcl_publish(&range1_publisher, &range1_msg, NULL));
+  range_front_msg.header.stamp.sec = time_stamp.tv_sec;
+  range_front_msg.header.stamp.nanosec = time_stamp.tv_nsec;
+  range_front_msg.range = sensor1.distAnalog() / 100.0;
+  RCSOFTCHECK(rcl_publish(&range_front_publisher, &range_front_msg, NULL));
   
-  // Range2
+  // range_left
   time_stamp = getTime();
-  range2_msg.header.stamp.sec = time_stamp.tv_sec;
-  range2_msg.header.stamp.nanosec = time_stamp.tv_nsec;
-  range2_msg.range = sensor2.distAnalog() / 100.0;
-  RCSOFTCHECK(rcl_publish(&range2_publisher, &range2_msg, NULL));
+  range_left_msg.header.stamp.sec = time_stamp.tv_sec;
+  range_left_msg.header.stamp.nanosec = time_stamp.tv_nsec;
+  range_left_msg.range = sensor2.distAnalog() / 100.0;
+  RCSOFTCHECK(rcl_publish(&range_left_publisher, &range_left_msg, NULL));
 
-  // Range3
+  // range_right
   time_stamp = getTime();
-  range3_msg.header.stamp.sec = time_stamp.tv_sec;
-  range3_msg.header.stamp.nanosec = time_stamp.tv_nsec;
-  range3_msg.range = sensor3.distAnalog() / 100.0;
-  RCSOFTCHECK(rcl_publish(&range3_publisher, &range3_msg, NULL));
+  range_right_msg.header.stamp.sec = time_stamp.tv_sec;
+  range_right_msg.header.stamp.nanosec = time_stamp.tv_nsec;
+  range_right_msg.range = sensor3.distAnalog() / 100.0;
+  RCSOFTCHECK(rcl_publish(&range_right_publisher, &range_right_msg, NULL));
 }
 
 
@@ -268,5 +282,37 @@ void publish_bool(bool value) {
   
   Serial.printf("Booleano publicado: %s\n", value ? "true" : "false");
 }
-
 //_________________________________________________
+
+//_________________________________________________________
+void watchdog(){
+  if (millis() - last_agent_check > 3000) {
+    last_agent_check = millis();
+    rcl_ret_t ret = rmw_uros_ping_agent(100, 1);
+    if (ret != RCL_RET_OK) {
+      if (agent_connected) {
+        Serial.println("⚠️ Agente micro-ROS no responde.");
+        agent_connected = false;
+      }
+    } else {
+      if (!agent_connected) {
+        Serial.println("✅ Conexión con agente restaurada.");
+      }
+      agent_connected = true;
+    }
+
+    // Si se pierde por más de 10s → modo seguro
+    static unsigned long disconnected_since = 0;
+    if (!agent_connected) {
+      if (disconnected_since == 0)
+        disconnected_since = millis();
+
+      if (millis() - disconnected_since > AGENT_TIMEOUT_MS) {
+        Serial.println("🚨 Conexión perdida >10s. Activando modo seguro...");
+        error_loop();
+      }
+    } else {
+      disconnected_since = 0;
+    }
+  }
+}

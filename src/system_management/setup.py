@@ -30,8 +30,12 @@ setup(
         'console_scripts': [
             'management_gui = gui.management_gui:main',
             'system_monitor = system_monitor.monitor_node:main',
-            'safety_controller = safety_controller.safety_node:main',
+            'VC_supervisor = safety_controller.voltage_current_supervisor:main',
             'rele_combiner = safety_controller.rele_combiner_node:main',
+            'esp32_supervisor = safety_controller.esp32_supervisor:main',
+            'components_supervisor = safety_controller.components_supervisor:main',
+            'gui = gui.management_gui:main',
+            'microros_agent_supervisor = safety_controller.microros_agent_supervisor:main',
         ],
     },
 )
