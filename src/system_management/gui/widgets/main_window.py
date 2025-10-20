@@ -4,6 +4,8 @@ from PySide6.QtWidgets import (QMainWindow, QTabWidget, QVBoxLayout,
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
+from PySide6.QtCore import QTimer
+
 from config.constants import Constants
 from utils.styles import get_app_style
 from widgets.sensor_monitor import SensorMonitorWidget
@@ -11,8 +13,9 @@ from widgets.map_widget import MapWidget
 from widgets.camera_widget import CameraWidget
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, ros_node=None):
         super().__init__()
+        self.ros_node = ros_node
         self.setWindowTitle(f"{Constants.APP_TITLE} v{Constants.APP_VERSION}")
         self.setGeometry(100, 100, Constants.WINDOW_WIDTH, Constants.WINDOW_HEIGHT)
         self.setStyleSheet(get_app_style())
@@ -82,11 +85,11 @@ class MainWindow(QMainWindow):
     
     def setup_tabs(self):
         # Pestaña 1: Monitoreo de Sensores
-        self.sensor_tab = SensorMonitorWidget()
+        self.sensor_tab = SensorMonitorWidget(ros_node=self.ros_node)
         self.tab_widget.addTab(self.sensor_tab, "📊 MONITOREO SENSORES")
         
         # Pestaña 2: Mapa y Navegación
-        self.map_tab = MapWidget()
+        self.map_tab = MapWidget(ros_node=self.ros_node)
         self.tab_widget.addTab(self.map_tab, "🗺️ MAPA Y NAVEGACIÓN")
         
         # Pestaña 3: Cámara y Visión (placeholder por ahora)
@@ -117,8 +120,21 @@ class MainWindow(QMainWindow):
         status_bar.showMessage("Sistema listo - Desconectado de ROS2")
         
         # Indicadores en la barra de estado
-        connection_indicator = QLabel("🔴 ROS2")
-        connection_indicator.setStyleSheet("color: #e74c3c; font-weight: bold;")
-        
-        status_bar.addPermanentWidget(connection_indicator)
+        self.connection_indicator = QLabel("🔴 ROS2")
+        self.connection_indicator.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        status_bar.addPermanentWidget(self.connection_indicator)
         self.setStatusBar(status_bar)
+
+        # Timer para actualizar indicador de conexión
+        if self.ros_node:
+            timer = QTimer(self)
+            timer.timeout.connect(self.update_ros_connection_indicator)
+            timer.start(500)
+    
+    def update_ros_connection_indicator(self):
+        if self.ros_node and getattr(self.ros_node, 'any_msg_received', False):
+            self.connection_indicator.setText("🟢 ROS2")
+            self.connection_indicator.setStyleSheet("color: #27ae60; font-weight: bold;")
+        else:
+            self.connection_indicator.setText("🔴 ROS2")
+            self.connection_indicator.setStyleSheet("color: #e74c3c; font-weight: bold;")

@@ -1,5 +1,5 @@
 //imu_reader.ino
-#include <Adafruit_MPU6050.h>
+/*#include <Adafruit_MPU6050.h>
 
 Adafruit_MPU6050 imu;
 
@@ -98,4 +98,4 @@ bool IMU_update() {
   yaw_imu   += gz * (dt_imu / 1000.0);
 
   return true;
-}
+}*/
