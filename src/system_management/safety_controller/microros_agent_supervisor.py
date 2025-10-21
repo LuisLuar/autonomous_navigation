@@ -15,7 +15,7 @@ class MicroROSAgentSupervisor(Node):
         )
 
         self.timer = self.create_timer(0.5, self.check_agent)  # 2 Hz
-        self.get_logger().info('✅ MicroROS Agent Supervisor iniciado — monitoreando agente...')
+        #self.get_logger().info('✅ MicroROS Agent Supervisor iniciado — monitoreando agente...')
 
     def check_agent(self):
         # Busca el proceso micro_ros_agent UDP4

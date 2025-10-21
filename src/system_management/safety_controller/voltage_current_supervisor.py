@@ -60,12 +60,12 @@ class VoltageCurrentSupervisor(Node):
         # Timer para verificación periódica de timeouts
         self.timeout_timer = self.create_timer(2.0, self.check_timeouts)
         
-        self.get_logger().info("🟢 Safety Monitor Inicializado - Enviando estados iniciales")
+        #self.get_logger().info("🟢 Safety Monitor Inicializado - Enviando estados iniciales")
 
     def initial_status_publish(self):
         """Publica estados iniciales inmediatamente al iniciar el nodo"""
         if not self.initial_publications_done:
-            self.get_logger().info("📢 Publicando estados iniciales...")
+            #self.get_logger().info("📢 Publicando estados iniciales...")
             
             # Publicar estados de "ESPERANDO DATOS" para todos los componentes
             self.publish_initial_battery_status()
@@ -74,7 +74,7 @@ class VoltageCurrentSupervisor(Node):
             # Marcar que ya se hicieron las publicaciones iniciales
             self.initial_publications_done = True
             self.initial_publish_timer.cancel()  # Detener este timer después de la primera ejecución
-            self.get_logger().info("✅ Estados iniciales publicados")
+            #self.get_logger().info("✅ Estados iniciales publicados")
 
     def publish_initial_battery_status(self):
         """Publica estado inicial de batería (ESPERANDO DATOS)"""
@@ -94,7 +94,7 @@ class VoltageCurrentSupervisor(Node):
         ]
         
         self.battery_12v_pub.publish(battery_status)
-        self.get_logger().info("🔶 Batería 12V: Estado inicial publicado (ESPERANDO DATOS)")
+        #self.get_logger().info("🔶 Batería 12V: Estado inicial publicado (ESPERANDO DATOS)")
 
         # Voltaje 5V - Estado INICIAL
         voltage_5v_status = DiagnosticStatus()
@@ -110,7 +110,7 @@ class VoltageCurrentSupervisor(Node):
         ]
         
         self.voltage_5v_pub.publish(voltage_5v_status)
-        self.get_logger().info("🔶 Voltaje 5V: Estado inicial publicado (ESPERANDO DATOS)")
+        #self.get_logger().info("🔶 Voltaje 5V: Estado inicial publicado (ESPERANDO DATOS)")
 
     def publish_initial_motor_status(self):
         """Publica estado inicial de motores (ESPERANDO DATOS)"""
@@ -128,7 +128,7 @@ class VoltageCurrentSupervisor(Node):
             self.create_key_value("timestamp", f"{time.time():.2f}")
         ]
         self.motor_left_status_pub.publish(left_status)
-        self.get_logger().info("🔶 Motor izquierdo: Estado inicial publicado (ESPERANDO DATOS)")
+        #self.get_logger().info("🔶 Motor izquierdo: Estado inicial publicado (ESPERANDO DATOS)")
 
         # Motor derecho - Estado INICIAL
         right_status = DiagnosticStatus()
@@ -143,7 +143,7 @@ class VoltageCurrentSupervisor(Node):
             self.create_key_value("timestamp", f"{time.time():.2f}")
         ]
         self.motor_right_status_pub.publish(right_status)
-        self.get_logger().info("🔶 Motor derecho: Estado inicial publicado (ESPERANDO DATOS)")
+        #self.get_logger().info("🔶 Motor derecho: Estado inicial publicado (ESPERANDO DATOS)")
 
     def battery_callback(self, msg):
         """Callback para datos de batería con timestamp"""
@@ -157,7 +157,7 @@ class VoltageCurrentSupervisor(Node):
             
             # Solo procesar si es la primera vez o si se recuperó de timeout
             if not self.battery_connected:
-                self.get_logger().info("🔋 Batería: Conexión establecida - Primeros datos recibidos")
+                #self.get_logger().info("🔋 Batería: Conexión establecida - Primeros datos recibidos")
                 self.battery_connected = True
             
             self.publish_battery_status()
@@ -175,7 +175,7 @@ class VoltageCurrentSupervisor(Node):
             
             # Solo procesar si es la primera vez o si se recuperó de timeout
             if not self.motors_connected:
-                self.get_logger().info("⚙️ Motores: Conexión establecida - Primeros datos recibidos")
+                #self.get_logger().info("⚙️ Motores: Conexión establecida - Primeros datos recibidos")
                 self.motors_connected = True
             
             self.publish_motor_status()

@@ -62,7 +62,7 @@ class Esp32DynamicSupervisor(Node):
         self.topic_subscribers = {}
         self.setup_topic_monitors()
 
-        self.get_logger().info('🟢 Supervisor ESP32 dinámico iniciado')
+        #self.get_logger().info('🟢 Supervisor ESP32 dinámico iniciado')
 
     def setup_topic_monitors(self):
         """Configura suscriptores específicos para monitorear actividad de topics críticos"""
@@ -90,7 +90,7 @@ class Esp32DynamicSupervisor(Node):
                         qos_profile=10
                     )
                     self.topic_subscribers[topic] = subscriber
-                    self.get_logger().info(f"🔍 Monitoreando actividad en: {topic}")
+                    #self.get_logger().info(f"🔍 Monitoreando actividad en: {topic}")
                 except Exception as e:
                     self.get_logger().warning(f"⚠️ No se pudo suscribir a {topic}: {e}")
 
@@ -263,7 +263,7 @@ class Esp32DynamicSupervisor(Node):
                     else:
                         status_msg = f"{icon} {esp_name}: {msg.message}"
                     
-                    self.get_logger().info(status_msg)
+                    #self.get_logger().info(status_msg)
                     self.last_node_states[expected_node] = current_state
 
                 # Publicar siempre el estado

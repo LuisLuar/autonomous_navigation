@@ -95,7 +95,7 @@ class ComponentDiagnosticNode(Node):
             'imu_linear_acceleration_max': 20.0  # m/s²
         }
 
-        self.get_logger().info("🟢 Nodo de diagnóstico de componentes iniciado")
+        #self.get_logger().info("🟢 Nodo de diagnóstico de componentes iniciado")
 
     # Callbacks para cada componente
     def encoder_callback(self, msg):
@@ -337,17 +337,17 @@ class ComponentDiagnosticNode(Node):
             
             if last_status != current_status:
                 icon = "🟢" if comp['level'] == DiagnosticStatus.OK else "⚠️" if comp['level'] == DiagnosticStatus.WARN else "❌"
-                self.get_logger().info(f"{icon} {comp['name']}: {comp['status']} ({comp['time_since']:.1f}s)")
+                #self.get_logger().info(f"{icon} {comp['name']}: {comp['status']} ({comp['time_since']:.1f}s)")
                 self.last_logged_status[comp['name']] = current_status
         
         # Verificar cambio en estado general
         if self.last_logged_overall != overall_level:
-            if overall_level == DiagnosticStatus.OK:
+            """if overall_level == DiagnosticStatus.OK:
                 self.get_logger().info("🎯 Todos los componentes funcionando correctamente")
             elif overall_level == DiagnosticStatus.WARN:
                 self.get_logger().warn("⚠️ Algunos componentes con advertencias")
             else:
-                self.get_logger().error("🚨 Error crítico en componentes")
+                self.get_logger().error("🚨 Error crítico en componentes")"""
             self.last_logged_overall = overall_level
 
     def destroy_node(self):
