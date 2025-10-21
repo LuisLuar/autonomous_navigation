@@ -5,20 +5,17 @@ from PySide6.QtGui import QColor
 from PySide6.QtCore import QSize
 
 from config.constants import Constants
+from utils.styles_light import get_app_style, get_theme_colors
 
 class SensorMonitorWidget(QWidget):
     def __init__(self, ros_node=None):
-        """
-        Widget principal para el monitoreo de sensores y sistema.
-        
-        Args:
-            ros_node: Nodo ROS2 para la comunicación
-        """
         super().__init__()
         self.ros_node = ros_node
-        self.sensor_states = {}  # Diccionario para almacenar estados de sensores
-        self.diagnostic_messages = []  # Almacena los últimos mensajes DiagnosticStatus
+        self.sensor_states = {}
+        self.diagnostic_messages = []
+        self.setStyleSheet(get_app_style())  # Aplicar estilos generales
         self.setup_ui()
+        self.theme_colors = get_theme_colors()
 
         # Timer para actualizar UI desde ros_node
         self.update_timer = QTimer()
@@ -29,13 +26,12 @@ class SensorMonitorWidget(QWidget):
     # CONFIGURACIÓN UI
     # ==============================================================
     def setup_ui(self):
-        """Configura la interfaz de usuario principal."""
         layout = QVBoxLayout(self)
         layout.setSpacing(15)
         
         # Título de la sección
         title = QLabel("MONITOREO DE SENSORES Y SISTEMA")
-        title.setStyleSheet(f"color: {Constants.COLORS['accent']}; font-size: {Constants.FONT_SIZE['title']}; font-weight: bold;")
+        title.setProperty("class", "sensor-title")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
         
@@ -80,27 +76,17 @@ class SensorMonitorWidget(QWidget):
     # LISTADO DE MENSAJES DIAGNÓSTICO MEJORADO
     # ==============================================================
     def create_diagnostic_list(self, title):
-        """
-        Crea un grupo con lista para mostrar mensajes de diagnóstico.
-        
-        Args:
-            title: Título del grupo
-            
-        Returns:
-            QGroupBox: Contenedor con la lista de diagnóstico
-        """
         group = QGroupBox(f"📋 {title} - ESTADOS DEL SISTEMA")
-        group.setStyleSheet(Constants.STYLES['group_title'])
         layout = QVBoxLayout()
         
         # Contador de estados
         status_count_label = QLabel("⚪ 0 | ⚠️ 0 | 🔴 0")
-        status_count_label.setStyleSheet(Constants.STYLES['count_label'])
+        status_count_label.setProperty("class", "diagnostic-counter")
         status_count_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(status_count_label)
         
         list_widget = QListWidget()
-        list_widget.setStyleSheet(Constants.STYLES['list_style'])
+        list_widget.setProperty("class", "diagnostic-list")
         list_widget.setSpacing(3)  # Espacio entre items
         list_widget.setUniformItemSizes(False)  # Permite diferentes alturas
         
@@ -112,13 +98,6 @@ class SensorMonitorWidget(QWidget):
         return group
 
     def update_diagnostic_list(self, list_widget, diagnostics):
-        """
-        Actualiza la lista de diagnóstico con los mensajes recibidos.
-        
-        Args:
-            list_widget: QListWidget a actualizar
-            diagnostics: Lista de mensajes DiagnosticStatus
-        """
         list_widget.clear()
         
         # Contadores para el resumen
@@ -185,15 +164,7 @@ class SensorMonitorWidget(QWidget):
             list_widget.addItem(item)
 
     def _get_message_level(self, msg):
-        """
-        Extrae el nivel de un mensaje de forma segura.
-        
-        Args:
-            msg: Mensaje DiagnosticStatus
-            
-        Returns:
-            int: Nivel del mensaje (0=OK, 1=WARNING, 2=ERROR)
-        """
+        """Extrae el nivel de un mensaje de forma segura."""
         level_raw = msg.level
         if isinstance(level_raw, bytes):
             return int.from_bytes(level_raw, byteorder='little', signed=False)
@@ -204,29 +175,14 @@ class SensorMonitorWidget(QWidget):
                 return 2
 
     def _get_diagnostic_style(self, level):
-        """
-        Obtiene el estilo visual para un nivel de diagnóstico.
-        
-        Args:
-            level: Nivel de diagnóstico (0=OK, 1=WARNING, 2=ERROR)
-            
-        Returns:
-            tuple: (icon, color, background, border_color)
-        """
-        if level == 2:  # ERROR
-            return "🔴", Constants.COLORS['error'], "#2d1b1b", "#c0392b"
-        elif level == 1:  # WARN
-            return "⚠️", Constants.COLORS['warning'], "#2d2b1b", "#d35400"
-        else:  # OK
-            return "⚪", Constants.COLORS['text_primary'], "#1b2d1b", Constants.COLORS['text_primary']
+        """Obtiene el estilo visual para un nivel de diagnóstico."""
+        level_map = {2: 'error', 1: 'warning', 0: 'ok'}
+        level_key = level_map.get(level, 'ok')
+        return self.theme_colors['diagnostic'][level_key]
+
 
     def _add_separator_item(self, list_widget):
-        """
-        Agrega un separador visual entre grupos de niveles.
-        
-        Args:
-            list_widget: QListWidget donde agregar el separador
-        """
+        """Agrega un separador visual entre grupos de niveles."""
         separator = QListWidgetItem()
         separator.setFlags(Qt.NoItemFlags)  # Hacerlo no seleccionable
         separator.setBackground(QColor("#34495e"))
@@ -235,35 +191,23 @@ class SensorMonitorWidget(QWidget):
     
     # === GRUPOS DE SENSORES ===
     def create_sensor_group(self, title, sensors):
-        """
-        Crea un grupo de sensores con su estado y valor.
-        
-        Args:
-            title: Título del grupo
-            sensors: Lista de tuplas (nombre_sensor, id_sensor)
-            
-        Returns:
-            QGroupBox: Contenedor con los sensores
-        """
         group = QGroupBox(title)
-        group.setStyleSheet(Constants.STYLES['group_title'])
-        
         layout = QGridLayout()
         layout.setSpacing(10)
         
         for i, (sensor_name, sensor_id) in enumerate(sensors):
             # Nombre del sensor
             name_label = QLabel(sensor_name)
-            name_label.setStyleSheet(Constants.STYLES['sensor_label'])
+            name_label.setProperty("class", "sensor-label")
             
             # Estado del sensor (LED virtual)
             status_label = QLabel("●")
-            status_label.setStyleSheet(Constants.STYLES['sensor_status'])
+            status_label.setProperty("class", "sensor-status")
             self.sensor_states[sensor_id] = status_label
             
             # Valor simulado
             value_label = QLabel("--")
-            value_label.setStyleSheet(Constants.STYLES['value_label_off'])
+            value_label.setProperty("class", "sensor-value-off")
             self.sensor_states[f"{sensor_id}_value"] = value_label
             
             layout.addWidget(name_label, i, 0)
@@ -275,26 +219,19 @@ class SensorMonitorWidget(QWidget):
     
     # === SISTEMA DE POTENCIA ===
     def create_power_group(self):
-        """
-        Crea el grupo para el sistema de potencia.
-        
-        Returns:
-            QGroupBox: Contenedor con el sistema de potencia
-        """
         group = QGroupBox("SISTEMA DE POTENCIA")
-        group.setStyleSheet(Constants.STYLES['group_title'])
         layout = QVBoxLayout()
 
         # Batería 12V
         batt_layout = QHBoxLayout()
         batt_label = QLabel("Batería 12V:")
-        batt_label.setStyleSheet(Constants.STYLES['power_label'])
+        batt_label.setProperty("class", "power-label")
         
         # Barra de progreso de la batería
         self.batt_progress = QProgressBar()
         self.batt_progress.setRange(0, 100)
         self.batt_progress.setValue(0)
-        self.batt_progress.setStyleSheet(Constants.STYLES['batt_progress'])
+        self.batt_progress.setProperty("class", "battery-progress")
 
         batt_layout.addWidget(batt_label)
         batt_layout.addWidget(self.batt_progress)
@@ -318,7 +255,7 @@ class SensorMonitorWidget(QWidget):
         motor_right_text = QLabel("Corriente Motor Derecho:")
         
         for lbl in [voltage_label, motor_left_text, motor_right_text]:
-            lbl.setStyleSheet(Constants.STYLES['power_label'])
+            lbl.setProperty("class", "power-label")
             labels_layout.addWidget(lbl)
         
         # Valores a la derecha (centrados)
@@ -327,7 +264,7 @@ class SensorMonitorWidget(QWidget):
         self.motor_right_label = QLabel("-- A")
         
         for lbl in [self.voltage_5v_label, self.motor_left_label, self.motor_right_label]:
-            lbl.setStyleSheet(Constants.STYLES['value_label_off'])
+            lbl.setProperty("class", "sensor-value-off")
             lbl.setAlignment(Qt.AlignCenter)
             values_right_layout.addWidget(lbl)
         
@@ -345,14 +282,7 @@ class SensorMonitorWidget(QWidget):
             
     # === COMUNICACIONES ===
     def create_comms_group(self):
-        """
-        Crea el grupo para las comunicaciones.
-        
-        Returns:
-            QGroupBox: Contenedor con las comunicaciones
-        """
         group = QGroupBox("COMUNICACIONES")
-        group.setStyleSheet(Constants.STYLES['group_title'])
         layout = QVBoxLayout()
         
         comms = [
@@ -366,11 +296,11 @@ class SensorMonitorWidget(QWidget):
             
             # Nombre de comunicación
             name_label = QLabel(comm_name)
-            name_label.setStyleSheet(Constants.STYLES['comms_label'])
+            name_label.setProperty("class", "comms-label")
             
             # Estado de comunicación
             status_label = QLabel("🔴")
-            status_label.setStyleSheet(Constants.STYLES['comms_status'])
+            status_label.setProperty("class", "comms-status")
             self.sensor_states[comm_id] = status_label
             
             comm_layout.addWidget(name_label)
@@ -382,13 +312,7 @@ class SensorMonitorWidget(QWidget):
         return group
     
     def _update_sensors_from_components(self, components_msg, values=None):
-        """
-        Actualiza los sensores basado en el mensaje de diagnóstico de componentes.
-        
-        Args:
-            components_msg: Mensaje de diagnóstico de componentes
-            values: Diccionario con valores de los sensores Sharp
-        """
+        """Actualiza los sensores basado en el mensaje de diagnóstico de componentes."""
         try:
             # Extraer información del mensaje de componentes
             values_dict = {kv.key: kv.value for kv in components_msg.values}
@@ -440,22 +364,15 @@ class SensorMonitorWidget(QWidget):
             print(f"⚠️ Error procesando componentes: {e}")
     
     def _update_sensor_status(self, sensor_id, status_type, value=None):
-        """
-        Actualiza el estado visual de un sensor.
-        
-        Args:
-            sensor_id: ID del sensor
-            status_type: Tipo de estado ('success', 'warning', 'error')
-            value: Valor a mostrar (opcional)
-        """
+        """Actualiza el estado visual de un sensor."""
         # Obtener color según el tipo de estado
         color_map = {
-            'success': Constants.COLORS['success'],
-            'warning': Constants.COLORS['warning'],
-            'error': Constants.COLORS['error']
+            'success': '#27ae60',
+            'warning': '#f1c40f',
+            'error': '#e74c3c'
         }
         
-        color = color_map.get(status_type, Constants.COLORS['text_primary'])
+        color = color_map.get(status_type, '#ecf0f1')
         
         # Actualizar estado
         icon_map = {
@@ -466,23 +383,21 @@ class SensorMonitorWidget(QWidget):
         
         icon = icon_map.get(status_type, '●')
         self.sensor_states[sensor_id].setText(icon)
-        self.sensor_states[sensor_id].setStyleSheet(f"font-size: {Constants.FONT_SIZE['icons']}; color: {color};")
+        self.sensor_states[sensor_id].setStyleSheet(f"color: {color};")
         
         # Actualizar valor si se proporciona
         if value is not None and f"{sensor_id}_value" in self.sensor_states:
             self.sensor_states[f"{sensor_id}_value"].setText(value)
             if status_type == 'success':
-                self.sensor_states[f"{sensor_id}_value"].setStyleSheet(Constants.STYLES['value_label_on'])
+                self.sensor_states[f"{sensor_id}_value"].setProperty("class", "sensor-value-on")
             else:
-                self.sensor_states[f"{sensor_id}_value"].setStyleSheet(Constants.STYLES['value_label_off'])
+                self.sensor_states[f"{sensor_id}_value"].setProperty("class", "sensor-value-off")
     
     # ==============================================================
     # ACTUALIZACIÓN DESDE ROS2
     # ==============================================================
     def update_from_ros(self):
-        """
-        Actualiza los datos desde ROS2 - VERSIÓN OPTIMIZADA.
-        """
+        """Actualiza los datos desde ROS2 - VERSIÓN OPTIMIZADA."""
         if not self.ros_node:
             return
 
@@ -507,7 +422,6 @@ class SensorMonitorWidget(QWidget):
                 bridge.esp32_safety_status,
                 bridge.esp32_control_status,
                 bridge.microros_agent_status,
-                bridge.components_status, 
             ]
 
             for msg in topics:
@@ -516,7 +430,7 @@ class SensorMonitorWidget(QWidget):
 
             # Dividir los mensajes por tipo
             safety_msgs = [m for m in diagnostics if "Voltaje" in m.name or "Corriente" in m.name]
-            main_msgs = [m for m in diagnostics if "ESP32" in m.name or "MICRO" in m.name  or "Componentes" in m.name]
+            main_msgs = [m for m in diagnostics if "ESP32" in m.name or "MICRO" in m.name]
 
             # Actualizar listas
             self.update_diagnostic_list(self.safety_diagnostics_list.list_widget, safety_msgs)
@@ -552,12 +466,7 @@ class SensorMonitorWidget(QWidget):
             print(f"❌ Error inesperado en update_from_ros: {e}")
 
     def _update_power_system(self, bridge):
-        """
-        Actualiza el sistema de potencia (batería y motores).
-        
-        Args:
-            bridge: Objeto ROSBridge con los datos
-        """
+        """Actualiza el sistema de potencia (batería y motores)."""
         if bridge.battery_array:
             data = bridge.battery_array.data
             if len(data) >= 2:
@@ -569,9 +478,9 @@ class SensorMonitorWidget(QWidget):
                 
                 # Determinar color según nivel de voltaje
                 level = self._get_message_level(bridge.voltage_5v_status)
-                voltage_color = Constants.COLORS['error'] if level == 2 else \
-                               Constants.COLORS['warning'] if level == 1 else \
-                               Constants.COLORS['text_primary']
+                voltage_color = '#e74c3c' if level == 2 else \
+                               '#f1c40f' if level == 1 else \
+                               '#ecf0f1'
 
                 # Actualizar etiqueta de voltaje
                 mensaje = bridge.voltage_5v_status.message
@@ -580,29 +489,32 @@ class SensorMonitorWidget(QWidget):
                 else:
                     self.voltage_5v_label.setText("-- V")
                 
-                self.voltage_5v_label.setStyleSheet(f"color: {voltage_color}; font-weight: bold; font-size: {Constants.FONT_SIZE['text_small']};")
+                # Aplicar clase dinámica según el estado
+                if level == 2:
+                    self.voltage_5v_label.setProperty("class", "value-error")
+                elif level == 1:
+                    self.voltage_5v_label.setProperty("class", "value-warning")
+                else:
+                    self.voltage_5v_label.setProperty("class", "value-success")
 
-                # Cambiar color de la barra de progreso según el porcentaje
-                chunk_color = Constants.COLORS['error'] if percent < Constants.BATTERY_PERCENTAGE_MIN else \
-                            Constants.COLORS['warning'] if percent < Constants.BATTERY_PERCENTAGE_LIMIT else \
-                            Constants.COLORS['success']
-                            
+                # Cambiar color según nivel
+                if percent < Constants.BATTERY_PERCENTAGE_MIN:
+                    chunk_color = Constants.COLORS['error'] # Rojo
+                elif percent < Constants.BATTERY_PERCENTAGE_LIMIT:
+                    chunk_color = Constants.COLORS['warning'] # Naranja
+                else:
+                    chunk_color = Constants.COLORS['success'] # Verde
+
+
                 self.batt_progress.setStyleSheet(f"""
-                    QProgressBar {{ 
-                        border: 2px solid #34495e; 
-                        border-radius: 5px;
-                        text-align: center; 
-                        color: white; 
-                        font-weight: bold; 
-                    }}
-                    QProgressBar::chunk {{ 
-                        background-color: {chunk_color}; 
-                        border-radius: 3px; 
+                    QProgressBar::chunk {{
+                    background-color: {chunk_color};
                     }}
                 """)
+
         else:
             self.voltage_5v_label.setText("-- V")
-            self.voltage_5v_label.setStyleSheet(Constants.STYLES['value_label_on'])
+            self.voltage_5v_label.setProperty("class", "sensor-value-off")
             self.batt_progress.setValue(0)
 
         if bridge.motors_array:
@@ -613,14 +525,7 @@ class SensorMonitorWidget(QWidget):
 
                 # Determinar colores según nivel
                 left_level = self._get_message_level(bridge.motor_left_status)
-                left_color = Constants.COLORS['error'] if left_level == 2 else \
-                            Constants.COLORS['warning'] if left_level == 1 else \
-                            Constants.COLORS['text_primary']
-
                 right_level = self._get_message_level(bridge.motor_right_status)
-                right_color = Constants.COLORS['error'] if right_level == 2 else \
-                             Constants.COLORS['warning'] if right_level == 1 else \
-                             Constants.COLORS['text_primary']
 
                 # Actualizar etiquetas de corriente
                 left_mensaje = bridge.motor_left_status.message
@@ -636,21 +541,28 @@ class SensorMonitorWidget(QWidget):
                 else:
                     self.motor_right_label.setText("-- A")
 
-                self.motor_left_label.setStyleSheet(f"color: {left_color}; font-weight: bold; font-size: {Constants.FONT_SIZE['text_small']};")
-                self.motor_right_label.setStyleSheet(f"color: {right_color}; font-weight: bold; font-size: {Constants.FONT_SIZE['text_small']};")
+                # Aplicar clases dinámicas según el estado
+                if left_level == 2:
+                    self.motor_left_label.setProperty("class", "value-error")
+                elif left_level == 1:
+                    self.motor_left_label.setProperty("class", "value-warning")
+                else:
+                    self.motor_left_label.setProperty("class", "value-success")
+
+                if right_level == 2:
+                    self.motor_right_label.setProperty("class", "value-error")
+                elif right_level == 1:
+                    self.motor_right_label.setProperty("class", "value-warning")
+                else:
+                    self.motor_right_label.setProperty("class", "value-success")
         else:
             self.motor_left_label.setText("-- A")
             self.motor_right_label.setText("-- A")
-            self.motor_left_label.setStyleSheet(Constants.STYLES['value_label_off'])
-            self.motor_right_label.setStyleSheet(Constants.STYLES['value_label_off'])
+            self.motor_left_label.setProperty("class", "sensor-value-off")
+            self.motor_right_label.setProperty("class", "sensor-value-off")
 
     def _update_esp32_status(self, bridge):
-        """
-        Actualiza el estado de las comunicaciones ESP32.
-        
-        Args:
-            bridge: Objeto ROSBridge con los datos
-        """
+        """Actualiza el estado de las comunicaciones ESP32."""
         # Actualizar ESP32 Seguridad
         if bridge.esp32_safety_status:
             level = self._get_message_level(bridge.esp32_safety_status)
@@ -684,22 +596,12 @@ class SensorMonitorWidget(QWidget):
                 self._last_esp2_level = -1
 
     def _battery_percent(self, voltage):
-        """
-        Calcula el porcentaje de batería basado en el voltaje.
-        
-        Args:
-            voltage: Voltaje medido
-            
-        Returns:
-            float: Porcentaje de batería (0-100)
-        """
+        """Calcula el porcentaje de batería basado en el voltaje."""
         vmin = Constants.BATTERY_12V_MIN
         vmax = Constants.BATTERY_12V_MAX
         pct = (voltage - vmin) / (vmax - vmin) * 100
         return max(0.0, min(100.0, pct))
 
     def _show_no_bridge_error(self):
-        """
-        Muestra un mensaje de error cuando no hay bridge disponible.
-        """
+        """Muestra un mensaje de error cuando no hay bridge disponible."""
         print("❌ No hay bridge ROS disponible")

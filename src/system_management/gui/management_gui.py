@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
-import atexit
 import signal
-import threading
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -14,11 +12,14 @@ import rclpy
 from rclpy.node import Node
 from ros_bridge import ROSBridge
 
+# ⚠️ CONFIGURAR EL BACKEND ANTES de importar Qt
+os.environ['QT_QPA_PLATFORM'] = 'xcb'
+
 
 class ManagementGUINode(Node):
     def __init__(self):
         super().__init__('management_gui')
-        self.get_logger().info('🟢 Nodo ROS2 de la GUI iniciado')
+        #self.get_logger().info('🟢 Nodo ROS2 de la GUI iniciado')
         self.ros_bridge = ROSBridge(self)
 
 
@@ -73,15 +74,15 @@ def main():
 
     # Crear aplicación Qt
     app_manager.app = QApplication(sys.argv)
-    app_manager.app.setApplicationName("Robot Autónomo - Panel de Control")
+    app_manager.app.setApplicationName("Autonomous Robot- Panel de Control")
 
     # Crear nodo ROS2
     app_manager.node = ManagementGUINode()
 
     # Crear ventana principal
     app_manager.window = MainWindow(ros_node=app_manager.node)
-    app_manager.window.showMaximized()
-    #showFullScreen()
+    app_manager.window.show()
+    #showFullScreen() 
 
     # Timer para ROS2
     app_manager.spin_timer = QTimer()

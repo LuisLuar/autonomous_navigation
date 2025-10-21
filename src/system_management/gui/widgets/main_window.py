@@ -1,13 +1,13 @@
+#!/usr/bin/env python3
 import sys
+import os
 from PySide6.QtWidgets import (QMainWindow, QTabWidget, QVBoxLayout, 
                                QWidget, QHBoxLayout, QLabel, QStatusBar)
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
-
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont, QIcon
 
 from config.constants import Constants
-from utils.styles import get_app_style
+from utils.styles_light import get_app_style
 from widgets.sensor_monitor import SensorMonitorWidget
 from widgets.map_widget import MapWidget
 from widgets.camera_widget import CameraWidget
@@ -18,7 +18,7 @@ class MainWindow(QMainWindow):
         self.ros_node = ros_node
         self.setWindowTitle(f"{Constants.APP_TITLE} v{Constants.APP_VERSION}")
         self.setGeometry(100, 100, Constants.WINDOW_WIDTH, Constants.WINDOW_HEIGHT)
-        self.setStyleSheet(get_app_style())
+        self.setStyleSheet(get_app_style())  # Aplicar estilos generales
         
         self.setup_ui()
         
@@ -47,35 +47,18 @@ class MainWindow(QMainWindow):
     def create_title_bar(self):
         title_widget = QWidget()
         title_widget.setFixedHeight(60)
-        title_widget.setStyleSheet("background-color: #2c3e50; border-bottom: 2px solid #3498db;")
+        title_widget.setProperty("class", "title-bar")
         
         layout = QHBoxLayout(title_widget)
         layout.setContentsMargins(20, 5, 20, 5)
         
         # Título de la aplicación
         title_label = QLabel(Constants.APP_TITLE)
-        title_label.setStyleSheet("""
-            color: #3498db; 
-            font-size: 18px; 
-            font-weight: bold;
-            background-color: transparent;
-        """)
-        title_font = QFont()
-        title_font.setPointSize(14)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
+        title_label.setProperty("class", "title-bar-title")
         
         # Estado del sistema
         status_label = QLabel("🔴 SISTEMA NO INICIALIZADO")
-        status_label.setStyleSheet("""
-            color: #e74c3c; 
-            font-size: 12px; 
-            font-weight: bold;
-            background-color: transparent;
-            padding: 5px 10px;
-            border: 1px solid #e74c3c;
-            border-radius: 3px;
-        """)
+        status_label.setProperty("class", "system-status")
         
         layout.addWidget(title_label)
         layout.addStretch()
@@ -108,20 +91,14 @@ class MainWindow(QMainWindow):
     
     def setup_status_bar(self):
         status_bar = QStatusBar()
-        status_bar.setStyleSheet("""
-            QStatusBar {
-                background-color: #2c3e50;
-                color: #bdc3c7;
-                border-top: 1px solid #34495e;
-            }
-        """)
+        status_bar.setStyleSheet(get_app_style())  # Aplicar estilos de barra de estado
         
         # Mensaje permanente
         status_bar.showMessage("Sistema listo - Desconectado de ROS2")
         
         # Indicadores en la barra de estado
         self.connection_indicator = QLabel("🔴 ROS2")
-        self.connection_indicator.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        self.connection_indicator.setProperty("class", "ros-indicator ros-disconnected")
         status_bar.addPermanentWidget(self.connection_indicator)
         self.setStatusBar(status_bar)
 
@@ -134,7 +111,7 @@ class MainWindow(QMainWindow):
     def update_ros_connection_indicator(self):
         if self.ros_node and getattr(self.ros_node, 'any_msg_received', False):
             self.connection_indicator.setText("🟢 ROS2")
-            self.connection_indicator.setStyleSheet("color: #27ae60; font-weight: bold;")
+            self.connection_indicator.setProperty("class", "ros-indicator ros-connected")
         else:
             self.connection_indicator.setText("🔴 ROS2")
-            self.connection_indicator.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            self.connection_indicator.setProperty("class", "ros-indicator ros-disconnected")
