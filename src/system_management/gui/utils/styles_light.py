@@ -236,21 +236,15 @@ def get_app_style():
         font-weight: bold;
         background-color: transparent;
         padding: 5px 10px;
-        border: 1px solid #e74c3c;
+        border: 2px solid #e74c3c;
         border-radius: 3px;
     }
     
     .ros-indicator {
         font-weight: bold;
-    }
-    
-    .ros-connected {
-        color: #1e7d22;
-    }
-    
-    .ros-disconnected {
         color: #e74c3c;
     }
+
     
     /* Estilos para valores dinámicos */
     .value-success {
@@ -316,6 +310,7 @@ def get_theme_colors():
         'diagnostic': {
             'error': ("🔴", "#e74c3c", "#fadbd8", "#e74c3c"),
             'warning': ("⚠️", "#cfb408", "#fef9e7", "#f1c40f"),
+            'success': ("🟢", "#27ae60", "#ecf0f1", "#27ae60"),
             'ok': ("⚪", "#737f80", "#ecf0f1", "#bdc3c7")
         },
         'sensors': {

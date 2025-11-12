@@ -34,6 +34,8 @@ volatile float offset_Mright = 0.0;  // Voltaje de salida en reposo (sin corrien
 
 volatile float voltage_12V = 0.0;
 volatile float voltage_5V = 0.0;
+float anterior_12v = 11.0;
+float anterior_5v = 4.0;
 
 SemaphoreHandle_t sensor_mutex = NULL;
 //___________________________________________
@@ -108,8 +110,8 @@ void ControlLoop(void *parameter) {
   while (1) {
     float left = readCurrent(GPIO_CURRENT_M_LEFT, offset_Mleft);
     float right = readCurrent(GPIO_CURRENT_M_RIGHT, offset_Mright);
-    float v12 = readVoltage(GPIO_VOLTAJE_12V);
-    float v5  = readVoltage(GPIO_VOLTAJE_5V);
+    float v12 = readVoltage(GPIO_VOLTAJE_12V, 0.05, anterior_12v);
+    float v5  = readVoltage(GPIO_VOLTAJE_5V, 0.5, anterior_5v);
 
     // Protegemos la escritura
     if (xSemaphoreTake(sensor_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {

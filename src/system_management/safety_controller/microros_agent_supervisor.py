@@ -29,7 +29,7 @@ class MicroROSAgentSupervisor(Node):
 
         if result.returncode == 0:
             msg.level = DiagnosticStatus.OK
-            msg.message = "conectado"
+            msg.message = "Conectado"
             #self.get_logger().info("🟢 micro-ROS Agent: ONLINE")
         else:
             msg.level = DiagnosticStatus.ERROR

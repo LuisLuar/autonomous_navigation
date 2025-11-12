@@ -1,11 +1,13 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                                QGroupBox, QPushButton)
 from PySide6.QtCore import Qt
+from utils.styles_light import get_app_style, get_theme_colors
 
 class CameraWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.setup_ui()
+        self.setStyleSheet(get_app_style()) 
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -13,7 +15,7 @@ class CameraWidget(QWidget):
         
         # Título
         title = QLabel("VISIÓN POR COMPUTADORA - CÁMARA RGB-D")
-        title.setStyleSheet("color: #3498db; font-size: 16px; font-weight: bold;")
+        title.setProperty("class", "sensor-title")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
         
@@ -30,41 +32,17 @@ class CameraWidget(QWidget):
         
         layout.addLayout(views_layout)
         
-        # Controles de visión
-        controls_layout = QHBoxLayout()
-        
-        self.detection_btn = QPushButton("🎯 ACTIVAR DETECCIÓN")
-        self.detection_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #27ae60;
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-            }
-        """)
-        
-        self.segmentation_btn = QPushButton("🔄 ACTIVAR SEGMENTACIÓN")
-        self.segmentation_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-            }
-        """)
-        
-        controls_layout.addWidget(self.detection_btn)
-        controls_layout.addWidget(self.segmentation_btn)
-        controls_layout.addStretch()
-        
-        layout.addLayout(controls_layout)
-        
         # Información de detecciones
         info_group = QGroupBox("INFORMACIÓN DE DETECCIONES")
         info_layout = QVBoxLayout()
         
         self.detection_info = QLabel("Sistema de visión no inicializado")
-        self.detection_info.setStyleSheet("color: #bdc3c7; font-size: 11px;")
+        self.detection_info.setProperty("class", "sensor-value-off")
+        self.detection_info.setStyleSheet("""
+            QLabel {
+                min-height: 170px;
+            }
+        """)
         self.detection_info.setAlignment(Qt.AlignCenter)
         
         info_layout.addWidget(self.detection_info)
@@ -84,14 +62,17 @@ class CameraWidget(QWidget):
                 font-size: 14px;
                 font-weight: bold;
                 border: 2px dashed #34495e;
-                min-height: 300px;
+                min-height: 500px;
             }
         """)
         video_placeholder.setAlignment(Qt.AlignCenter)
         
         # Estado
-        status_label = QLabel("🔴 Desconectado")
-        status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        status_label = QLabel("")
+
+        icon, color, background, border_color = get_theme_colors()['diagnostic']['error']
+        status_label .setText(f"{icon} Desconectado")        
+        status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
         
         layout.addWidget(video_placeholder)
         layout.addWidget(status_label)

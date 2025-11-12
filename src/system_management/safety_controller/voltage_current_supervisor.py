@@ -12,14 +12,14 @@ class VoltageCurrentSupervisor(Node):
         # Suscriptores
         self.battery_sub = self.create_subscription(
             Float32MultiArray,
-            'battery/array',
+            '/battery_array',
             self.battery_callback,
             10
         )
         
         self.motors_sub = self.create_subscription(
             Float32MultiArray,
-            'motors/array',
+            '/motors_array',
             self.motors_callback,
             10
         )
@@ -31,8 +31,8 @@ class VoltageCurrentSupervisor(Node):
         self.motor_right_status_pub = self.create_publisher(DiagnosticStatus, 'status/motor_right', 10)
         
         # Publicadores para relés
-        self.motor_left_relay_pub = self.create_publisher(Bool, 'start_motor_left', 10)
-        self.motor_right_relay_pub = self.create_publisher(Bool, 'start_motor_right', 10)
+        self.motor_left_relay_pub = self.create_publisher(Bool, 'start/motor_left', 10)
+        self.motor_right_relay_pub = self.create_publisher(Bool, 'start/motor_right', 10)
         
         # Variables de estado
         self.current_voltage_12v = 0.0

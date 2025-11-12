@@ -6,7 +6,7 @@ class Constants:
     WINDOW_HEIGHT = 1100
 
     # Battery mapping (configurable)
-    BATTERY_12V_MIN = 11.0   # 0%
+    BATTERY_12V_MIN = -11.0   # 0%
     BATTERY_12V_MAX = 13.0   # 100%  (ajustable)
 
     BATTERY_PERCENTAGE_MIN = 20
@@ -15,8 +15,8 @@ class Constants:
     MOTOR_CURRENT_MAX = 30
     MOTOR_CURRENT_LIMIT = 20
 
-    CONTROL_VOLTAGE_MIN = 3
-    CONTROL_VOLTAGE_LIMIT = 4
+    CONTROL_VOLTAGE_MIN = -3
+    CONTROL_VOLTAGE_LIMIT = -4
 
     # Paleta de colores estilo HMI industrial
     COLORS = {

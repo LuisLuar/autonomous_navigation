@@ -14,9 +14,12 @@
     <!-- Incluir la cámara Asus Xtion -->
     <xacro:include filename="$(find robot_description)/urdf/components/camera/asus_xtion.urdf.xacro"/>
 
-  <!-- sensore -->
+    <!-- sensores -->
     <xacro:include filename="$(find robot_description)/urdf/components/imu/mpu6050.urdf.xacro"/>
     <xacro:include filename="$(find robot_description)/urdf/components/distance_sensor/sharp.urdf.xacro"/>
+
+    <!-- URDF RPLIDAR-->
+    <xacro:include filename="$(find robot_description)/urdf/components/rplidar/lidar.urdf.xacro"/>
 
     <!-- ================================================== -->
     <!-- ESTRUCTURA DEL ROBOT COMPLETO -->
@@ -36,19 +39,22 @@
     
     <!-- 
     Montar la cámara Asus Xtion en el base_link del robot diferencial
-    Ajusta las coordenadas xyz y rpy según donde quieras posicionar la cámara
+        xyz: posición relativa al base_link del robot
+            x: adelante/atrás (positivo = adelante)
+            y: izquierda/derecha (positivo = izquierda)
+            z: arriba/abajo (positivo = arriba)
+            
+            rpy: orientación (roll, pitch, yaw en radianes)
     -->
     <xacro:sensor_asus_xtion parent="base_link" name="camera">
-        <!-- 
-        xyz: posición relativa al base_link del robot
-          x: adelante/atrás (positivo = adelante)
-          y: izquierda/derecha (positivo = izquierda)
-          z: arriba/abajo (positivo = arriba)
-        
-        rpy: orientación (roll, pitch, yaw en radianes)
-        -->
         <origin xyz="0.4 0.0 0.35" rpy="0.0 0.0 0.0"/>
     </xacro:sensor_asus_xtion>
+
+
+    <!-- Unión entre base_link y el LIDAR RPLidar A1 / A1M8 -->
+    <xacro:sensor_rplidar parent="base_link" name="laser">
+        <origin xyz="0.10 0.0 0.58" rpy="0 0 0"/>
+    </xacro:sensor_rplidar>
 
      <!-- IMU (posición estable, cerca del centro de masa) -->
     <xacro:sensor_mpu6050 parent="base_link" name="imu">

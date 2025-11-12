@@ -33,7 +33,7 @@ const char* agent_ip = "10.42.0.1";  // ← IP de tu PC (donde corre el agent)*/
 
 const char* ssid = "Fastnett-Fibra-ConstructoraVasqu";
 const char* password = "1706312434";
-const char* agent_ip = "192.168.100.167";
+const char* agent_ip = "192.168.100.98";
 
 const uint32_t agent_port = 8888;
 //___________________________m
@@ -104,11 +104,11 @@ void beginMicroros() {
   setup_float32_multiarray(&battery_array_msg, 2, "battery_array");
   setup_float32_multiarray(&motors_array_msg, 2, "motors_array");
 
-  RCCHECK(rclc_publisher_init_default( &battery_array_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "battery/array"));
-  RCCHECK(rclc_publisher_init_default( &motors_array_pub,  &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "motors/array"));
+  RCCHECK(rclc_publisher_init_default( &battery_array_pub, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/battery_array"));
+  RCCHECK(rclc_publisher_init_default( &motors_array_pub,  &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray), "/motors_array"));
 
   Serial.println("CREANDO SUSCRIPTORES");
-  RCCHECK(rclc_subscription_init_default( &rele_subscriber,  &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt8), "rele/control"));
+  RCCHECK(rclc_subscription_init_default( &rele_subscriber,  &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt8), "rele_control"));
 
   Serial.println("CREANDO TIMER");
   RCCHECK(rclc_timer_init_default( &sync_timer,     &support, RCL_MS_TO_NS(120000), sync_timer_callback));
