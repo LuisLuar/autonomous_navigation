@@ -315,6 +315,7 @@ def get_theme_colors():
         'diagnostic': {
             'error': ("🔴", "#e74c3c", "#fadbd8", "#e74c3c"),
             'warning': ("⚠️", "#f1c40f", "#fef9e7", "#f1c40f"),
+            'success': ("🟢", "#27ae60", "#ecf0f1", "#27ae60"),
             'ok': ("⚪", "#ecf0f1", "#34495e", "#bdc3c7")
         },
         'sensors': {

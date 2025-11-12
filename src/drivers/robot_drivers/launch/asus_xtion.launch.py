@@ -33,22 +33,24 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import Node
 
 
 def generate_launch_description():
-
-    pkg_openni2_ros = get_package_share_directory("openni2_camera")
-
-    openni2_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_openni2_ros, "launch", "camera_with_cloud.launch.py")
-        )
+    
+    # Nodo monitor con reconexión automática
+    camera_monitor = Node(
+        package='robot_drivers',
+        executable='camera_reconnect_node',
+        name='camera_monitor',
+        output='screen',
+        parameters=[
+            {'timeout_seconds': 5.0},  # Tiempo sin datos antes de reconectar
+            {'monitor_topic': '/camera/rgb/image_raw'}  # Topic a monitorear
+        ]
     )
 
     ld = LaunchDescription()
-
-    ld.add_action(openni2_cmd)
+    ld.add_action(camera_monitor)
 
     return ld

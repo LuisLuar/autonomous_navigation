@@ -17,8 +17,9 @@
 #include <nav_msgs/msg/odometry.h>
 #include <sensor_msgs/msg/imu.h>
 #include <sensor_msgs/msg/range.h>
-#include <std_msgs/msg/bool.h>
+//#include <std_msgs/msg/bool.h>
 #include <GP2Y0E03_ESP32.h>
+#include <std_srvs/srv/set_bool.h>
 
 //___________ENCODER DERECHO_____________
 #define RightA 13
@@ -117,7 +118,6 @@ GP2Y0E03 sensor3;
 
 void setup() {
   Serial.begin(115200);  // Inicializa el puerto serial a 9600 bps
-  Serial.println("ESP32 iniciada y lista para recibir comandos");
   analogReadResolution(12);
 
   //_____________________MICROROS________________________________
@@ -170,6 +170,7 @@ void setup() {
   lastTime_enc = millis();
 
   lastTime_imu = millis();
+  Serial.println("ESP32 iniciada y lista para recibir comandos");
 }
 
 void loop() {

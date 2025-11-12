@@ -5,6 +5,7 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtCore import QUrl, Qt
 import tempfile
 import os
+from PySide6.QtCore import Qt, QTimer
 
 from utils.styles_light import get_app_style, get_map_widget_style, get_theme_colors
 
@@ -12,7 +13,7 @@ class MapWidget(QWidget):
     def __init__(self, ros_node=None, offline_tiles_path=None, leaflet_path=None):
         super().__init__()
         self.ros_node = ros_node
-        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/OpenStreetMap"
+        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/casa2" #OpenStreetMap GoogleImagenes
         
         # Ruta a los recursos de Leaflet offline
         if leaflet_path:
@@ -36,6 +37,11 @@ class MapWidget(QWidget):
         self.html_file = None
         self.setup_ui()
         self.setup_map()
+
+        # Timer para actualizar UI desde ros_node
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.update_from_ros)
+        self.update_timer.start(500)  # cada 500 ms
     
     def setup_ui(self):
         self.setStyleSheet(get_app_style() + get_map_widget_style())
@@ -363,6 +369,63 @@ class MapWidget(QWidget):
         self.setup_map()
         
         print(f"[MapWidget] Posición del robot actualizada: {lat:.6f}, {lng:.6f}")
+    
+    def update_map_position(self, lat, lng):
+        """Actualiza solo la posición del robot sin recrear todo el mapa"""
+        # Crear JavaScript para mover el marcador
+        js_code = f"""
+        if (window.robotMarker) {{
+            var newLatLng = L.latLng({lat}, {lng});
+            window.robotMarker.setLatLng(newLatLng);
+            window.robotMarker.getPopup().setContent("Robot<br>Lat: {lat:.6f}<br>Lng: {lng:.6f}");
+            
+            // Opcional: centrar el mapa en la nueva posición
+            // map.panTo(newLatLng);
+        }}
+        """
+        self.map_view.page().runJavaScript(js_code)
+
+    # ==============================================================
+    # ACTUALIZACIÓN DESDE ROS2
+    # ==============================================================
+    def update_from_ros(self):
+        """Actualiza los datos desde ROS2 - VERSIÓN OPTIMIZADA."""
+        if not self.ros_node:
+            return
+
+        rn = self.ros_node
+
+        try:
+            # Verificar el bridge
+            if not hasattr(rn, 'ros_bridge') or rn.ros_bridge is None:
+                self._show_no_bridge_error()
+                return
+
+            bridge = rn.ros_bridge
+
+            if bridge.gps_fix:
+                lat = bridge.gps_fix.latitude  
+                lng = bridge.gps_fix.longitude
+
+                # Solo actualizar si la posición cambió significativamente
+                if (not self.current_position or 
+                    abs(lat - self.current_position[0]) > 0.000001 or 
+                    abs(lng - self.current_position[1]) > 0.000001):
+                    
+                    self.current_position = (lat, lng)
+                    
+                    # Actualizar el mapa con la nueva posición
+                    self.update_map_position(lat, lng)
+
+
+        except AttributeError as e:
+            print(f"⚠️ Error accediendo a datos ROS: {e}")
+        except Exception as e:
+            print(f"❌ Error inesperado en update_from_ros: {e}")
+
+    def _show_no_bridge_error(self):
+        """Muestra un mensaje de error cuando no hay bridge disponible."""
+        print("❌ No hay bridge ROS disponible")
     
     def closeEvent(self, event):
         # Limpiar archivo temporal al cerrar

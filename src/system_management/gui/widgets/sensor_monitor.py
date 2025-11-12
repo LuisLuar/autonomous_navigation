@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, 
-                               QGroupBox, QLabel, QProgressBar, QPushButton, QListWidget, QListWidgetItem)
+                               QGroupBox, QLabel, QProgressBar, QListWidget, QListWidgetItem)
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtCore import QSize
@@ -46,28 +46,32 @@ class SensorMonitorWidget(QWidget):
         grid_layout.addWidget(self.safety_diagnostics_list, 0, 1)
         
         # === GRUPOS DE SENSORES ===
-        main_sensors_group = self.create_sensor_group("SENSORES PRINCIPALES", [
-            ("LIDAR 360°", "lidar"),
-            ("Cámara RGB-D", "camera"),
-            ("GPS", "gps"),
-            ("IMU", "imu")
-        ])
-        grid_layout.addWidget(main_sensors_group, 1, 0)
+        main_sensors_group = self.create_device_group("SENSORES", [
+                                ("LIDAR 360°", "lidar"),
+                                ("Cámara RGB-D", "camera"),
+                                ("GPS", "gps"),
+                            ])
+        grid_layout.addWidget(main_sensors_group, 2, 0)
         
+        """("IMU", "imu"),
+                                ("Encoder", "encoder")"""
         safety_sensors_group = self.create_sensor_group("SENSORES DE SEGURIDAD", [
             ("Sharp frontal", "sharp_front"),
             ("Sharp izquierdo", "sharp_left"),
-            ("Sharp derecho", "sharp_right"),
-            ("Pulsador Emergencia", "emergency")
+            ("Sharp derecho", "sharp_right")
         ])
         grid_layout.addWidget(safety_sensors_group, 1, 1)
 
         # === SISTEMA DE POTENCIA ===
         power_group = self.create_power_group()
-        grid_layout.addWidget(power_group, 2, 0)
+        grid_layout.addWidget(power_group, 1, 0)
         
         # === COMUNICACIONES ===
-        comms_group = self.create_comms_group()
+        comms_group = self.create_device_group("COMUNICACIONES", [
+                        ("micro-ROS Agent", "microros_agent"),
+                        ("ESP32 Seguridad", "esp32_safety"),
+                        ("ESP32 Control", "esp32_control"),
+                    ])
         grid_layout.addWidget(comms_group, 2, 1)
         
         layout.addLayout(grid_layout)
@@ -201,7 +205,8 @@ class SensorMonitorWidget(QWidget):
             name_label.setProperty("class", "sensor-label")
             
             # Estado del sensor (LED virtual)
-            status_label = QLabel("●")
+            icon, *_ = get_theme_colors()['diagnostic']['error']
+            status_label = QLabel(icon)
             status_label.setProperty("class", "sensor-status")
             self.sensor_states[sensor_id] = status_label
             
@@ -280,37 +285,33 @@ class SensorMonitorWidget(QWidget):
         group.setLayout(layout)
         return group
             
-    # === COMUNICACIONES ===
-    def create_comms_group(self):
-        group = QGroupBox("COMUNICACIONES")
+    # === COMUNICACIONES Y SENSORES ===
+    def create_device_group(self, group_title, devices):
+        group = QGroupBox(group_title)
         layout = QVBoxLayout()
         
-        comms = [
-            ("micro-ROS Agent", "microros_agent"),
-            ("ESP32 Seguridad", "esp32_safety"),
-            ("ESP32 Control", "esp32_control"),
-        ]
-        
-        for comm_name, comm_id in comms:
-            comm_layout = QHBoxLayout()
+        for device_name, device_id in devices:
+            device_layout = QHBoxLayout()
             
-            # Nombre de comunicación
-            name_label = QLabel(comm_name)
+            # Nombre del dispositivo
+            name_label = QLabel(device_name)
             name_label.setProperty("class", "comms-label")
             
-            # Estado de comunicación
-            status_label = QLabel("🔴")
+            # Estado del dispositivo
+            icon, *_ = get_theme_colors()['diagnostic']['error']
+            status_label = QLabel(icon)
             status_label.setProperty("class", "comms-status")
-            self.sensor_states[comm_id] = status_label
+            self.sensor_states[device_id] = status_label
             
-            comm_layout.addWidget(name_label)
-            comm_layout.addStretch()
-            comm_layout.addWidget(status_label)
-            layout.addLayout(comm_layout)
+            device_layout.addWidget(name_label)
+            device_layout.addStretch()
+            device_layout.addWidget(status_label)
+            layout.addLayout(device_layout)
         
         group.setLayout(layout)
         return group
-    
+
+
     def _update_sensors_from_components(self, components_msg, values=None):
         """Actualiza los sensores basado en el mensaje de diagnóstico de componentes."""
         try:
@@ -335,13 +336,13 @@ class SensorMonitorWidget(QWidget):
                     self._update_sensor_status(sensor_id, 'error', "-- m")
             
             # Actualizar IMU
-            imu_status = values_dict.get('IMU_status', 'NUNCA_RECIBIDO')
+            """imu_status = values_dict.get('IMU_status', 'NUNCA_RECIBIDO')
             if imu_status == 'FUNCIONANDO_OK':
                 self._update_sensor_status('imu', 'success', None)
             elif imu_status == 'DATOS_INVALIDOS':
                 self._update_sensor_status('imu', 'warning', None)
             else:
-                self._update_sensor_status('imu', 'error', None)
+                self._update_sensor_status('imu', 'error', None)"""
                 
             # Log de cambios de estado
             if not hasattr(self, '_last_components_state'):
@@ -366,22 +367,7 @@ class SensorMonitorWidget(QWidget):
     def _update_sensor_status(self, sensor_id, status_type, value=None):
         """Actualiza el estado visual de un sensor."""
         # Obtener color según el tipo de estado
-        color_map = {
-            'success': '#27ae60',
-            'warning': '#f1c40f',
-            'error': '#e74c3c'
-        }
-        
-        color = color_map.get(status_type, '#ecf0f1')
-        
-        # Actualizar estado
-        icon_map = {
-            'success': '🟢',
-            'warning': '⚠️',
-            'error': '❌'
-        }
-        
-        icon = icon_map.get(status_type, '●')
+        icon, color, background, border_color = get_theme_colors()['diagnostic'][status_type]
         self.sensor_states[sensor_id].setText(icon)
         self.sensor_states[sensor_id].setStyleSheet(f"color: {color};")
         
@@ -422,6 +408,10 @@ class SensorMonitorWidget(QWidget):
                 bridge.esp32_safety_status,
                 bridge.esp32_control_status,
                 bridge.microros_agent_status,
+                bridge.global_status,
+                bridge.camera_status,
+                bridge.gps_status,
+                bridge.rplidar_status
             ]
 
             for msg in topics:
@@ -430,7 +420,7 @@ class SensorMonitorWidget(QWidget):
 
             # Dividir los mensajes por tipo
             safety_msgs = [m for m in diagnostics if "Voltaje" in m.name or "Corriente" in m.name]
-            main_msgs = [m for m in diagnostics if "ESP32" in m.name or "MICRO" in m.name]
+            main_msgs = [m for m in diagnostics if "ESP32" in m.name or "MICRO" in m.name or "Sistema" in m.name or "Cámara" in m.name or "GPS" in m.name or "RPLIDAR" in m.name]
 
             # Actualizar listas
             self.update_diagnostic_list(self.safety_diagnostics_list.list_widget, safety_msgs)
@@ -459,6 +449,24 @@ class SensorMonitorWidget(QWidget):
 
             # Actualizar estado ESP32
             self._update_esp32_status(bridge)
+
+            # Actualizar estado de la camara:
+            if bridge.camera_status:
+                level = self._get_message_level(bridge.camera_status)
+                status_type = 'success' if level == 0 else 'warning' if level == 1 else 'error'
+                self._update_sensor_status('camera', status_type)
+            
+            # Actualizar estado del GPS:
+            if bridge.gps_status:
+                level = self._get_message_level(bridge.gps_status)
+                status_type = 'success' if level == 0 else 'warning' if level == 1 else 'error'
+                self._update_sensor_status('gps', status_type)
+
+            # Actualizar estado del RPLIDAR:
+            if bridge.rplidar_status:
+                level = self._get_message_level(bridge.rplidar_status)
+                status_type = 'success' if level == 0 else 'warning' if level == 1 else 'error'
+                self._update_sensor_status('lidar', status_type)
 
         except AttributeError as e:
             print(f"⚠️ Error accediendo a datos ROS: {e}")

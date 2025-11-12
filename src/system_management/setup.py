@@ -34,8 +34,12 @@ setup(
             'rele_combiner = safety_controller.rele_combiner_node:main',
             'esp32_supervisor = safety_controller.esp32_supervisor:main',
             'components_supervisor = safety_controller.components_supervisor:main',
+            'master_supervisor = safety_controller.master_supervisor:main',
             'gui = gui.management_gui:main',
             'microros_agent_supervisor = safety_controller.microros_agent_supervisor:main',
+            'camera_supervisor = safety_controller.camera_supervisor:main',
+            'gps_supervisor = safety_controller.gps_supervisor:main',
+            'rplidar_supervisor = safety_controller.rplidar_supervisor:main',
         ],
     },
 )

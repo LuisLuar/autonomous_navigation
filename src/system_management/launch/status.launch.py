@@ -5,8 +5,19 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='system_management',
-            executable='rele_combiner',
-            name='rele_combiner_node',
+            executable='camera_supervisor',
+            output='screen'
+        ),
+
+        Node(
+            package='system_management',
+            executable='components_supervisor',
+            output='screen'
+        ),
+
+        Node(
+            package='system_management',
+            executable='gps_supervisor',
             output='screen'
         ),
 
@@ -18,13 +29,7 @@ def generate_launch_description():
 
         Node(
             package='system_management',
-            executable='VC_supervisor',
-            output='screen'
-        ),
-
-        Node(
-            package='system_management',
-            executable='gui',
+            executable='master_supervisor',
             output='screen'
         ),
 
@@ -36,8 +41,14 @@ def generate_launch_description():
 
         Node(
             package='system_management',
-            executable='components_supervisor',
+            executable='rplidar_supervisor',
             output='screen'
         ),
 
+        Node(
+            package='system_management',
+            executable='VC_supervisor',
+            output='screen'
+        ),
+        
     ])

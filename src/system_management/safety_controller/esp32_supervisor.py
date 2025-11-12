@@ -11,7 +11,7 @@ from sensor_msgs.msg import Range  # Agregar este import
 
 class Esp32DynamicSupervisor(Node):
     def __init__(self):
-        super().__init__('supervisor_esp32_dynamic')
+        super().__init__('esp32_dynamic_supervisor')
 
         # Publicadores separados para cada ESP32
         self.pub_esp32_1 = self.create_publisher(DiagnosticStatus, 'status/esp32_safety', 10)
@@ -44,9 +44,9 @@ class Esp32DynamicSupervisor(Node):
         # Nodos y tópicos esperados por cada ESP32
         self.expected_nodes = {
             'Robot_Safety': [
-                '/battery/array',
-                '/motors/array', 
-                '/rele/control'
+                '/battery_array',
+                '/motors_array', 
+                '/rele_control'
             ],
             'Robot_Control': [
                 '/odom/unfiltered',
@@ -69,13 +69,12 @@ class Esp32DynamicSupervisor(Node):
         # Topics críticos que indican actividad real, con sus tipos de mensaje
         critical_topics = {
             'Robot_Safety': [
-                ('/battery/array', Float32MultiArray),
-                ('/motors/array', Float32MultiArray)
+                ('/battery_array', Float32MultiArray),
+                ('/motors_array', Float32MultiArray)
             ],
             'Robot_Control': [
                 ('/odom/unfiltered', Odometry),
                 ('/imu/unfiltered', Imu),
-                ('/range/front',Range),
             ]
         }
         

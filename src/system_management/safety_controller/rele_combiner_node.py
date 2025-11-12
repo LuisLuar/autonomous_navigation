@@ -11,16 +11,16 @@ class ReleCombiner(Node):
 
         # Crear suscriptores
         self.subscribers = [
-            self.create_subscription(Bool, '/start_motor_left',   self.cb_left_motor, 10),
-            self.create_subscription(Bool, '/start_motor_right',  self.cb_right_motor, 10),
-            self.create_subscription(Bool, '/light_stop',         self.cb_stop, 10),
-            self.create_subscription(Bool, '/light_left',    self.cb_turn_left, 10),
-            self.create_subscription(Bool, '/light_right',   self.cb_turn_right, 10),
-            self.create_subscription(Bool, '/light_safety',       self.cb_safety, 10)
+            self.create_subscription(Bool, '/start/motor_left',   self.cb_left_motor, 10),
+            self.create_subscription(Bool, '/start/motor_right',  self.cb_right_motor, 10),
+            self.create_subscription(Bool, '/light/stop',         self.cb_stop, 10),
+            self.create_subscription(Bool, '/light/left',    self.cb_turn_left, 10),
+            self.create_subscription(Bool, '/light/right',   self.cb_turn_right, 10),
+            self.create_subscription(Bool, '/light/safety',       self.cb_safety, 10)
         ]
 
         # Publicador para enviar UInt8 a la ESP32
-        self.rele_pub = self.create_publisher(UInt8, '/rele/control', 10)
+        self.rele_pub = self.create_publisher(UInt8, '/rele_control', 10)
 
         #self.get_logger().info("Nodo 'rele_combiner' iniciado. Escuchando 6 entradas booleanas.")
 

@@ -6,6 +6,8 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import Float32MultiArray
 from diagnostic_msgs.msg import DiagnosticStatus
 from geometry_msgs.msg import PoseStamped
+from sensor_msgs.msg import NavSatFix, NavSatStatus
+from std_msgs.msg import Header, String
 
 class ROSBridge(Node):
     def __init__(self, parent_node=None):
@@ -34,6 +36,9 @@ class ROSBridge(Node):
         self.odom = None
         self.battery_array = None
         self.motors_array = None
+        self.gps_fix = None
+        self.gps_info = None
+        self.gps_raw = None
 
         # Estados de diagnóstico
         self.battery_12v_status = None
@@ -44,6 +49,11 @@ class ROSBridge(Node):
         self.esp32_control_status = None
         self.microros_agent_status = None
         self.components_status = None
+        self.global_status = None
+        self.camera_status = None
+        self.gps_status = None
+        self.rplidar_status = None
+
 
         # Bandera para indicar si recibimos al menos un mensaje
         self.any_msg_received = False
@@ -68,8 +78,8 @@ class ROSBridge(Node):
         self.create_subscription(Odometry, '/odom/unfiltered', self.cb_odom, 10)
 
         # Sensores de sistema
-        self.create_subscription(Float32MultiArray, '/battery/array', self.cb_battery_array, 10)
-        self.create_subscription(Float32MultiArray, '/motors/array', self.cb_motors_array, 10)
+        self.create_subscription(Float32MultiArray, '/battery_array', self.cb_battery_array, 10)
+        self.create_subscription(Float32MultiArray, '/motors_array', self.cb_motors_array, 10)
        
         # Suscripciones de diagnóstico
         self.create_subscription(DiagnosticStatus, 'status/battery_12v', self.cb_batt12v_status, 10)
@@ -80,6 +90,16 @@ class ROSBridge(Node):
         self.create_subscription(DiagnosticStatus, 'status/esp32_control', self.cb_esp32_control, 10)
         self.create_subscription(DiagnosticStatus, 'status/microros_agent', self.cb_microros_agent, 10)
         self.create_subscription(DiagnosticStatus, 'status/components', self.cb_components, 10)
+        self.create_subscription(DiagnosticStatus, 'status/camera', self.cb_camera_status, 10)
+        self.create_subscription(DiagnosticStatus, 'status/gps', self.cb_gps_status, 10)
+        self.create_subscription(DiagnosticStatus, 'status/rplidar', self.cb_rplidar_status, 10)
+        self.create_subscription(DiagnosticStatus, 'global_status', self.cb_global, 10)
+
+        # Señal del gps
+        self.create_subscription(NavSatFix, '/gps/fix', self.cb_gps_fix,10)
+        self.create_subscription(String, '/gps/raw', self.cb_gps_raw,10)
+        self.create_subscription(String, '/gps/info', self.cb_gps_info,10)
+
 
     # Callbacks: guardan el último mensaje recibido
     def cb_range_front(self, msg: Range):
@@ -141,6 +161,35 @@ class ROSBridge(Node):
     def cb_components(self, msg: DiagnosticStatus):
         self.components_status = msg
         self.any_msg_received = True
+
+    def cb_camera_status(self, msg: DiagnosticStatus):
+        self.camera_status = msg
+        self.any_msg_received = True
+    
+    def cb_gps_status(self, msg: DiagnosticStatus):
+        self.gps_status = msg
+        self.any_msg_received = True
+
+    def cb_rplidar_status(self, msg: DiagnosticStatus):
+        self.rplidar_status = msg
+        self.any_msg_received = True
+    
+    def cb_global(self, msg: DiagnosticStatus):
+        self.global_status = msg
+        self.any_msg_received = True
+    
+    def cb_gps_fix(self, msg: NavSatFix):
+        self.gps_fix = msg
+        self.any_msg_received = True
+    
+    def cb_gps_raw(self, msg: String):
+        self.gps_raw = msg
+        self.any_msg_received = True
+
+    def cb_gps_info(self, msg: String):
+        self.gps_info = msg
+        self.any_msg_received = True
+
 
     def publish_goal(self, x, y, frame_id='map'):
         """

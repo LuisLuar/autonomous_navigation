@@ -31,15 +31,8 @@ def robot_state_publisher(context: LaunchContext):
         parameters=[params],
     )
 
-    # Joint State Publisher GUI Node
-    joint_state_publisher_gui_node = Node(
-        package='joint_state_publisher_gui',
-        executable='joint_state_publisher_gui',
-        name='joint_state_publisher_gui',
-        output='screen'
-    )
 
-    return [robot_state_publisher_cmd,joint_state_publisher_gui_node ]
+    return [robot_state_publisher_cmd] #,joint_state_publisher_gui_node
 
 
 def generate_launch_description():
@@ -50,3 +43,13 @@ def generate_launch_description():
     ld.add_action(prepare_xacro_cmd)
 
     return ld
+
+"""
+# Joint State Publisher GUI Node
+    joint_state_publisher_gui_node = Node(
+        package='joint_state_publisher_gui',
+        executable='joint_state_publisher_gui',
+        name='joint_state_publisher_gui',
+        output='screen'
+    )
+"""

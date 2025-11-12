@@ -8,7 +8,7 @@ const char* agent_ip = "10.42.0.1";  // ← IP de tu PC (donde corre el agent)*/
 
 const char* ssid = "Fastnett-Fibra-ConstructoraVasqu";
 const char* password = "1706312434";
-const char* agent_ip = "192.168.100.167";
+const char* agent_ip = "192.168.100.98";
 
 const uint32_t agent_port = 8888;
 //___________________________
@@ -23,6 +23,7 @@ bool agent_connected = true;
 rcl_allocator_t allocator;
 rclc_support_t support;
 rcl_node_t node;
+rcl_service_t set_bool_service;
 
 rcl_subscription_t subscriber;
 rcl_subscription_t reset_subscriber;
@@ -32,6 +33,8 @@ rcl_publisher_t range_front_publisher;
 rcl_publisher_t range_left_publisher;
 rcl_publisher_t range_right_publisher;
 rcl_publisher_t reset_publisher;
+std_srvs__srv__SetBool_Request set_bool_req;
+std_srvs__srv__SetBool_Response set_bool_res;
 
 geometry_msgs__msg__Twist msg;
 nav_msgs__msg__Odometry odom_msg;
@@ -41,8 +44,8 @@ sensor_msgs__msg__Range range_front_msg;
 sensor_msgs__msg__Range range_left_msg;
 sensor_msgs__msg__Range range_right_msg;
 
-std_msgs__msg__Bool sub_msg;
-std_msgs__msg__Bool pub_msg;
+//std_msgs__msg__Bool sub_msg;
+//std_msgs__msg__Bool pub_msg;
 
 rcl_timer_t odom_timer;
 rcl_timer_t range_timer;
@@ -109,10 +112,12 @@ void beginMicroros() {
   RCCHECK(rclc_node_init_default(&node, "Robot_Control","", &support));
 
   // 4. Crear suscriptor para el servicio
-  RCCHECK(rclc_subscription_init_default(&reset_subscriber, &node,ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),       "reset/request_srv"));
+  // Crear servicio booleano
+  RCCHECK(rclc_service_init_default(&set_bool_service, &node, ROSIDL_GET_SRV_TYPE_SUPPORT(std_srvs, srv, SetBool), "/robot_control_reset"));
+  //RCCHECK(rclc_subscription_init_default(&reset_subscriber, &node,ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),       "reset/request_srv"));
   RCCHECK(rclc_subscription_init_default(&subscriber,       &node,ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist), "cmd_vel"));
   
-  RCCHECK(rclc_publisher_init_default(&reset_publisher, &node,ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),     "reset/response_srv"));
+  //RCCHECK(rclc_publisher_init_default(&reset_publisher, &node,ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),     "reset/response_srv"));
   RCCHECK(rclc_publisher_init_default(&odom_publisher,  &node,ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry), "odom/unfiltered"));
   RCCHECK(rclc_publisher_init_default(&imu_publisher,   &node,ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu),   "imu/unfiltered"));
 
@@ -125,13 +130,16 @@ void beginMicroros() {
   RCCHECK(rclc_timer_init_default(&range_timer, &support,RCL_MS_TO_NS(60),publish_ranges_all));
   RCCHECK(rclc_timer_init_default(&sync_timer,  &support,RCL_MS_TO_NS(120000),sync_timer_callback));
 
+  
+
   // create executor
   RCCHECK(rclc_executor_init(&executor, &support.context, 6, &allocator));
   RCCHECK(rclc_executor_add_subscription(&executor, &subscriber, &msg, &subscription_callback, ON_NEW_DATA));
-  RCCHECK(rclc_executor_add_subscription(&executor, &reset_subscriber, &sub_msg, &reset_callback, ON_NEW_DATA));
+  //RCCHECK(rclc_executor_add_subscription(&executor, &reset_subscriber, &sub_msg, &reset_callback, ON_NEW_DATA));
   RCCHECK(rclc_executor_add_timer(&executor, &odom_timer));
   RCCHECK(rclc_executor_add_timer(&executor, &range_timer));
   RCCHECK(rclc_executor_add_timer(&executor, &sync_timer));
+  RCCHECK(rclc_executor_add_service(&executor, &set_bool_service, &set_bool_req, &set_bool_res, set_bool_callback));
 
   delay(1000);
   syncTime();
@@ -250,7 +258,7 @@ void sync_timer_callback(rcl_timer_t* timer, int64_t last_call_time) {
 }
 
 //__________________RESET DE VALORES INTEGRADOS______________________________________________-
-void reset_callback(const void *msg_in)
+/*void reset_callback(const void *msg_in)
 {
   const std_msgs__msg__Bool *msg = (const std_msgs__msg__Bool *)msg_in;
    // Imprimir el valor real
@@ -281,6 +289,34 @@ void publish_bool(bool value) {
   }
   
   Serial.printf("Booleano publicado: %s\n", value ? "true" : "false");
+}*/
+// Callback del servicio
+void set_bool_callback(const void * req, void * res) {
+  std_srvs__srv__SetBool_Request * req_in = (std_srvs__srv__SetBool_Request *) req;
+  std_srvs__srv__SetBool_Response * res_in = (std_srvs__srv__SetBool_Response *) res;
+  
+  // Aquí procesas la solicitud booleana
+  bool requested_state = req_in->data;
+  Serial.println(requested_state);
+  
+  if (requested_state) {
+    // Acción cuando es true
+    roll_imu = 0, pitch_imu = 0, yaw_imu = 0; //datos de la imu
+    x_pos = 0.0, y_pos = 0.0, yaw_enc= 0.0; //datos del encoder
+    v = 0, w = 0; //datos del robot
+    
+    res_in->success = true;
+    static char success_msg1[] = "Estado activado exitosamente";
+    res_in->message.data = success_msg1;
+    res_in->message.size = strlen(res_in->message.data);
+    
+  } else {
+    // Acción cuando es false
+    res_in->success = true;
+    static char success_msg2[] = "Estado desactivado exitosamente";
+    res_in->message.data = success_msg2;
+    res_in->message.size = strlen(res_in->message.data);
+  }
 }
 //_________________________________________________
 

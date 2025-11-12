@@ -6,10 +6,14 @@
 // pero como la ESP32 solo soporta hasta 3.3V, el rango útil es ~16.5V máx.
 #define DIVIDER_RATIO (25.0 / 5.0)  // = 5.0
 
-float readVoltage(int GPIO){
+float readVoltage(int GPIO, float alpha , float &anterior){
   int rawValue = analogRead(GPIO);
   float voltageOut = (rawValue / ADC_RESOLUTION) * VREF;     // Voltaje que ve la ESP32 (0–3.3V)
-  float voltageIn = voltageOut * DIVIDER_RATIO;              // Voltaje real medido (0–16.5V aprox)
+  float SinFilter_voltageIn = voltageOut * DIVIDER_RATIO;              // Voltaje real medido (0–16.5V aprox)
+
+  
+  float voltage = alpha * SinFilter_voltageIn + (1-alpha) * anterior;
+  anterior = voltage;
 
   /*Serial.print("ADC: ");
   Serial.print(rawValue);
@@ -18,5 +22,5 @@ float readVoltage(int GPIO){
   Serial.print(" V\t Voltaje real: ");
   Serial.print(voltageIn, 2);
   Serial.println(" V");*/
-  return voltageIn;
+  return voltage;
 }

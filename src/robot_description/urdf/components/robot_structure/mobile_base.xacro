@@ -102,25 +102,25 @@
     <!-- ================================================== -->
     
     <!-- Rueda delantera derecha -->
-    <joint name="base_front_right_wheel_joint" type="continuous">
+    <joint name="base_front_right_wheel_joint" type="fixed">
         <parent link="base_link"/>
         <child link="front_right_wheel_link"/>
         <!-- Posición: esquina delantera derecha del chasis -->
         <origin xyz="${wheel_x_offset} ${-wheel_y_offset} 0" rpy="0 0 0"/>
         <!-- Eje de rotación: Y (ruedas giran alrededor del eje longitudinal) -->
-        <axis xyz="0 1 0"/>
+        <!--axis xyz="0 1 0"/-->
         <!-- Límites: velocity [rad/s], effort [Nm] -->
-        <limit velocity="100" effort="100"/>
+        <!--limit velocity="100" effort="100"/-->
     </joint>
 
     <!-- Rueda delantera izquierda -->
-    <joint name="base_front_left_wheel_joint" type="continuous">
+    <joint name="base_front_left_wheel_joint" type="fixed">
         <parent link="base_link"/>
         <child link="front_left_wheel_link"/>
         <!-- Posición: esquina delantera izquierda del chasis -->
         <origin xyz="${wheel_x_offset} ${wheel_y_offset} 0" rpy="0 0 0"/>
-        <axis xyz="0 1 0"/>
-        <limit velocity="100" effort="100"/>
+        <!--axis xyz="0 1 0"/>
+        <limit velocity="100" effort="100"/-->
     </joint>
 
     <!-- ================================================== -->
@@ -128,23 +128,23 @@
     <!-- ================================================== -->
     
     <!-- Rueda trasera derecha -->
-    <joint name="base_rear_right_wheel_joint" type="continuous">
+    <joint name="base_rear_right_wheel_joint" type="fixed">
         <parent link="base_link"/>
         <child link="rear_right_wheel_link"/>
         <!-- Posición: esquina trasera derecha del chasis -->
         <origin xyz="${-wheel_x_offset} ${-wheel_y_offset} 0" rpy="0 0 0"/>
-        <axis xyz="0 1 0"/>
-        <limit velocity="100" effort="100"/>
+        <!--axis xyz="0 1 0"/>
+        <limit velocity="100" effort="100"/-->
     </joint>
 
     <!-- Rueda trasera izquierda -->
-    <joint name="base_rear_left_wheel_joint" type="continuous">
+    <joint name="base_rear_left_wheel_joint" type="fixed">
         <parent link="base_link"/>
         <child link="rear_left_wheel_link"/>
         <!-- Posición: esquina trasera izquierda del chasis -->
         <origin xyz="${-wheel_x_offset} ${wheel_y_offset} 0" rpy="0 0 0"/>
-        <axis xyz="0 1 0"/>
-        <limit velocity="100" effort="100"/>
+        <!--axis xyz="0 1 0"/>
+        <limit velocity="100" effort="100"/-->
     </joint>
 
 </robot>

@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<robot name="sensor_rplidar" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ================================================== -->
+  <!-- COMPONENTE: LIDAR RPLIDAR A1 / A1M8               -->
+  <!-- ================================================== -->
+  <!--
+    Parámetros:
+      parent: link padre (normalmente base_link)
+      name: nombre del sensor (por defecto "laser")
+  -->
+
+  <xacro:macro name="sensor_rplidar" params="parent name *origin">
+    
+    <!-- === LINK DEL LIDAR === -->
+    <link name="${name}">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder length="0.03" radius="0.035"/>
+        </geometry>
+        <material name="black">
+          <color rgba="0.0 0.0 0.0 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder length="0.03" radius="0.035"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- === JOINT ENTRE EL PADRE Y EL LIDAR === -->
+    <joint name="${parent}_to_${name}" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${name}"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+
+  </xacro:macro>
+
+</robot>

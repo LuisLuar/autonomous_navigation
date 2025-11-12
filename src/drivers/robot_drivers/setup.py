@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
 package_name = 'robot_drivers'
 
@@ -10,7 +12,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/launch', ['launch/asus_xtion.launch.py']),
+        (os.path.join('share', package_name, 'launch'), 
+         glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,6 +27,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'gps = robot_drivers.gps:main',
+            'camera_reconnect_node = robot_drivers.camera_reconnect_node:main',
         ],
     },
 )
