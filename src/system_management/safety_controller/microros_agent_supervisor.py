@@ -15,28 +15,44 @@ class MicroROSAgentSupervisor(Node):
         )
 
         self.timer = self.create_timer(0.5, self.check_agent)  # 2 Hz
-        #self.get_logger().info('✅ MicroROS Agent Supervisor iniciado — monitoreando agente...')
 
     def check_agent(self):
-        # Busca el proceso micro_ros_agent UDP4
-        result = subprocess.run(
-            ['pgrep', '-f', 'micro_ros_agent.*udp4'],
-            stdout=subprocess.DEVNULL
-        )
+        # Verificar los 3 agentes
+        udp_active = self.check_agent_process('micro_ros_agent.*udp4')
+        control_active = self.check_agent_process('micro_ros_agent.*ttyESP32')
+        safety_active = self.check_agent_process('micro_ros_agent.*ttySafety')
 
         msg = DiagnosticStatus()
         msg.name = "MICRO-ROS agent"
 
-        if result.returncode == 0:
+        # Construir mensaje descriptivo
+        active_agents = []
+        if udp_active:
+            active_agents.append("WIFI-8888")
+        if control_active:
+            active_agents.append("SERIAL-CONTROL")
+        if safety_active:
+            active_agents.append("SERIAL-SAFETY")
+
+        if active_agents:
             msg.level = DiagnosticStatus.OK
-            msg.message = "Conectado"
-            #self.get_logger().info("🟢 micro-ROS Agent: ONLINE")
+            if len(active_agents) == 1:
+                msg.message = f"Conectado Agente: {active_agents[0]}"
+            else:
+                msg.message = f"Conectado {', '.join(active_agents)}"
         else:
             msg.level = DiagnosticStatus.ERROR
             msg.message = "DESCONECTADO"
-            #self.get_logger().warn("🔴 micro-ROS Agent: OFFLINE")
 
         self.publisher_.publish(msg)
+
+    def check_agent_process(self, pattern):
+        """Verifica si un agente específico está ejecutándose"""
+        result = subprocess.run(
+            ['pgrep', '-f', pattern],
+            stdout=subprocess.DEVNULL
+        )
+        return result.returncode == 0
 
 
 def main(args=None):

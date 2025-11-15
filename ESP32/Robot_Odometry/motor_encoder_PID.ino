@@ -20,8 +20,8 @@ void beginPid(){
   motorL.setGains (0.7, 0.11, 0.03); // (Kc,Ti,Td)
   motorR.setGains (0.4, 0.11, 0.03); // (Kc,Ti,Td);
 
-  motorL.setCvLimits(127, 0);
-  motorR.setCvLimits(127, 0);
+  motorL.setCvLimits(63, 0);
+  motorR.setCvLimits(63, 0);
 
   motorL.setPvLimits(16.9, 0); //Leftuierdo 16.4 rad/s
   motorR.setPvLimits(16.9, 0); //derecho
@@ -33,17 +33,19 @@ void encoderPID(){
   updateMotor(Left, encoderL, motorL, 1);
   updateMotor(Right, encoderR, motorR, 2);
 
-  v = (Right.v + Left.v) / 2;
-  w = (Right.v - Left.v) / L ; // rad/s
+  vx = (Right.v + Left.v) / 2;
+  wz = (Right.v - Left.v) / L ; // rad/s
 
-  //calculate current position of the robot
+  // Filtro sencillo deadzone
+  if (abs(vx) < 0.05) vx = 0;
+  if (abs(wz) < 0.05) wz = 0;
 
-  yaw_enc += w * dt_enc / 1000; //radians
+  yaw_enc += wz * dt_enc / 1000; //radians
 
   float cos_h = cos(yaw_enc);
   float sin_h = sin(yaw_enc);
-  delta_x = v * cos_h * dt_enc / 1000; //m
-  delta_y = v * sin_h * dt_enc / 1000; //m
+  delta_x = vx * cos_h * dt_enc / 1000; //m
+  delta_y = vx * sin_h * dt_enc / 1000; //m
 
   x_pos += delta_x;//*0.85;
   y_pos += delta_y;//*1.1;
@@ -55,7 +57,7 @@ void updateMotor(DatosMotores &m, ESP32Encoder &enc, motorControl &ctrl, int id)
   enc.setCount(0);
   
   m.wSinFilter = count * (2 * PI * 1000) / (dt_enc * ppr);
-  m.w = alpha * m.wSinFilter + (1-alpha) * m.wAnterior;
+  m.w = alpha * m.wSinFilter + (1-alpha) * m.wAnterior; // velocidad angular actual en rad/s
   m.wAnterior = m.w;
   
   m.v = (m.w * D) / 2;

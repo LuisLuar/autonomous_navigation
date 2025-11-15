@@ -40,6 +40,8 @@ setup(
             'camera_supervisor = safety_controller.camera_supervisor:main',
             'gps_supervisor = safety_controller.gps_supervisor:main',
             'rplidar_supervisor = safety_controller.rplidar_supervisor:main',
+            'test_lazo_abierto = test_code.test_lazo_abierto:main',
+            'test_lazo_cerrado = test_code.gui_lazo_cerrado:main',
         ],
     },
 )

@@ -8,14 +8,13 @@ const char* agent_ip = "10.42.0.1";  // ← IP de tu PC (donde corre el agent)*/
 
 const char* ssid = "Fastnett-Fibra-ConstructoraVasqu";
 const char* password = "1706312434";
-const char* agent_ip = "192.168.100.98";
-
+const char* agent_ip = "192.168.100.169";
 const uint32_t agent_port = 8888;
 //___________________________
 
 //___________variables de seguridad_______________
 unsigned long last_agent_check = 0;
-const unsigned long AGENT_TIMEOUT_MS = 10000;  // 10 s sin comunicación
+const unsigned long AGENT_TIMEOUT_MS = 2000;  // 10 s sin comunicación
 bool agent_connected = true;
 //_________________________________________________
 
@@ -26,13 +25,13 @@ rcl_node_t node;
 rcl_service_t set_bool_service;
 
 rcl_subscription_t subscriber;
-rcl_subscription_t reset_subscriber;
+//rcl_subscription_t reset_subscriber;
 rcl_publisher_t odom_publisher;
 rcl_publisher_t imu_publisher;
 rcl_publisher_t range_front_publisher;
 rcl_publisher_t range_left_publisher;
 rcl_publisher_t range_right_publisher;
-rcl_publisher_t reset_publisher;
+//rcl_publisher_t reset_publisher;
 std_srvs__srv__SetBool_Request set_bool_req;
 std_srvs__srv__SetBool_Response set_bool_res;
 
@@ -65,9 +64,18 @@ struct timespec getTime() {
   return tp;
 }
 
-
 void error_loop() {
   unsigned long long last_error_time = millis();
+    // Determinar próximo transporte alternando entre WiFi y Serial
+  uint8_t current_transport = preferences.getUInt("transport_mode", TRANSPORT_WIFI);
+  uint8_t next_transport = (current_transport == TRANSPORT_WIFI) ? TRANSPORT_SERIAL : TRANSPORT_WIFI;
+
+  preferences.putUInt("transport_mode", next_transport);
+  preferences.end(); // Guardar cambios
+  
+  Serial.print("🔁 Próximo reinicio usará: ");
+  Serial.println(next_transport == TRANSPORT_WIFI ? "WiFi" : "Serial");
+    
   while (1) {
 
     ST.motor(1, 0);
@@ -84,24 +92,41 @@ void error_loop() {
 
 
 void beginMicroros() {
-  //______MICROROS_________
-  //set_microros_transports();
-  //delay(2000);
+  // Inicializar Preferences
+  preferences.begin("microros", false);
+  
+  // Leer el modo de transporte guardado (default: WiFi)
+  uint8_t transport_mode = preferences.getUInt("transport_mode", TRANSPORT_WIFI);
+  
+  Serial.print("🔧 Modo de transporte: ");
+  Serial.println(transport_mode == TRANSPORT_WIFI ? "WiFi" : "Serial");
 
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  // Configurar según el modo
+  if(transport_mode == TRANSPORT_SERIAL) {
+    Serial.println("📡 Configurando micro-ROS por Serial...");
+    //______MICROROS_________
+    set_microros_transports();
+    delay(2000);
+  } else {
+    Serial.println("📡 Configurando micro-ROS por WiFi...");
+    
+  
+  
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+    }
+    Serial.println("Conectado a WiFi");
+  
+    //Configurar transporte micro-ROS por UDP
+    set_microros_wifi_transports(
+      (char*)ssid,          // Conversión explícita a char*
+      (char*)password,      // Conversión explícita a char*
+      (char*)agent_ip,      // Conversión explícita a char*
+      agent_port            // uint32_t
+    );
   }
-  Serial.println("Conectado a WiFi");
-
-  //Configurar transporte micro-ROS por UDP
-  set_microros_wifi_transports(
-    (char*)ssid,          // Conversión explícita a char*
-    (char*)password,      // Conversión explícita a char*
-    (char*)agent_ip,      // Conversión explícita a char*
-    agent_port            // uint32_t
-  );
   delay(1000);
 
 
@@ -126,8 +151,8 @@ void beginMicroros() {
   RCCHECK(rclc_publisher_init_default(&range_left_publisher,  &node,ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Range),"range/left"));
   RCCHECK(rclc_publisher_init_default(&range_right_publisher,  &node,ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Range),"range/right"));
          
-  RCCHECK(rclc_timer_init_default(&odom_timer,  &support,RCL_MS_TO_NS(50),publish_odom));
-  RCCHECK(rclc_timer_init_default(&range_timer, &support,RCL_MS_TO_NS(60),publish_ranges_all));
+  RCCHECK(rclc_timer_init_default(&odom_timer,  &support,RCL_MS_TO_NS(100),publish_odom));
+  RCCHECK(rclc_timer_init_default(&range_timer, &support,RCL_MS_TO_NS(200),publish_ranges_all));
   RCCHECK(rclc_timer_init_default(&sync_timer,  &support,RCL_MS_TO_NS(120000),sync_timer_callback));
 
   
@@ -197,7 +222,7 @@ void syncTime() {
 void publish_odom(rcl_timer_t* timer, int64_t last_call_time) {
   struct timespec time_stamp = getTime();
   
-  odometry.update(v,w,x_pos,y_pos,yaw_enc);
+  odometry.update(vx,wz,x_pos,y_pos,yaw_enc);
   imu_pub.update(ax, ay, az, gx, gy, gz, roll_imu, pitch_imu, yaw_imu);
 
   odom_msg = odometry.getData();
@@ -303,7 +328,6 @@ void set_bool_callback(const void * req, void * res) {
     // Acción cuando es true
     roll_imu = 0, pitch_imu = 0, yaw_imu = 0; //datos de la imu
     x_pos = 0.0, y_pos = 0.0, yaw_enc= 0.0; //datos del encoder
-    v = 0, w = 0; //datos del robot
     
     res_in->success = true;
     static char success_msg1[] = "Estado activado exitosamente";

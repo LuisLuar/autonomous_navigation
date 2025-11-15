@@ -39,7 +39,7 @@ class Esp32DynamicSupervisor(Node):
         }
 
         # Timeout de inactividad (segundos)
-        self.ACTIVITY_TIMEOUT = 8.0  # 4 ciclos del supervisor
+        self.ACTIVITY_TIMEOUT = 4.0  # 2 ciclos del supervisor
 
         # Nodos y tópicos esperados por cada ESP32
         self.expected_nodes = {

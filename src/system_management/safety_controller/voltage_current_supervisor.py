@@ -190,13 +190,13 @@ class VoltageCurrentSupervisor(Node):
         if self.last_battery_time is not None:
             battery_timeout = current_time - self.last_battery_time > self.TIMEOUT_DURATION
             if battery_timeout and self.battery_connected:
-                self.get_logger().error(f"🔴 TIMEOUT Batería: Sin datos por {self.TIMEOUT_DURATION}s")
+                #self.get_logger().error(f"🔴 TIMEOUT Batería: Sin datos por {self.TIMEOUT_DURATION}s")
                 self.battery_connected = False
                 battery_timed_out = True
         elif self.last_battery_time is None and self.initial_publications_done:
             # Si ya pasó el tiempo inicial y nunca recibió datos
             if not hasattr(self, '_battery_never_received_logged') or not self._battery_never_received_logged:
-                self.get_logger().warn("🔶 Batería: Aún no se recibieron datos iniciales")
+                #self.get_logger().warn("🔶 Batería: Aún no se recibieron datos iniciales")
                 self._battery_never_received_logged = True
         
         # Verificar timeout de motores
@@ -204,13 +204,13 @@ class VoltageCurrentSupervisor(Node):
         if self.last_motors_time is not None:
             motors_timeout = current_time - self.last_motors_time > self.TIMEOUT_DURATION
             if motors_timeout and self.motors_connected:
-                self.get_logger().error(f"🔴 TIMEOUT Motores: Sin datos por {self.TIMEOUT_DURATION}s")
+                #self.get_logger().error(f"🔴 TIMEOUT Motores: Sin datos por {self.TIMEOUT_DURATION}s")
                 self.motors_connected = False
                 motors_timed_out = True
         elif self.last_motors_time is None and self.initial_publications_done:
             # Si ya pasó el tiempo inicial y nunca recibió datos
             if not hasattr(self, '_motors_never_received_logged') or not self._motors_never_received_logged:
-                self.get_logger().warn("🔶 Motores: Aún no se recibieron datos iniciales")
+                #self.get_logger().warn("🔶 Motores: Aún no se recibieron datos iniciales")
                 self._motors_never_received_logged = True
         
         # Publicar estados de error por timeout
@@ -222,7 +222,7 @@ class VoltageCurrentSupervisor(Node):
         
         # Verificar si AMBOS tópicos tienen timeout
         if battery_timed_out and motors_timed_out:
-            self.get_logger().error("🚨 CRÍTICO: Ambos tópicos (batería y motores) tienen timeout!")
+            #self.get_logger().error("🚨 CRÍTICO: Ambos tópicos (batería y motores) tienen timeout!")
             self.publish_global_timeout_status()
 
     def publish_battery_timeout_status(self):
@@ -292,7 +292,8 @@ class VoltageCurrentSupervisor(Node):
     def publish_global_timeout_status(self):
         """Publica estado crítico cuando ambos tópicos fallan"""
         # Log adicional para estado crítico
-        self.get_logger().error("💀 SISTEMA CRÍTICO: Sin datos de batería ni motores")
+        #self.get_logger().error("💀 SISTEMA CRÍTICO: Sin datos de batería ni motores")
+        pass
 
     def publish_battery_status(self):
         """Publica estado normal de batería (solo si hay conexión)"""

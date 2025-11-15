@@ -1,0 +1,48 @@
+navsat_transform_node:
+    ros__parameters:
+# Frequency of the main run loop
+        frequency: 30.0
+
+# Tiempo de retraso, en segundos, antes de calcular la transformación del marco UTM al marco mundial. Esto es especialmente
+# importante si tiene use_odometry_yaw establecido en true. El valor predeterminado es 0.
+        delay: 0.0
+
+# LEA ATENTAMENTE: Al igual que todos los nodos de robot_localization, este nodo asume que los datos de su IMU se reportan en el marco ENU.
+# Muchas IMU reportan datos en el marco NED, por lo que deberá verificar que sus datos estén en el marco correcto antes de utilizarlos.
+
+# Si su IMU no tiene en cuenta la declinación magnética, introduzca aquí el valor correspondiente a su ubicación. Si no lo conoce,
+# consulte http://www.ngdc.noaa.gov/geomag-web/ (asegúrese de convertir el valor a radianes). Este parámetro es obligatorio.
+        magnetic_declination_radians: 0.0
+
+# La desviación de tu IMU, una vez que se le añade el valor magentic_declination_radians, debería indicar 0 cuando mira hacia el este. Si
+# no es así, introduce aquí la compensación. El valor predeterminado es 0.
+        yaw_offset: 0.0
+
+# Si esto es true, la altitud se establece en 0 en el mensaje de odometría de salida. El valor predeterminado es falso.
+        zero_altitude: false
+
+# Si esto es true, la transformación world_frame->utm se transmite para que la utilicen otros nodos. El valor predeterminado es falso.
+        broadcast_utm_transform: false
+
+# Si esto es true, se publicará la transformación utm->world_frame en lugar de la transformación world_frame->utm.
+# Tenga en cuenta que broadcast_utm_transform aún debe estar habilitado. El valor predeterminado es false.
+        broadcast_utm_transform_as_parent_frame: false
+
+# Si esto es true, todos los datos de odometría recibidos se convierten de nuevo a latitud/longitud y se publican como un mensaje NavSatFix como
+# /gps/filtered. El valor predeterminado es falso.
+        publish_filtered_gps: false
+
+# Si esto es true, el nodo ignora los datos IMU y obtiene su rumbo de la fuente de odometría (normalmente el
+# tema /odometry/filtered procedente de uno de los nodos de estimación de estado de robot_localization). ¡TENGA CUIDADO al usar esto!
+# El valor de yaw en su fuente de odometría *debe* estar referenciado al mundo, es decir, no puede utilizar su fuente de odometría para la yaw
+# si sus datos de yaw se basan únicamente en velocidades integradas. El valor predeterminado es falso.
+        use_odometry_yaw: false
+
+# Si es true, recuperará el datum del parámetro «datum» que aparece a continuación, si está disponible. Si no existe el parámetro «datum»,
+# navsat_transform_node esperará hasta que el usuario llame al servicio «datum» con el mensaje de servicio SetDatum.
+        wait_for_datum: false
+
+# En lugar de utilizar la primera ubicación GPS y el rumbo basado en IMU para el origen del marco local, los usuarios pueden especificar el
+# origen (datum) utilizando este parámetro. Los campos del parámetro representan la latitud y la longitud en grados decimales,
+# y el rumbo en radianes. Como navsat_transform_node asume un estándar ENU, un rumbo 0 corresponde al este.
+        datum: [55.944904, -3.186693, 0.0]

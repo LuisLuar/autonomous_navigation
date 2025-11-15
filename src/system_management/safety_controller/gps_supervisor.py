@@ -73,7 +73,7 @@ class GPSSupervisor(Node):
             'poor': {'sats_min': 3, 'hdop_max': 10.0}
         }
 
-        self.get_logger().info('🟢 Supervisor de GPS iniciado')
+        #self.get_logger().info('🟢 Supervisor de GPS iniciado')
 
     def setup_topic_monitors(self):
         """Configura suscriptores para monitorear actividad de topics críticos"""
@@ -90,9 +90,10 @@ class GPSSupervisor(Node):
                 10
             )
             self.topic_subscribers['/gps/fix'] = self.fix_subscriber
-            self.get_logger().info("🔍 Monitoreando actividad en: /gps/fix")
+            #self.get_logger().info("🔍 Monitoreando actividad en: /gps/fix")
         except Exception as e:
-            self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/fix: {e}")
+            #self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/fix: {e}")
+            pass
 
         # Suscriptor para /gps/vel
         try:
@@ -103,9 +104,10 @@ class GPSSupervisor(Node):
                 10
             )
             self.topic_subscribers['/gps/vel'] = self.vel_subscriber
-            self.get_logger().info("🔍 Monitoreando actividad en: /gps/vel")
+            #self.get_logger().info("🔍 Monitoreando actividad en: /gps/vel")
         except Exception as e:
-            self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/vel: {e}")
+            #self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/vel: {e}")
+            pass
 
         # Suscriptor para /gps/raw (actividad general)
         try:
@@ -116,9 +118,10 @@ class GPSSupervisor(Node):
                 10
             )
             self.topic_subscribers['/gps/raw'] = self.raw_subscriber
-            self.get_logger().info("🔍 Monitoreando actividad en: /gps/raw")
+            #self.get_logger().info("🔍 Monitoreando actividad en: /gps/raw")
         except Exception as e:
-            self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/raw: {e}")
+            #self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/raw: {e}")
+            pass
 
         # Suscriptor para /gps/info (información detallada)
         try:
@@ -129,9 +132,10 @@ class GPSSupervisor(Node):
                 10
             )
             self.topic_subscribers['/gps/info'] = self.info_subscriber
-            self.get_logger().info("🔍 Monitoreando actividad en: /gps/info")
+            #self.get_logger().info("🔍 Monitoreando actividad en: /gps/info")
         except Exception as e:
-            self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/info: {e}")
+            #self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/info: {e}")
+            pass
 
     def fix_callback(self, msg):
         """Callback para mensajes de fix del GPS"""
@@ -186,7 +190,8 @@ class GPSSupervisor(Node):
                     self.satellites_used = int(part.split(':')[1])
                     
         except Exception as e:
-            self.get_logger().debug(f"Error parseando info GPS: {e}")
+            #self.get_logger().debug(f"Error parseando info GPS: {e}")
+            pass
 
     def check_activity_timeout(self):
         """Verifica si el GPS ha estado inactivo por más del timeout"""
@@ -207,8 +212,8 @@ class GPSSupervisor(Node):
                 topic_names_and_types = self.get_topic_names_and_types()
                 return [name for name, types in topic_names_and_types]
             except Exception as e:
-                if attempt == 2:
-                    self.get_logger().error(f"Error obteniendo topics: {e}")
+                """if attempt == 2:
+                    self.get_logger().error(f"Error obteniendo topics: {e}")"""
                 time.sleep(0.1)
         return []
 
@@ -408,7 +413,8 @@ class GPSSupervisor(Node):
             self.publisher.publish(msg)
 
         except Exception as e:
-            self.get_logger().error(f"🚨 Error en check_gps: {e}")
+            #self.get_logger().error(f"🚨 Error en check_gps: {e}")
+            pass
 
     def interpret_hdop(self):
         """Proporciona una interpretación legible del valor HDOP"""
@@ -433,7 +439,8 @@ class GPSSupervisor(Node):
                 self.destroy_subscription(subscriber)
             self.topic_subscribers.clear()
         except Exception as e:
-            self.get_logger().warning(f"Error en cleanup: {e}")
+            #self.get_logger().warning(f"Error en cleanup: {e}")
+            pass
         finally:
             super().destroy_node()
 

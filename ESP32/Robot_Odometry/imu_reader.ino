@@ -79,14 +79,14 @@ bool IMU_update() {
   ay = a.acceleration.y - accY_offset;
   az = a.acceleration.z - accZ_offset;
 
+  gx = g.gyro.x - gyroX_offset;
+  gy = g.gyro.y - gyroY_offset;
+  gz = g.gyro.z - gyroZ_offset;
+
   // Filtro sencillo deadzone
   if (abs(ax) < 0.07) ax = 0;
   if (abs(ay) < 0.07) ay = 0;
   if (abs(az) < 0.07) az = 0;
-
-  gx = g.gyro.x - gyroX_offset;
-  gy = g.gyro.y - gyroY_offset;
-  gz = g.gyro.z - gyroZ_offset;
 
   if (abs(gx) < 0.3) gx = 0;
   if (abs(gy) < 0.3) gy = 0;

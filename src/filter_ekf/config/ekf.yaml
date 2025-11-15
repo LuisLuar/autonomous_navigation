@@ -1,22 +1,60 @@
 ekf_filter_node:
     ros__parameters:
-        frequency: 50.0
-        two_d_mode: true
+        frequency: 10.0
+        two_d_mode: false
+
+        # Si tienes problemas, prueba a establecer esto en true y, a continuación, ejecuta el comando echo en el tema /diagnostics_agg para ver si el nodo
+        # tiene algún problema con la configuración o los datos.
+        print_diagnostics: false
+
+
         publish_tf: true
  
         map_frame: map             
         odom_frame: odom            
         base_link_frame: base_footprint 
-        world_frame: odom 
+        world_frame: map #Para datos de posicion absoluta como GPS a map_frame o datos de posicion continua a odom_frame
 
         #x     , y     , z,
         #roll  , pitch , yaw,
         #vx    , vy    , vz,
         #vroll , vpitch, vyaw,
         #ax    , ay    , az
+
         odom0: odom/unfiltered
-        odom0_config: [false, false, false,
-                       false, false, false,
+        odom0_config: [true, true, false,
+                       false, false, true,
                        true, true, false,
                        false, false, true,
                        false, false, false]
+
+        imu0: imu/unfiltered
+        imu0_config: [false, false, false,
+                      true, true, true,
+                      false, false, false,
+                      true, true, true,
+                      true, true, true]
+        imu0_remove_gravitational_acceleration: false
+
+        # MATRIZ DE COVARIANZA DEL RUIDO DEL PROCESO 
+        # Representa el ruido que añadimos al error total después de cada paso de predicción. 
+        # Cuanto mejor se adapte el modelo de movimiento omnidireccional a su sistema, menores serán estos valores.
+        # Sin embargo, si los usuarios observan que una variable determinada tarda en converger, una solución es aumentar el
+        # valor diagonal para la variable en cuestión, lo que hará que el error previsto del filtro
+        # sea mayor, lo que a su vez hará que el filtro confíe más en la medición entrante durante la corrección. 
+        # Los valores se ordenan como x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az. 
+        process_noise_covariance: [0.05, 0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                                   0.0,    0.05, 0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                                   0.0,    0.0,    0.06, 0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                                   0.0,    0.0,    0.0,    0.03, 0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                                   0.0,    0.0,    0.0,    0.0,    0.03, 0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                                   0.0,    0.0,    0.0,    0.0,    0.0,    0.06, 0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                                   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.025, 0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                                   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.025, 0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                                   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.04, 0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+                                   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.01, 0.0,    0.0,    0.0,    0.0,    0.0,
+                                   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.01, 0.0,    0.0,    0.0,    0.0,
+                                   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.02, 0.0,    0.0,    0.0,
+                                   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.01, 0.0,    0.0,
+                                   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.01, 0.0,
+                                   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.015]

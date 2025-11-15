@@ -55,7 +55,7 @@ class RPLidarSupervisor(Node):
         # Suscriptores para monitorear actividad
         self.setup_scan_monitor()
 
-        self.get_logger().info('🟢 Supervisor de RPLIDAR iniciado')
+        #self.get_logger().info('🟢 Supervisor de RPLIDAR iniciado')
 
     def setup_scan_monitor(self):
         """Configura suscriptor para monitorear datos del LIDAR"""
@@ -66,9 +66,10 @@ class RPLidarSupervisor(Node):
                 self.scan_callback,
                 10
             )
-            self.get_logger().info("🔍 Monitoreando actividad en: /scan")
+            #self.get_logger().info("🔍 Monitoreando actividad en: /scan")
         except Exception as e:
-            self.get_logger().warning(f"⚠️ No se pudo suscribir a /scan: {e}")
+            #self.get_logger().warning(f"⚠️ No se pudo suscribir a /scan: {e}")
+            pass
 
     def scan_callback(self, msg):
         """Callback para mensajes de scan del LIDAR"""
@@ -108,7 +109,8 @@ class RPLidarSupervisor(Node):
             self.max_range = max_range
             
         except Exception as e:
-            self.get_logger().warning(f"Error analizando calidad de scan: {e}")
+            #self.get_logger().warning(f"Error analizando calidad de scan: {e}")
+            pass
 
     def check_activity_timeout(self):
         """Verifica si el LIDAR ha estado inactivo por más del timeout"""
@@ -140,8 +142,8 @@ class RPLidarSupervisor(Node):
                 topic_names_and_types = self.get_topic_names_and_types()
                 return [name for name, types in topic_names_and_types]
             except Exception as e:
-                if attempt == 2:
-                    self.get_logger().error(f"Error obteniendo topics: {e}")
+                """if attempt == 2:
+                    self.get_logger().error(f"Error obteniendo topics: {e}")"""
                 time.sleep(0.1)
         return []
 
@@ -290,7 +292,8 @@ class RPLidarSupervisor(Node):
             self.publisher.publish(msg)
 
         except Exception as e:
-            self.get_logger().error(f"🚨 Error en check_rplidar: {e}")
+            #self.get_logger().error(f"🚨 Error en check_rplidar: {e}")
+            pass
 
     def destroy_node(self):
         """Cleanup al destruir el nodo"""
@@ -298,7 +301,8 @@ class RPLidarSupervisor(Node):
             if hasattr(self, 'scan_subscriber'):
                 self.destroy_subscription(self.scan_subscriber)
         except Exception as e:
-            self.get_logger().warning(f"Error en cleanup: {e}")
+            #self.get_logger().warning(f"Error en cleanup: {e}")
+            pass
         finally:
             super().destroy_node()
 

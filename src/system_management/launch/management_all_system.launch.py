@@ -47,7 +47,7 @@ def generate_launch_description():
                 PathJoinSubstitution([
                     FindPackageShare('filter_ekf'),
                     'launch',
-                    'ekf.launch.py'
+                    'dual_ekf_navsat.launch.py'
                 ])
             ]),
             launch_arguments={}.items()
