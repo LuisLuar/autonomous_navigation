@@ -52,7 +52,7 @@ class CameraSupervisor(Node):
         self.topic_subscribers = {}
         self.setup_topic_monitors()
 
-        self.get_logger().info('🟢 Supervisor de Cámara iniciado')
+        #self.get_logger().info('🟢 Supervisor de Cámara iniciado')
 
     def setup_topic_monitors(self):
         """Configura suscriptores para monitorear actividad de topics críticos"""
@@ -81,9 +81,10 @@ class CameraSupervisor(Node):
                     qos_profile=10
                 )
                 self.topic_subscribers[topic] = subscriber
-                self.get_logger().info(f"🔍 Monitoreando actividad en: {topic}")
+                #self.get_logger().info(f"🔍 Monitoreando actividad en: {topic}")
             except Exception as e:
-                self.get_logger().warning(f"⚠️ No se pudo suscribir a {topic}: {e}")
+                #self.get_logger().warning(f"⚠️ No se pudo suscribir a {topic}: {e}")
+                pass
 
     def topic_activity_callback(self, topic_name):
         """Callback que registra actividad en topics de cámara"""
@@ -92,8 +93,8 @@ class CameraSupervisor(Node):
         self.message_counter += 1
         
         # Debug ocasional (cada 20 mensajes)
-        if self.message_counter % 20 == 0:
-            self.get_logger().debug(f"📷 Actividad cámara: {topic_name} (msg #{self.message_counter})")
+        #if self.message_counter % 20 == 0:
+            #self.get_logger().debug(f"📷 Actividad cámara: {topic_name} (msg #{self.message_counter})")
 
     def check_activity_timeout(self):
         """Verifica si la cámara ha estado inactiva por más del timeout"""
@@ -114,8 +115,8 @@ class CameraSupervisor(Node):
                 topic_names_and_types = self.get_topic_names_and_types()
                 return [name for name, types in topic_names_and_types]
             except Exception as e:
-                if attempt == 2:
-                    self.get_logger().error(f"Error obteniendo topics: {e}")
+                #if attempt == 2:
+                    #self.get_logger().error(f"Error obteniendo topics: {e}")
                 time.sleep(0.1)
         return []
 
@@ -201,7 +202,7 @@ class CameraSupervisor(Node):
                 self.last_camera_state['level'] != current_state['level'] or
                 self.last_camera_state['activity_timed_out'] != current_state['activity_timed_out']):
                 
-                if msg.level == DiagnosticStatus.OK:
+                """if msg.level == DiagnosticStatus.OK:
                     icon = "🟢"
                 elif msg.level == DiagnosticStatus.WARN:
                     icon = "🟡"
@@ -216,14 +217,15 @@ class CameraSupervisor(Node):
                 else:
                     status_msg = f"{icon} Cámara: {msg.message}"
                 
-                self.get_logger().info(status_msg)
+                #self.get_logger().info(status_msg)"""
                 self.last_camera_state = current_state
 
             # Publicar siempre el estado
             self.publisher.publish(msg)
 
         except Exception as e:
-            self.get_logger().error(f"🚨 Error en check_camera: {e}")
+            #self.get_logger().error(f"🚨 Error en check_camera: {e}")
+            pass
 
     def destroy_node(self):
         """Cleanup al destruir el nodo"""
@@ -233,7 +235,8 @@ class CameraSupervisor(Node):
                 self.destroy_subscription(subscriber)
             self.topic_subscribers.clear()
         except Exception as e:
-            self.get_logger().warning(f"Error en cleanup: {e}")
+            #self.get_logger().warning(f"Error en cleanup: {e}")
+            pass
         finally:
             super().destroy_node()
 

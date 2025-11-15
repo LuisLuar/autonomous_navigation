@@ -16,6 +16,7 @@
 #define ODOMETRY_H
 
 #include <Arduino.h>
+#include <micro_ros_arduino.h>
 #include <micro_ros_utilities/type_utilities.h>
 #include <micro_ros_utilities/string_utilities.h>
 #include <nav_msgs/msg/odometry.h>

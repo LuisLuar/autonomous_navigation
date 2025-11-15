@@ -36,7 +36,7 @@ class CameraReconnectNode(Node):
         # Iniciar la cámara por primera vez
         self.start_camera()
         
-        self.get_logger().info(f'Camera reconnect node initialized. Monitoring: {self.monitor_topic}')
+        #self.get_logger().info(f'Camera reconnect node initialized. Monitoring: {self.monitor_topic}')
     
     def image_callback(self, msg):
         """Se ejecuta cada vez que llega una imagen de la cámara"""
@@ -48,10 +48,10 @@ class CameraReconnectNode(Node):
         time_since_last_message = current_time - self.last_message_time
         
         if time_since_last_message > self.timeout:
-            self.get_logger().warn(
+            """self.get_logger().warn(
                 f'⚠️  No camera data received for {time_since_last_message:.1f} seconds. '
                 'Camera may be disconnected. Attempting to reconnect...'
-            )
+            )"""
             self.restart_camera()
             # Reset el timer para evitar múltiples reinicios seguidos
             self.last_message_time = current_time
@@ -75,15 +75,16 @@ class CameraReconnectNode(Node):
                 preexec_fn=os.setsid  # Para poder matar el grupo de procesos completo
             )
             
-            self.get_logger().info(f'✅ Camera process started (PID: {self.camera_process.pid})')
+            #self.get_logger().info(f'✅ Camera process started (PID: {self.camera_process.pid})')
             self.last_message_time = time.time()
             
         except Exception as e:
-            self.get_logger().error(f'❌ Failed to start camera: {e}')
+            #self.get_logger().error(f'❌ Failed to start camera: {e}')
+            pass
     
     def restart_camera(self):
         """Reinicia la cámara (detiene y vuelve a iniciar)"""
-        self.get_logger().info('🔄 Restarting camera...')
+        #self.get_logger().info('🔄 Restarting camera...')
         self.stop_camera()
         time.sleep(3)  # Esperar a que se liberen los recursos USB
         self.start_camera()
@@ -118,10 +119,10 @@ class CameraReconnectNode(Node):
                     except psutil.NoSuchProcess:
                         pass
                 
-                self.get_logger().info('✅ Camera process stopped')
+                #self.get_logger().info('✅ Camera process stopped')
                 
             except Exception as e:
-                self.get_logger().error(f'❌ Error stopping camera: {e}')
+                #self.get_logger().error(f'❌ Error stopping camera: {e}')
                 # Último recurso: matar todo el grupo de procesos
                 try:
                     import os

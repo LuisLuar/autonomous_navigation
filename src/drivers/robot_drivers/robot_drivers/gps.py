@@ -192,7 +192,7 @@ class MultiGNSSPublisher(Node):
         timer_period = 1.0 / max(self.publish_rate, 1.0)
         self.create_timer(timer_period, self.read_gnss_data)
         
-        self.get_logger().info('Nodo GPS iniciado correctamente')
+        #self.get_logger().info('Nodo GPS iniciado correctamente')
 
     def connect_to_gps(self):
         """
@@ -213,7 +213,7 @@ class MultiGNSSPublisher(Node):
             self.reconnect_attempts = 0
             self.reconnect_delay = INITIAL_RECONNECT_DELAY
             
-            self.get_logger().info(f'✓ Conectado al GPS en {self.port} @ {self.baud} bps')
+            #self.get_logger().info(f'✓ Conectado al GPS en {self.port} @ {self.baud} bps')
             return True
             
         except serial.SerialException as e:
@@ -251,9 +251,9 @@ class MultiGNSSPublisher(Node):
         # Aumentar el delay con backoff exponencial
         if self.reconnect_attempts >= MAX_RECONNECT_ATTEMPTS:
             self.reconnect_delay = min(self.reconnect_delay * 2, MAX_RECONNECT_DELAY)
-            self.get_logger().warning(
+            """self.get_logger().warning(
                 f'Múltiples intentos fallidos. Siguiente intento en {self.reconnect_delay:.1f}s'
-            )
+            )"""
 
     def parse_gga(self, parts):
         """
@@ -299,7 +299,7 @@ class MultiGNSSPublisher(Node):
             return False
             
         except Exception as e:
-            self.get_logger().warning(f'Error parseando GGA: {e}')
+            #self.get_logger().warning(f'Error parseando GGA: {e}')
             return False
 
     def parse_rmc(self, parts):
@@ -355,7 +355,7 @@ class MultiGNSSPublisher(Node):
             return True, speed_m_s, course
             
         except Exception as e:
-            self.get_logger().warning(f'Error parseando RMC: {e}')
+            #self.get_logger().warning(f'Error parseando RMC: {e}')
             return False, None, None
 
     def parse_gsa(self, parts):
@@ -388,7 +388,7 @@ class MultiGNSSPublisher(Node):
             return True
             
         except Exception as e:
-            self.get_logger().warning(f'Error parseando GSA: {e}')
+            #self.get_logger().warning(f'Error parseando GSA: {e}')
             return False
 
     def parse_gsv(self, parts):
@@ -483,7 +483,7 @@ class MultiGNSSPublisher(Node):
 
             # Verificar checksum
             if not verify_nmea_checksum(raw):
-                self.get_logger().warning(f'Checksum inválido: {raw[:80]}')
+                #self.get_logger().warning(f'Checksum inválido: {raw[:80]}')
                 return
 
             # Separar campos de la sentencia
@@ -524,7 +524,8 @@ class MultiGNSSPublisher(Node):
             
         except Exception as e:
             # Otros errores no relacionados con el serial
-            self.get_logger().error(f'Error inesperado leyendo datos GNSS: {e}')
+            #self.get_logger().error(f'Error inesperado leyendo datos GNSS: {e}')
+            pass
 
     def publish_gps_fix_and_velocity(self):
         """
@@ -668,9 +669,10 @@ class MultiGNSSPublisher(Node):
         try:
             if hasattr(self, 'ser') and self.ser and self.ser.is_open:
                 self.ser.close()
-                self.get_logger().info('Puerto serial cerrado correctamente')
+                #self.get_logger().info('Puerto serial cerrado correctamente')
         except Exception as e:
-            self.get_logger().error(f'Error al cerrar puerto serial: {e}')
+            #self.get_logger().error(f'Error al cerrar puerto serial: {e}')
+            pass
         super().destroy_node()
 
 

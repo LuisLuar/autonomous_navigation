@@ -49,7 +49,7 @@ class StatusMonitor(Node):
         # Descubrir topicos iniciales
         self.discover_status_topics()
         
-        self.get_logger().info('Master Supervisor iniciado')
+        #self.get_logger().info('Master Supervisor iniciado')
     
     def discover_status_topics(self):
         """Descubre y se suscribe a nuevos topicos de status"""
@@ -79,7 +79,8 @@ class StatusMonitor(Node):
                     self.remove_subscription_for_topic(topic)
                         
         except Exception as e:
-            self.get_logger().error(f'Error descubriendo topicos: {str(e)}')
+            #self.get_logger().error(f'Error descubriendo topicos: {str(e)}')
+            pass
     
     def create_subscription_for_topic(self, topic_name):
         """Crea una suscripción para un topico específico"""
@@ -93,10 +94,11 @@ class StatusMonitor(Node):
             self.status_subscriptions[topic_name] = subscription
             self.status_data[topic_name] = None  # Estado inicial desconocido
             
-            self.get_logger().info(f'Suscrito a: {topic_name}')
+            #self.get_logger().info(f'Suscrito a: {topic_name}')
             
         except Exception as e:
-            self.get_logger().error(f'Error suscribiéndose a {topic_name}: {str(e)}')
+            #self.get_logger().error(f'Error suscribiéndose a {topic_name}: {str(e)}')
+            pass
     
     def remove_subscription_for_topic(self, topic_name):
         """Elimina una suscripción para un topico específico"""
@@ -105,7 +107,7 @@ class StatusMonitor(Node):
             if topic_name in self.status_data:
                 del self.status_data[topic_name]
             
-            self.get_logger().info(f'Desuscrito de: {topic_name}')
+            #self.get_logger().info(f'Desuscrito de: {topic_name}')
     
     def status_callback(self, msg, topic_name):
         """Callback para procesar mensajes de status"""
@@ -121,14 +123,14 @@ class StatusMonitor(Node):
                 self.blink_callback
             )
             self.blink_state = False  # Empezar apagado
-            self.get_logger().info("Iniciando parpadeo para estado WARNING")
+            #self.get_logger().info("Iniciando parpadeo para estado WARNING")
     
     def stop_blinking(self):
         """Detiene el timer de parpadeo"""
         if self.blink_timer is not None:
             self.blink_timer.destroy()
             self.blink_timer = None
-            self.get_logger().info("Deteniendo parpadeo")
+            #self.get_logger().info("Deteniendo parpadeo")
     
     def blink_callback(self):
         """Callback para controlar el parpadeo en estado WARNING"""
@@ -138,9 +140,9 @@ class StatusMonitor(Node):
             safety_relay.data = self.blink_state
             self.light_safety_pub.publish(safety_relay)
             
-            self.get_logger().debug(
+            """self.get_logger().debug(
                 f'Parpadeo WARNING: {"ENCENDIDO" if self.blink_state else "APAGADO"}'
-            )
+            )"""
 
     def evaluate_global_status(self):
         """Evalúa el estado global basado en todos los estados individuales"""
