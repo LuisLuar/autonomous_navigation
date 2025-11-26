@@ -38,4 +38,12 @@ def generate_launch_description():
             output='screen',
             name='gps_node'
         ),
+
+        # Lanzar WebSocket Bridge
+        Node(
+            package='robot_drivers',
+            executable='websocket_bridge',
+            output='screen',
+            name='websocket_ros_bridge'
+        ),
     ])

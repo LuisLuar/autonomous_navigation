@@ -6,17 +6,33 @@ ImuPublisher::ImuPublisher()
 
     // Default: zero orientation and angular/linear acceleration
     //imu_msg_.orientation_covariance[0] = -1.0; // if orientation is not used
-    imu_msg_.orientation_covariance[0] = 0.1; // EJE X
-    imu_msg_.orientation_covariance[4] = 0.1; // EJE Y
-    imu_msg_.orientation_covariance[8] = 0.001; // EJE Z
     
-    imu_msg_.angular_velocity_covariance[0] = 0.01; // X
-    imu_msg_.angular_velocity_covariance[4] = 0.01; // Y
-    imu_msg_.angular_velocity_covariance[8] = 0.0001;  // Z
+    // Definir matriz de covarianza para la orientación en cuaternios(X, Y, Z)
+    double orientation_covariance[9] = {
+        0.01, 0.0,  0.0,  
+        0.0,  0.01, 0.0,  
+        0.0,  0.0,  0.01
+    };
+    memcpy(imu_msg_.orientation_covariance, orientation_covariance, sizeof(orientation_covariance));    // Copiar usando memcpy
+    
+    
+    // Definir matriz de covarianza para la velocidad angular en (X, Y, Z)
+    double angular_velocity_covariance[9] = {
+        0.02, 0.0,  0.0,  
+        0.0,  0.02, 0.0,  
+        0.0,  0.0,  0.02
+    };
+    memcpy(imu_msg_.angular_velocity_covariance, angular_velocity_covariance, sizeof(angular_velocity_covariance));
 
-    imu_msg_.linear_acceleration_covariance[0] = 0.05;
-    imu_msg_.linear_acceleration_covariance[4] = 0.05;
-    imu_msg_.linear_acceleration_covariance[8] = 0.05;
+    
+    // Definir matriz de covarianza para la aceleracion lineal en (X, Y, Z)
+    double linear_acceleration_covariance[9] = {
+        0.03, 0.0,  0.0,  
+        0.0,  0.03, 0.0,  
+        0.0,  0.0,  0.03
+    };
+    memcpy(imu_msg_.linear_acceleration_covariance, linear_acceleration_covariance, sizeof(linear_acceleration_covariance));
+    
 }
 
 void ImuPublisher::update(

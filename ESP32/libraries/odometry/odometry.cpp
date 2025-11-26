@@ -21,44 +21,61 @@ Odometry::Odometry():
 {
     odom_msg_.header.frame_id = micro_ros_string_utilities_set(odom_msg_.header.frame_id, "odom");
     odom_msg_.child_frame_id = micro_ros_string_utilities_set(odom_msg_.child_frame_id, "base_footprint");
+    
+    // Definir matriz de covarianza para la posicion (X, Y, Z) y orientación en cuaternios(X, Y, Z)
+    double pose_covariance[36] = {
+        0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+        0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+        0.0,  0.0,  0.01, 0.0,  0.0,  0.0,
+        0.0,  0.0,  0.0,  0.01, 0.0,  0.0,
+        0.0,  0.0,  0.0,  0.0,  0.01, 0.0,
+        0.0,  0.0,  0.0,  0.0,  0.0,  0.01
+    };
+    
+    // Copiar usando memcpy
+    memcpy(odom_msg_.pose.covariance, pose_covariance, sizeof(pose_covariance));
+    
+        // Definir matriz de covarianza para la velocidad lineal (X, Y, Z) y la velocidad angular(X, Y, Z)
+    double twist_covariance[36] = {
+        0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+        0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+        0.0,  0.0,  0.01, 0.0,  0.0,  0.0,
+        0.0,  0.0,  0.0,  0.01, 0.0,  0.0,
+        0.0,  0.0,  0.0,  0.0,  0.01, 0.0,
+        0.0,  0.0,  0.0,  0.0,  0.0,  0.01
+    };
+    
+    // Copiar usando memcpy
+    memcpy(odom_msg_.twist.covariance, twist_covariance, sizeof(twist_covariance));
 }
 
 void Odometry::update(float linear_vel_x, float angular_vel_z, float x_pos_, float y_pos_, float heading_ )
 {
     
-    //calculate robot's heading in quaternion angle
-    //ROS has a function to calculate yaw in quaternion angle
+    //calcular la dirección del robot en ángulo de cuaternión
     float q[4];
     euler_to_quat(0, 0, heading_, q);
 
-    //robot's position in x,y, and z
+    //Posición del robot en X, Y, Z
     odom_msg_.pose.pose.position.x = x_pos_;
     odom_msg_.pose.pose.position.y = y_pos_;
     odom_msg_.pose.pose.position.z = 0.0;
 
-    //robot's heading in quaternion
+    //Dirección del robot en cuaternión
     odom_msg_.pose.pose.orientation.x = (double) q[1];
     odom_msg_.pose.pose.orientation.y = (double) q[2];
     odom_msg_.pose.pose.orientation.z = (double) q[3];
     odom_msg_.pose.pose.orientation.w = (double) q[0];
-
-    odom_msg_.pose.covariance[0] = 0.01; //x posicion
-    odom_msg_.pose.covariance[7] = 0.01; // y posicion
-    odom_msg_.pose.covariance[35] = 0.001; // yaw orientacion
-
-    //linear speed from encoders
+    
+    //velocidad lineal a partir de los encoders
     odom_msg_.twist.twist.linear.x = linear_vel_x;
     odom_msg_.twist.twist.linear.y = 0.0;
     odom_msg_.twist.twist.linear.z = 0.0;
 
-    //angular speed from encoders
+    //velocidad angular a partir de los encoders
     odom_msg_.twist.twist.angular.x = 0.0;
     odom_msg_.twist.twist.angular.y = 0.0;
     odom_msg_.twist.twist.angular.z = angular_vel_z;
-
-    odom_msg_.twist.covariance[0] = 0.0001;
-    odom_msg_.twist.covariance[7] = 0.0001;
-    odom_msg_.twist.covariance[35] = 0.0001;
 }
 
 nav_msgs__msg__Odometry Odometry::getData()

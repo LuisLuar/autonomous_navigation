@@ -81,7 +81,8 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.map_tab, "🗺️ MAPA Y NAVEGACIÓN")
         
         # Pestaña 3: Cámara y Visión (placeholder por ahora)
-        self.camera_tab = CameraWidget()
+        # self.camera_tab = CameraWidget()
+        self.camera_tab = CameraWidget(ros_node=self.ros_node)
         self.tab_widget.addTab(self.camera_tab, "📷 CÁMARA Y VISIÓN")
     
     def setup_status_bar(self):

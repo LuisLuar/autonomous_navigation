@@ -13,7 +13,7 @@ class MapWidget(QWidget):
     def __init__(self, ros_node=None, offline_tiles_path=None, leaflet_path=None):
         super().__init__()
         self.ros_node = ros_node
-        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/casa2" #OpenStreetMap GoogleImagenes
+        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/casa" #OpenStreetMap GoogleImagenes
         
         # Ruta a los recursos de Leaflet offline
         if leaflet_path:
@@ -101,12 +101,12 @@ class MapWidget(QWidget):
         if self.leaflet_path and os.path.exists(self.leaflet_path):
             leaflet_css = f"file://{self.leaflet_path}/leaflet.css"
             leaflet_js = f"file://{self.leaflet_path}/leaflet.js"
-            print(f"[MapWidget] ✓ Usando Leaflet OFFLINE desde: {self.leaflet_path}")
+            #print(f"[MapWidget] ✓ Usando Leaflet OFFLINE desde: {self.leaflet_path}")
         else:
             # Fallback a CDN
             leaflet_css = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
             leaflet_js = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            print(f"[MapWidget] ⚠️ Leaflet offline no encontrado, usando CDN")
+            #print(f"[MapWidget] ⚠️ Leaflet offline no encontrado, usando CDN")
         
         tiles_url = f"file://{self.offline_tiles_path}/{{z}}/{{x}}/{{y}}.png"
         
@@ -239,7 +239,8 @@ class MapWidget(QWidget):
         
         # Verificar directorios
         if not os.path.exists(self.offline_tiles_path):
-            print(f"[MapWidget] ⚠️ ADVERTENCIA: No se encuentra el directorio de tiles: {self.offline_tiles_path}")
+            #print(f"[MapWidget] ⚠️ ADVERTENCIA: No se encuentra el directorio de tiles: {self.offline_tiles_path}")
+            pass
         
         # Crear HTML del mapa
         html_content = self.create_offline_map_html()
@@ -250,7 +251,7 @@ class MapWidget(QWidget):
         # Conectar señal para detectar cambios en el título (comunicación JS->Python)
         self.map_view.titleChanged.connect(self.on_map_title_changed)
         
-        print(f"[MapWidget] Mapa configurado en: {initial_lat:.6f}, {initial_lng:.6f}")
+        #print(f"[MapWidget] Mapa configurado en: {initial_lat:.6f}, {initial_lng:.6f}")
     
     def on_map_title_changed(self, title):
         """Detectar clicks en el mapa desde JavaScript"""
@@ -264,9 +265,10 @@ class MapWidget(QWidget):
                 self.info_label.setText(f"📍 Punto seleccionado: {lat:.6f}, {lng:.6f}")
                 self.set_dest_btn.setEnabled(True)
                 
-                print(f"[MapWidget] Punto temporal seleccionado: {lat:.6f}, {lng:.6f}")
+                #print(f"[MapWidget] Punto temporal seleccionado: {lat:.6f}, {lng:.6f}")
             except Exception as e:
-                print(f"[MapWidget] Error procesando click: {e}")
+                #print(f"[MapWidget] Error procesando click: {e}")
+                pass
     
     def save_and_load_map(self, html_content=None):
         # Limpiar archivo anterior
@@ -289,7 +291,7 @@ class MapWidget(QWidget):
         url = QUrl.fromLocalFile(self.html_file)
         self.map_view.setUrl(url)
         
-        print(f"[MapWidget] Mapa HTML guardado en: {self.html_file}")
+        #print(f"[MapWidget] Mapa HTML guardado en: {self.html_file}")
     
     def confirm_destination(self):
         """Confirmar y establecer el destino seleccionado en el mapa"""
@@ -311,20 +313,21 @@ class MapWidget(QWidget):
         self.set_dest_btn.setEnabled(False)
 
         # Imprimir en terminal (monitor serial)
-        print(f"\n{'='*60}")
+        """print(f"\n{'='*60}")
         print(f"🎯 DESTINO ESTABLECIDO")
         print(f"{'='*60}")
         print(f"  Latitud:  {lat:.6f}")
         print(f"  Longitud: {lng:.6f}")
-        print(f"{'='*60}\n")
+        print(f"{'='*60}\n")"""
 
         # Publicar a ROS si está disponible
         if self.ros_node:
             try:
                 self.ros_node.publish_goal(lat, lng)
-                print(f"[MapWidget] ✓ Goal publicado a ROS exitosamente")
+                #print(f"[MapWidget] ✓ Goal publicado a ROS exitosamente")
             except Exception as e:
-                print(f"[MapWidget] ✗ Error publicando goal a ROS: {e}")
+                #print(f"[MapWidget] ✗ Error publicando goal a ROS: {e}")
+                pass
     
     def set_destination(self, lat, lng):
         """Establecer destino directamente (usado por update_robot_position si es necesario)"""
@@ -333,13 +336,14 @@ class MapWidget(QWidget):
         
         self.info_label.setText(f"✓ Destino: {lat:.6f}, {lng:.6f}")
         
-        print(f"[MapWidget] DESTINO_ESTABLECIDO: {lat:.6f}, {lng:.6f}")
+        #print(f"[MapWidget] DESTINO_ESTABLECIDO: {lat:.6f}, {lng:.6f}")
 
         if self.ros_node:
             try:
                 self.ros_node.publish_goal(lat, lng)
             except Exception as e:
-                print(f"[MapWidget] Error publicando goal: {e}")
+                #print(f"[MapWidget] Error publicando goal: {e}")
+                pass
     
     def clear_destination(self):
         self.destination = None
@@ -351,9 +355,9 @@ class MapWidget(QWidget):
         # Recrear mapa sin destino
         self.setup_map()
         
-        print(f"\n{'='*60}")
-        print(f"🗑️ DESTINO LIMPIADO")
-        print(f"{'='*60}\n")
+        #print(f"\n{'='*60}")
+        #print(f"🗑️ DESTINO LIMPIADO")
+        #print(f"{'='*60}\n")
     
     def handle_map_click(self, lat, lng):
         """Manejador alternativo para clicks en el mapa"""
@@ -368,7 +372,7 @@ class MapWidget(QWidget):
         # Recrear mapa con nueva posición
         self.setup_map()
         
-        print(f"[MapWidget] Posición del robot actualizada: {lat:.6f}, {lng:.6f}")
+        #print(f"[MapWidget] Posición del robot actualizada: {lat:.6f}, {lng:.6f}")
     
     def update_map_position(self, lat, lng):
         """Actualiza solo la posición del robot sin recrear todo el mapa"""
@@ -419,20 +423,24 @@ class MapWidget(QWidget):
 
 
         except AttributeError as e:
-            print(f"⚠️ Error accediendo a datos ROS: {e}")
+            #print(f"⚠️ Error accediendo a datos ROS: {e}")
+            pass
         except Exception as e:
-            print(f"❌ Error inesperado en update_from_ros: {e}")
+            #print(f"❌ Error inesperado en update_from_ros: {e}")
+            pass
 
     def _show_no_bridge_error(self):
         """Muestra un mensaje de error cuando no hay bridge disponible."""
-        print("❌ No hay bridge ROS disponible")
+        #print("❌ No hay bridge ROS disponible")
+        pass
     
     def closeEvent(self, event):
         # Limpiar archivo temporal al cerrar
         if self.html_file and os.path.exists(self.html_file):
             try:
                 os.unlink(self.html_file)
-                print(f"[MapWidget] Archivo temporal eliminado: {self.html_file}")
+                #print(f"[MapWidget] Archivo temporal eliminado: {self.html_file}")
             except Exception as e:
-                print(f"[MapWidget] No se pudo eliminar archivo temporal: {e}")
+                #print(f"[MapWidget] No se pudo eliminar archivo temporal: {e}")
+                pass
         super().closeEvent(event)

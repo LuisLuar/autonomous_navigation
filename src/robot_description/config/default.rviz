@@ -48,7 +48,7 @@ Visualization Manager:
         Z: 0
       Plane: XY
       Plane Cell Count: 10
-      Reference Frame: base_link #odom
+      Reference Frame: odom #base_link 
       Value: true
 
     # =============================================

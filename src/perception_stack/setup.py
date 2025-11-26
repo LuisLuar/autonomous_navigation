@@ -30,6 +30,7 @@ setup(
         'console_scripts': [
             'object_detector = object_detection.detector_node:main',
             'semantic_segmenter = semantic_segmentation.segmenter_node:main',
+            'capture_frame = object_detection.capture_frame:main',  
         ],
     },
 )

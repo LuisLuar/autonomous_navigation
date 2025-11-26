@@ -21,6 +21,9 @@
     <!-- URDF RPLIDAR-->
     <xacro:include filename="$(find robot_description)/urdf/components/rplidar/lidar.urdf.xacro"/>
 
+    <!-- GPS BU-353N5 -->
+    <xacro:include filename="$(find robot_description)/urdf/components/gps/BU353N5.urdf.xacro"/>
+
     <!-- ================================================== -->
     <!-- ESTRUCTURA DEL ROBOT COMPLETO -->
     <!-- ================================================== -->
@@ -49,6 +52,11 @@
     <xacro:sensor_asus_xtion parent="base_link" name="camera">
         <origin xyz="0.4 0.0 0.35" rpy="0.0 0.0 0.0"/>
     </xacro:sensor_asus_xtion>
+
+    <!--Union entre base_link y el GPS BU353N5-->
+    <xacro:sensor_gps_bu353n5 parent="base_link" name="gnss">
+        <origin xyz="0.0 0.0 0.60" rpy="0 0 0"/>
+    </xacro:sensor_gps_bu353n5>
 
 
     <!-- Unión entre base_link y el LIDAR RPLidar A1 / A1M8 -->

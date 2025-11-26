@@ -1,25 +1,10 @@
 //Robot_Odometry.ino (PRINCIPAL)
-#include <imu_publisher.h>
-#include <odometry.h>
 #include <ESP32Encoder.h>
 #include <SabertoothSimplified.h>
 #include <motorControl.h>
 
-/*Motor controller using micro_ros serial set_microros_transports*/
-#include <micro_ros_arduino.h>
-#include <stdio.h>
-#include <rcl/rcl.h>
-#include <rcl/error_handling.h>
-#include <rclc/rclc.h>
-#include <rclc/executor.h>
 
-#include <geometry_msgs/msg/twist.h>
-#include <nav_msgs/msg/odometry.h>
-#include <sensor_msgs/msg/imu.h>
-#include <sensor_msgs/msg/range.h>
-//#include <std_msgs/msg/bool.h>
 #include <GP2Y0E03_ESP32.h>
-#include <std_srvs/srv/set_bool.h>
 
 
 //___________ENCODER DERECHO_____________
@@ -62,18 +47,19 @@ float roll_imu = 0.0, pitch_imu = 0.0, yaw_imu = 0.0;
 
 //________CONFIGURACION ENCODER__________
 const int sampleTime_enc = 50;  // Tiempo de muestreo milisegundos
-unsigned long lastTime_enc = 0, dt_enc = 0;;      
+unsigned long lastTime_enc = 0, dt_enc = 0;     
 
 float vx = 0, wz = 0; //Velocidad lineal y angular del robot [m/s] y [rad/s]
 float x_pos = 0.0, y_pos = 0.0,  delta_y = 0.0, delta_x = 0.0; //Posición estimada por odometría METROS
 float yaw_enc = 0.0; //Orientación estimada por odometría RADIANES
 //_______________________________________
 
-//_______variables microros___________
-rclc_executor_t executor;
+bool reset = false;
+const int sampleTime_range = 200;  // Tiempo de muestreo milisegundos
+unsigned long lastTime_range = 0, dt_range = 0; 
+float range_front = 0.0, range_left = 0.0, range_right = 0.0;
 
-#define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){error_loop();}}
-#define RCSOFTCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){}}
+//_______variables microros___________
 
 const int led_error = 2;
 //_______________________________________________________
@@ -94,8 +80,6 @@ DatosMotores Right;
 //_________________________________________________________
 
 //____________creación de instancias__________________________
-Odometry odometry;
-ImuPublisher imu_pub;
 
 ESP32Encoder encoderL;
 ESP32Encoder encoderR;
@@ -117,12 +101,10 @@ void setup() {
 
   //_____________________MOTOR______________________
   SabertoothSerial.begin(9600, SERIAL_8N1, -1, SABERTOOTH_TX);
-  Serial.println("Sabertooth listo");
+  //Serial.println("Sabertooth listo");
   ST.motor(1, 0);
   ST.motor(2, 0);
 
-  //_____________________MICROROS________________________________
-  beginMicroros();
 
   // Opcional: espera Serial (solo si necesitas debugging tempranero)
   unsigned long start = millis();
@@ -146,7 +128,7 @@ void setup() {
   sensor1.calibrateAnalog(2500, 400, 4, 50);
   sensor2.calibrateAnalog(2500, 400, 4, 50);
   sensor3.calibrateAnalog(2500, 400, 4, 50);
-  Serial.println("Sensor Sharp GP2Y0E03 listo (modo analógico)"); 
+  //Serial.println("Sensor Sharp GP2Y0E03 listo (modo analógico)"); 
 
   //_____________CONTROL PID_______________
   beginPid();
@@ -161,26 +143,31 @@ void setup() {
     NULL,               // Handle
     0                   // Core 0
   );
-  Serial.print("setup() running on core ");
+  //Serial.print("setup() running on core ");
 
   digitalWrite(led_error, LOW);
   
   lastTime_enc = millis();
   lastTime_imu = millis();
+  lastTime_range = millis();
   
-  Serial.println("ESP32 iniciada y lista para recibir comandos");
+  //Serial.println("ESP32 iniciada y lista para recibir comandos");
 }
 
 void loop() {
-  watchdog();
-  RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(40)));
-  delay(10);
+   // Enviar datos a Python
+  enviarDatos();
+  
+  // Recibir datos de Python
+  recibirDatos();
+  
+  delay(50); // Pequeño delay para estabilidad
 }
 
 //_______FUNCION PARA EJECUTAR EN EL SEGUNDO NUCLEO_____________-
 void ControlLoop(void *parameter) {
-  Serial.print("ControlLoop() running on core ");
-  Serial.println(xPortGetCoreID());
+  //Serial.print("ControlLoop() running on core ");
+  //Serial.println(xPortGetCoreID());
   
   while (1) {
 
@@ -195,6 +182,15 @@ void ControlLoop(void *parameter) {
       lastTime_enc = millis();  // Almacenamos el tiempo actual.
       encoderPID(); // actualiza V y W del robot Y X,Y posicion y orientacion del encoder, y manda la señal PID
     }
+
+    dt_range = millis() - lastTime_range; //milisegundos
+    if (dt_range >= sampleTime_range) {// Se actualiza cada tiempo de muestreo
+      lastTime_range = millis();  // Almacenamos el tiempo actual.
+      range_front = sensor1.distAnalog() / 100.0;
+      range_left = sensor2.distAnalog() / 100.0;
+      range_right = sensor3.distAnalog() / 100.0;
+    }
+
 
     delay(10);
     

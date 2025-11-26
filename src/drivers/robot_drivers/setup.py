@@ -29,6 +29,7 @@ setup(
         'console_scripts': [
             'gps = robot_drivers.gps:main',
             'camera_reconnect_node = robot_drivers.camera_reconnect_node:main',
+            'websocket_bridge = robot_drivers.websocket_bridge:main',
         ],
     },
 )

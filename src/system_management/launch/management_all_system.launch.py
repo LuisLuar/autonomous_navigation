@@ -29,13 +29,25 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
 
-        # Lanzar camara - gps -lidar
+        # Lanzar camara - gps -lidar - websockets
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
                 PathJoinSubstitution([
                     FindPackageShare('robot_drivers'),
                     'launch',
                     'drivers_all.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
+
+        # Lanzar comunicacion dual con micro-ros y serial
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('system_management'),
+                    'launch',
+                    'dual_esp32_comunication.launch.py'
                 ])
             ]),
             launch_arguments={}.items()
@@ -72,6 +84,18 @@ def generate_launch_description():
                     FindPackageShare('system_management'),
                     'launch',
                     'status.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
+
+        #Lanza los nodos de percepción
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('perception_stack'),
+                    'launch',
+                    'perception.launch.py'
                 ])
             ]),
             launch_arguments={}.items()

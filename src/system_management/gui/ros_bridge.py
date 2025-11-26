@@ -8,6 +8,12 @@ from diagnostic_msgs.msg import DiagnosticStatus
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import NavSatFix, NavSatStatus
 from std_msgs.msg import Header, String
+from sensor_msgs.msg import Image
+
+from cv_bridge import CvBridge
+from PySide6.QtGui import QImage, QPixmap
+import numpy as np
+import cv2
 
 class ROSBridge(Node):
     def __init__(self, parent_node=None):
@@ -54,6 +60,14 @@ class ROSBridge(Node):
         self.gps_status = None
         self.rplidar_status = None
 
+        #camara
+        self.camera_rgb_image = None
+        self.camera_depth_image = None
+
+        self.bridge = CvBridge()
+        self.camera_rgb_qpixmap = None
+        self.camera_depth_qpixmap = None
+
 
         # Bandera para indicar si recibimos al menos un mensaje
         self.any_msg_received = False
@@ -96,9 +110,13 @@ class ROSBridge(Node):
         self.create_subscription(DiagnosticStatus, 'global_status', self.cb_global, 10)
 
         # Señal del gps
-        self.create_subscription(NavSatFix, '/gps/fix', self.cb_gps_fix,10)
+        self.create_subscription(NavSatFix, '/gps/filtered', self.cb_gps_fix,10)
         self.create_subscription(String, '/gps/raw', self.cb_gps_raw,10)
         self.create_subscription(String, '/gps/info', self.cb_gps_info,10)
+
+        #Camara
+        self.create_subscription(Image, '/camera/rgb/image_raw', self.cb_camera_rgb, 1)
+        self.create_subscription(Image, '/camera/depth/image_raw', self.cb_camera_depth, 1)
 
 
     # Callbacks: guardan el último mensaje recibido
@@ -189,6 +207,43 @@ class ROSBridge(Node):
     def cb_gps_info(self, msg: String):
         self.gps_info = msg
         self.any_msg_received = True
+
+    # Agregar los callbacks en ROSBridge:
+    def cb_camera_rgb(self, msg: Image):
+
+        try:
+            # Convertir a cv2 (BGR)
+            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+
+            # Convertir a RGB y crear QImage copiando los datos (evita referencias inválidas)
+            rgb = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb.shape
+            bytes_per_line = ch * w
+            qimg = QImage(rgb.copy().data, w, h, bytes_per_line, QImage.Format_RGB888)
+
+            # Convertir a QPixmap (rápido) y guardarlo
+            self.camera_rgb_qpixmap = QPixmap.fromImage(qimg)
+            self.any_msg_received = True
+            self.last_rgb_time = self.get_clock().now()
+        except Exception as e:
+            self.get_logger().warning(f"Error en cb_camera_rgb: {e}")
+
+    def cb_camera_depth(self, msg: Image):
+        try:
+            depth_image = self.bridge.imgmsg_to_cv2(msg, "passthrough")
+            # Normalizar y colormap como haces en UI, pero aquí
+            depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
+            h, w = depth_colormap.shape[:2]
+
+            rgb = cv2.cvtColor(depth_colormap, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb.shape
+            bytes_per_line = ch * w
+            qimg = QImage(rgb.copy().data, w, h, bytes_per_line, QImage.Format_RGB888)
+            self.camera_depth_qpixmap = QPixmap.fromImage(qimg)
+            self.any_msg_received = True
+            self.last_depth_time = self.get_clock().now()
+        except Exception as e:
+            self.get_logger().warning(f"Error en cb_camera_depth: {e}")
 
 
     def publish_goal(self, x, y, frame_id='map'):

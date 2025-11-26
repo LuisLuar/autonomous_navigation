@@ -21,12 +21,7 @@ def generate_launch_description():
             output='screen'
         ),
 
-        Node(
-            package='system_management',
-            executable='esp32_supervisor',
-            output='screen'
-        ),
-
+        
         Node(
             package='system_management',
             executable='master_supervisor',
@@ -52,3 +47,9 @@ def generate_launch_description():
         ),
         
     ])
+
+#Node(
+#            package='system_management',
+#            executable='esp32_supervisor',
+#            output='screen'
+#        ),

@@ -11,6 +11,8 @@ from widgets.main_window import MainWindow
 import rclpy
 from rclpy.node import Node
 from ros_bridge import ROSBridge
+import threading
+
 
 # ⚠️ CONFIGURAR EL BACKEND ANTES de importar Qt
 os.environ['QT_QPA_PLATFORM'] = 'xcb'
@@ -19,7 +21,6 @@ os.environ['QT_QPA_PLATFORM'] = 'xcb'
 class ManagementGUINode(Node):
     def __init__(self):
         super().__init__('management_gui')
-        #self.get_logger().info('🟢 Nodo ROS2 de la GUI iniciado')
         self.ros_bridge = ROSBridge(self)
 
 
@@ -74,29 +75,24 @@ def main():
 
     # Crear aplicación Qt
     app_manager.app = QApplication(sys.argv)
-    app_manager.app.setApplicationName("Autonomous Robot- Panel de Control")
+    app_manager.app.setApplicationName("Autonomous Robot - Panel de Control")
 
     # Crear nodo ROS2
     app_manager.node = ManagementGUINode()
 
+    # 🔥🔥🔥 INICIAR SPIN EN HILO SEPARADO 🔥🔥🔥
+    def ros_spin_thread():
+        rclpy.spin(app_manager.node)
+
+    spin_thread = threading.Thread(target=ros_spin_thread, daemon=True)
+    spin_thread.start()
+    # -------------------------------------------------------------------
+
     # Crear ventana principal
     app_manager.window = MainWindow(ros_node=app_manager.node)
     app_manager.window.show()
-    #showFullScreen() 
 
-    # Timer para ROS2
-    app_manager.spin_timer = QTimer()
-    
-    def spin_once():
-        if not app_manager._shutting_down:
-            try:
-                rclpy.spin_once(app_manager.node, timeout_sec=0.01)
-            except Exception as e:
-                if not app_manager._shutting_down:
-                    print(f"[WARN] Error en spin_once: {e}")
-
-    app_manager.spin_timer.timeout.connect(spin_once)
-    app_manager.spin_timer.start(50)
+    # ❌ No usar spin_once, así que no activamos ningún QTimer
 
     # Cierre por ventana
     def on_window_close(event):

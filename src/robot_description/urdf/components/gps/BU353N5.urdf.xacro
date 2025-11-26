@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<robot name="sensor_gps_bu353n5" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Materiales para el GPS -->
+  <material name="gps_black">
+    <color rgba="0.1 0.1 0.1 1.0"/>
+  </material>
+  
+  <material name="gps_blue">
+    <color rgba="0.0 0.0 0.8 1.0"/>
+  </material>
+
+  <xacro:macro name="sensor_gps_bu353n5" params="name parent *origin">
+  
+  <joint name="${name}_joint" type="fixed">
+    <xacro:insert_block name="origin"/>
+    <parent link="${parent}"/>
+    <child link="${name}_frame"/>  <!-- ✅ Usar directamente _frame -->
+  </joint>
+
+  <link name="${name}_frame">
+    <inertial>
+      <mass value="0.05"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.060 0.045 0.015"/>
+      </geometry>
+      <material name="gps_black"/>
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.060 0.045 0.015"/>
+      </geometry>
+    </collision>
+  </link>
+
+</xacro:macro>
+</robot>
