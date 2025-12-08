@@ -28,9 +28,10 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'object_detector = object_detection.detector_node:main',
-            'semantic_segmenter = semantic_segmentation.segmenter_node:main',
-            'capture_frame = object_detection.capture_frame:main',  
+            'detector_node = object_detection.detector_node:main',
+            'segmenter_node = semantic_segmentation.segmenter_node:main',
+            'capture_frame = perception_stack.capture_frame:main',  
+            'camera_streamer = perception_stack.camera_streamer:main',
         ],
     },
 )

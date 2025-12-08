@@ -18,8 +18,8 @@ class CameraWidget(QWidget):
         
         # Estados de la cámara
         self.camera_status = None
-        self.rgb_image = None
-        self.depth_image = None
+        self.detection_image = None
+        self.segmentation_image = None
         
         self.setup_ui()
         self.setStyleSheet(get_app_style())
@@ -43,12 +43,12 @@ class CameraWidget(QWidget):
         views_layout = QHBoxLayout()
         
         # Vista RGB
-        self.rgb_group = self.create_camera_view("CÁMARA RGB", "rgb")
-        views_layout.addWidget(self.rgb_group)
+        self.detection_group = self.create_camera_view("CÁMARA detection", "detection")
+        views_layout.addWidget(self.detection_group)
         
         # Vista Profundidad
-        self.depth_group = self.create_camera_view("CÁMARA PROFUNDIDAD", "depth") 
-        views_layout.addWidget(self.depth_group)
+        self.segmentation_group = self.create_camera_view("SEGMENTACIÓN DE CARRILES", "segmentation") 
+        views_layout.addWidget(self.segmentation_group)
         
         layout.addLayout(views_layout)
         
@@ -91,12 +91,12 @@ class CameraWidget(QWidget):
         status_label = QLabel("")
         
         # Guardar referencias para actualización
-        if view_type == "rgb":
-            self.rgb_video_label = video_placeholder
-            self.rgb_status_label = status_label
+        if view_type == "detection":
+            self.detection_video_label = video_placeholder
+            self.detection_status_label = status_label
         else:  # depth
-            self.depth_video_label = video_placeholder
-            self.depth_status_label = status_label
+            self.segmentation_video_label = video_placeholder
+            self.segmentation_status_label = status_label
 
         icon, color, background, border_color = get_theme_colors()['diagnostic']['error']
         status_label.setText(f"{icon} Desconectado")        
@@ -145,10 +145,10 @@ class CameraWidget(QWidget):
                 
                 status_text = f"{icon} Conectado" if level == 0 else f"{icon} Advertencia" if level == 1 else f"{icon} Error"
                 
-                self.rgb_status_label.setText(status_text)
-                self.rgb_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
-                self.depth_status_label.setText(status_text)
-                self.depth_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+                self.detection_status_label.setText(status_text)
+                self.detection_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+                self.segmentation_status_label.setText(status_text)
+                self.segmentation_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
                 
                 # Actualizar información de detecciones
                 if level == 0:
@@ -163,18 +163,26 @@ class CameraWidget(QWidget):
             else:
                 # Estado por defecto si no hay información
                 icon, color, background, border_color = get_theme_colors()['diagnostic']['error']
-                self.rgb_status_label.setText(f"{icon} Desconectado")
-                self.rgb_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
-                self.depth_status_label.setText(f"{icon} Desconectado")
-                self.depth_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+                self.detection_status_label.setText(f"{icon} Desconectado")
+                self.detection_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+                self.segmentation_status_label.setText(f"{icon} Desconectado")
+                self.segmentation_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
                 self.detection_info.setText("Esperando conexión con la cámara...")
                 self.detection_info.setProperty("class", "sensor-value-off")
 
             # Procesar imagen RGB si está disponible y la cámara está conectada
-            # En CameraWidget.__init__ cambia:
+            if hasattr(bridge, 'camera_detection_qpixmap') and bridge.camera_detection_qpixmap and self.camera_status and self._get_message_level(self.camera_status) == 0:
+                try:
+                    self.detection_video_label.setPixmap(bridge.camera_detection_qpixmap)
+                    self.detection_video_label.setScaledContents(True)
+                except Exception as e:
+                    print(f"Error mostrando QPixmap detection con detecciones: {e}")
+            else:
+                self.detection_video_label.clear()
+                self.detection_video_label.setText("VIDEO NO DISPONIBLE")
 
-            # (dentro de update_from_ros, donde compruebas bridge)
-            if hasattr(bridge, 'camera_rgb_qpixmap') and bridge.camera_rgb_qpixmap and self.camera_status and self._get_message_level(self.camera_status) == 0:
+
+            """if hasattr(bridge, 'camera_rgb_qpixmap') and bridge.camera_rgb_qpixmap and self.camera_status and self._get_message_level(self.camera_status) == 0:
                 try:
                     self.rgb_video_label.setPixmap(bridge.camera_rgb_qpixmap)
                     self.rgb_video_label.setScaledContents(True)
@@ -192,7 +200,17 @@ class CameraWidget(QWidget):
                     print(f"Error mostrando QPixmap Depth: {e}")
             else:
                 self.depth_video_label.clear()
-                self.depth_video_label.setText("VIDEO NO DISPONIBLE")
+                self.depth_video_label.setText("VIDEO NO DISPONIBLE")"""
+
+            if hasattr(bridge, 'camera_segmentation_qpixmap') and bridge.camera_segmentation_qpixmap and self.camera_status and self._get_message_level(self.camera_status) == 0:
+                try:
+                    self.segmentation_video_label.setPixmap(bridge.camera_segmentation_qpixmap)
+                    self.segmentation_video_label.setScaledContents(True)
+                except Exception as e:
+                    print(f"Error mostrando QPixmap Segmentation: {e}")
+            else:
+                self.segmentation_video_label.clear()
+                self.segmentation_video_label.setText("VIDEO NO DISPONIBLE")    
 
 
 

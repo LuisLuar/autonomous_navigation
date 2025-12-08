@@ -356,13 +356,14 @@ class SensorMonitorWidget(QWidget):
             }
             
             if current_state != self._last_components_state:
-                print(f"🔧 Estado Componentes: Front={current_state['sharp_front']}, "
+                """print(f"Estado Componentes: Front={current_state['sharp_front']}, "
                     f"Left={current_state['sharp_left']}, Right={current_state['sharp_right']}, "
-                    f"IMU={current_state['imu']}")
+                    f"IMU={current_state['imu']}")"""
                 self._last_components_state = current_state
                 
         except Exception as e:
-            print(f"⚠️ Error procesando componentes: {e}")
+            #print(f"Error procesando componentes: {e}")
+            pass
     
     def _update_sensor_status(self, sensor_id, status_type, value=None):
         """Actualiza el estado visual de un sensor."""
@@ -411,7 +412,15 @@ class SensorMonitorWidget(QWidget):
                 bridge.global_status,
                 bridge.camera_status,
                 bridge.gps_status,
-                bridge.rplidar_status
+                bridge.rplidar_status,
+                bridge.cpu_temperature_status,
+                bridge.gpu_temperature_status,
+                bridge.battery_laptop_status,
+                bridge.ram_status,
+                bridge.cpu_usage_status,
+                bridge.gpu_usage_status,
+                bridge.disk_temperature_status,
+                bridge.uptime_status,
             ]
 
             for msg in topics:
@@ -419,8 +428,18 @@ class SensorMonitorWidget(QWidget):
                     diagnostics.append(msg)
 
             # Dividir los mensajes por tipo
-            safety_msgs = [m for m in diagnostics if "Voltaje" in m.name or "Corriente" in m.name]
-            main_msgs = [m for m in diagnostics if "ESP32" in m.name or "MICRO" in m.name or "Sistema" in m.name or "Cámara" in m.name or "GPS" in m.name or "RPLIDAR" in m.name]
+            safety_msgs = [m for m in diagnostics if "Voltaje" in m.name 
+                           or "Corriente" in m.name
+                           or "Temperatura" in m.name
+                           or "Tiempo" in m.name
+                           or "Laptop" in m.name
+                           or "Uso" in m.name]
+            main_msgs = [m for m in diagnostics if "ESP32" in m.name 
+                         or "MICRO" in m.name 
+                         or "Sistema" in m.name 
+                         or "Cámara" in m.name 
+                         or "GPS" in m.name 
+                         or "RPLIDAR" in m.name]
 
             # Actualizar listas
             self.update_diagnostic_list(self.safety_diagnostics_list.list_widget, safety_msgs)
@@ -469,9 +488,11 @@ class SensorMonitorWidget(QWidget):
                 self._update_sensor_status('lidar', status_type)
 
         except AttributeError as e:
-            print(f"⚠️ Error accediendo a datos ROS: {e}")
+            #print(f"Error accediendo a datos ROS: {e}")
+            pass
         except Exception as e:
-            print(f"❌ Error inesperado en update_from_ros: {e}")
+            #print(f"Error inesperado en update_from_ros: {e}")
+            pass
 
     def _update_power_system(self, bridge):
         """Actualiza el sistema de potencia (batería y motores)."""
@@ -579,12 +600,12 @@ class SensorMonitorWidget(QWidget):
             
             if not hasattr(self, '_last_esp1_level') or self._last_esp1_level != level:
                 level_text = "OK" if level == 0 else "WARN" if level == 1 else "ERROR"
-                print(f"📡 ESP32 Safety: {level_text} - {bridge.esp32_safety_status.message}")
+                #print(f"ESP32 Safety: {level_text} - {bridge.esp32_safety_status.message}")
                 self._last_esp1_level = level
         else:
             self._update_sensor_status('esp32_safety', 'error')
             if not hasattr(self, '_last_esp1_level') or self._last_esp1_level != -1:
-                print(f"📡 ESP32 Safety: SIN DATOS")
+                #print(f"ESP32 Safety: SIN DATOS")
                 self._last_esp1_level = -1
 
         # Actualizar ESP32 Control
@@ -595,12 +616,12 @@ class SensorMonitorWidget(QWidget):
             
             if not hasattr(self, '_last_esp2_level') or self._last_esp2_level != level:
                 level_text = "OK" if level == 0 else "WARN" if level == 1 else "ERROR"
-                print(f"📡 ESP32 Control: {level_text} - {bridge.esp32_control_status.message}")
+                #print(f"ESP32 Control: {level_text} - {bridge.esp32_control_status.message}")
                 self._last_esp2_level = level
         else:
             self._update_sensor_status('esp32_control', 'error')
             if not hasattr(self, '_last_esp2_level') or self._last_esp2_level != -1:
-                print(f"📡 ESP32 Control: SIN DATOS")
+                #print(f"ESP32 Control: SIN DATOS")
                 self._last_esp2_level = -1
 
     def _battery_percent(self, voltage):
@@ -612,4 +633,4 @@ class SensorMonitorWidget(QWidget):
 
     def _show_no_bridge_error(self):
         """Muestra un mensaje de error cuando no hay bridge disponible."""
-        print("❌ No hay bridge ROS disponible")
+        #print("No hay bridge ROS disponible")

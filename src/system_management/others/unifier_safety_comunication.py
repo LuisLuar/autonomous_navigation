@@ -287,7 +287,8 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info('👋 Safety Unifier node apagado por usuario')
+        #node.get_logger().info('Safety Unifier node apagado por usuario')
+        pass
     except Exception as e:
         node.get_logger().error(f'🚨 Error fatal en Safety Unifier: {e}')
     finally:

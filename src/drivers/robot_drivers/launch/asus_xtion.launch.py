@@ -41,11 +41,11 @@ def generate_launch_description():
     # Nodo monitor con reconexión automática
     camera_monitor = Node(
         package='robot_drivers',
-        executable='camera_reconnect_node',
-        name='camera_monitor',
+        executable='camera',
+        name='camera',
         output='screen',
         parameters=[
-            {'timeout_seconds': 5.0},  # Tiempo sin datos antes de reconectar
+            {'timeout_seconds': 2.0},  # Tiempo sin datos antes de reconectar
             {'monitor_topic': '/camera/rgb/image_raw'}  # Topic a monitorear
         ]
     )

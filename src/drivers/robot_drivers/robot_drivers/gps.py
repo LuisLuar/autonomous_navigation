@@ -30,7 +30,7 @@ ECUADOR_TZ = timezone(timedelta(hours=-5))
 # Constantes para reconexión
 MAX_RECONNECT_ATTEMPTS = 5  # Intentos antes de aumentar el intervalo
 INITIAL_RECONNECT_DELAY = 1.0  # Segundos de espera inicial
-MAX_RECONNECT_DELAY = 30.0  # Máximo tiempo de espera entre intentos
+MAX_RECONNECT_DELAY = 15.0  # Máximo tiempo de espera entre intentos
 
 
 def verify_nmea_checksum(sentence: str) -> bool:
@@ -132,7 +132,7 @@ class MultiGNSSPublisher(Node):
         self.declare_parameter('serial_port', '/dev/ttyGPS')
         self.declare_parameter('baudrate', 4800)
         self.declare_parameter('frame_id', 'gnss_frame')
-        self.declare_parameter('publish_rate', 5.0)
+        self.declare_parameter('publish_rate', 10.0)  # Hz
         self.declare_parameter('speed_threshold', 0.2)  # m/s - umbral para considerar movimiento real
         self.declare_parameter('smoothing_window', 5)  # ventana para promedio móvil de velocidad
 
@@ -213,16 +213,16 @@ class MultiGNSSPublisher(Node):
             self.reconnect_attempts = 0
             self.reconnect_delay = INITIAL_RECONNECT_DELAY
             
-            #self.get_logger().info(f'✓ Conectado al GPS en {self.port} @ {self.baud} bps')
+            #self.get_logger().info(f'Conectado al GPS en {self.port} @ {self.baud} bps')
             return True
             
         except serial.SerialException as e:
             self.is_connected = False
-            #self.get_logger().warning(f'✗ No se pudo conectar a {self.port}: {e}')
+            #self.get_logger().warning(f'No se pudo conectar a {self.port}: {e}')
             return False
         except Exception as e:
             self.is_connected = False
-            #self.get_logger().error(f'✗ Error inesperado al conectar GPS: {e}')
+            #self.get_logger().error(f'Error inesperado al conectar GPS: {e}')
             return False
 
     def attempt_reconnection(self):
@@ -245,7 +245,7 @@ class MultiGNSSPublisher(Node):
         
         # Intentar reconectar
         if self.connect_to_gps():
-            #self.get_logger().info('¡Reconexión exitosa!')
+            #self.get_logger().info('Reconexión exitosa')
             return
         
         # Aumentar el delay con backoff exponencial
@@ -687,9 +687,11 @@ def main(args=None):
         node = MultiGNSSPublisher()
         rclpy.spin(node)
     except KeyboardInterrupt:
-        print("\nInterrupción por teclado - cerrando nodo GPS...")
+        #print("\nInterrupción por teclado - cerrando nodo GPS...")
+        pass
     except Exception as e:
-        print(f"Error crítico en nodo GNSS: {e}")
+        #print(f"Error crítico en nodo GNSS: {e}")
+        pass
     finally:
         if node is not None:
             try:

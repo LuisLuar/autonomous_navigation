@@ -9,6 +9,7 @@ from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import NavSatFix, NavSatStatus
 from std_msgs.msg import Header, String
 from sensor_msgs.msg import Image
+from geographic_msgs.msg import GeoPoint
 
 from cv_bridge import CvBridge
 from PySide6.QtGui import QImage, QPixmap
@@ -40,6 +41,8 @@ class ROSBridge(Node):
         self.range_right = None
         self.imu = None
         self.odom = None
+        self.odom_local = None
+        self.odom_global = None
         self.battery_array = None
         self.motors_array = None
         self.gps_fix = None
@@ -60,13 +63,22 @@ class ROSBridge(Node):
         self.gps_status = None
         self.rplidar_status = None
 
-        #camara
-        self.camera_rgb_image = None
-        self.camera_depth_image = None
+        #Estados de diagnostico LAPTOP
+        self.cpu_temperature_status = None
+        self.gpu_temperature_status = None
+        self.battery_laptop_status = None
+        self.ram_status = None
+        self.cpu_usage_status = None
+        self.gpu_usage_status = None
+        self.disk_temperature_status = None
+        self.uptime_status = None
 
+        #camara
         self.bridge = CvBridge()
-        self.camera_rgb_qpixmap = None
-        self.camera_depth_qpixmap = None
+        #self.camera_rgb_qpixmap = None
+        #self.camera_depth_qpixmap = None
+        self.camera_segmentation_qpixmap = None
+        self.camera_detection_qpixmap = None
 
 
         # Bandera para indicar si recibimos al menos un mensaje
@@ -76,7 +88,7 @@ class ROSBridge(Node):
         self._setup_subscriptions()
 
         # Publisher de ejemplo para destino
-        self.goal_pub = self.create_publisher(PoseStamped, '/gui/goal_pose', 10)
+        self.goal_latlon_pub = self.create_publisher(GeoPoint, '/goal_latlon', 10)
 
         self.get_logger().info('[ROSBridge] Inicializado y suscrito a topics.')
 
@@ -94,6 +106,10 @@ class ROSBridge(Node):
         # Sensores de sistema
         self.create_subscription(Float32MultiArray, '/battery_array', self.cb_battery_array, 10)
         self.create_subscription(Float32MultiArray, '/motors_array', self.cb_motors_array, 10)
+
+        #suscripciones de odometria local y global si existen
+        self.create_subscription(Odometry, '/odometry/local', self.cb_odom_local, 10)
+        self.create_subscription(Odometry, '/odometry/global', self.cb_odom_global, 10)
        
         # Suscripciones de diagnóstico
         self.create_subscription(DiagnosticStatus, 'status/battery_12v', self.cb_batt12v_status, 10)
@@ -109,14 +125,30 @@ class ROSBridge(Node):
         self.create_subscription(DiagnosticStatus, 'status/rplidar', self.cb_rplidar_status, 10)
         self.create_subscription(DiagnosticStatus, 'global_status', self.cb_global, 10)
 
+        #Mensajes de diagnostico Laptopo
+        self.create_subscription(DiagnosticStatus, '/status/cpu_temperature', self.cb_cpu_temp_status, 10)
+        self.create_subscription(DiagnosticStatus, '/status/gpu_temperature', self.cb_gpu_temp_status, 10)
+        self.create_subscription(DiagnosticStatus, '/status/battery_laptop', self.cb_battery_laptop_status, 10)
+        self.create_subscription(DiagnosticStatus, '/status/ram', self.cb_ram_status, 10)
+        self.create_subscription(DiagnosticStatus, '/status/cpu_usage', self.cb_cpu_usage_status, 10)
+        self.create_subscription(DiagnosticStatus, '/status/gpu_usage', self.cb_gpu_usage_status, 10)
+        self.create_subscription(DiagnosticStatus, '/status/disk_temperature', self.cb_disk_temp_status, 10)
+        self.create_subscription(DiagnosticStatus, '/status/uptime', self.cb_uptime_status, 10)
+        
+
         # Señal del gps
-        self.create_subscription(NavSatFix, '/gps/filtered', self.cb_gps_fix,10)
+        self.create_subscription(NavSatFix, '/gps/fix', self.cb_gps_fix,10)
         self.create_subscription(String, '/gps/raw', self.cb_gps_raw,10)
         self.create_subscription(String, '/gps/info', self.cb_gps_info,10)
 
         #Camara
-        self.create_subscription(Image, '/camera/rgb/image_raw', self.cb_camera_rgb, 1)
-        self.create_subscription(Image, '/camera/depth/image_raw', self.cb_camera_depth, 1)
+        #self.create_subscription(Image, '/camera/rgb/image_raw', self.cb_camera_rgb, 1)
+        #self.create_subscription(Image, '/camera/depth/image_raw', self.cb_camera_depth, 1) 
+
+        # Redes neuronales
+        self.create_subscription(Image, '/segmentation/overlay', self.cb_camera_segmentation, 1)
+        self.create_subscription(Image, '/detection/annotated_image', self.cb_camera_detection, 1)
+
 
 
     # Callbacks: guardan el último mensaje recibido
@@ -195,7 +227,41 @@ class ROSBridge(Node):
     def cb_global(self, msg: DiagnosticStatus):
         self.global_status = msg
         self.any_msg_received = True
+
+    #Diagnostico de laptop
+    def cb_cpu_temp_status(self, msg: DiagnosticStatus):
+        self.cpu_temperature_status = msg
+        self.any_msg_received = True
+
+    def cb_gpu_temp_status(self, msg: DiagnosticStatus):
+        self.gpu_temperature_status = msg
+        self.any_msg_received = True
+
+    def cb_battery_laptop_status(self, msg: DiagnosticStatus):
+        self.battery_laptop_status= msg
+        self.any_msg_received = True
     
+    def cb_ram_status(self, msg: DiagnosticStatus):
+        self.ram_status= msg
+        self.any_msg_received = True
+    
+    def cb_cpu_usage_status(self, msg: DiagnosticStatus):
+        self.cpu_usage_status = msg
+        self.any_msg_received = True
+
+    def cb_gpu_usage_status(self, msg: DiagnosticStatus):
+        self.gpu_usage_status = msg
+        self.any_msg_received = True
+
+    def cb_disk_temp_status(self, msg: DiagnosticStatus):
+        self.disk_temperature_status = msg
+        self.any_msg_received = True
+
+    def cb_uptime_status(self, msg: DiagnosticStatus):
+        self.uptime_status= msg
+        self.any_msg_received = True
+    
+    # Posición del robot    
     def cb_gps_fix(self, msg: NavSatFix):
         self.gps_fix = msg
         self.any_msg_received = True
@@ -208,59 +274,56 @@ class ROSBridge(Node):
         self.gps_info = msg
         self.any_msg_received = True
 
-    # Agregar los callbacks en ROSBridge:
-    def cb_camera_rgb(self, msg: Image):
+    #Callbacks de posición global y local de odometría
+    def cb_odom_local(self, msg: Odometry):
+        self.odom_local = msg
+        self.any_msg_received = True    
+    
+    def cb_odom_global(self, msg: Odometry):
+        self.odom_global = msg
+        self.any_msg_received = True
+    
 
+    
+    def cb_camera_detection(self, msg: Image):
         try:
-            # Convertir a cv2 (BGR)
-            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-
-            # Convertir a RGB y crear QImage copiando los datos (evita referencias inválidas)
-            rgb = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+            det_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            rgb = cv2.cvtColor(det_image, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb.shape
             bytes_per_line = ch * w
             qimg = QImage(rgb.copy().data, w, h, bytes_per_line, QImage.Format_RGB888)
-
-            # Convertir a QPixmap (rápido) y guardarlo
-            self.camera_rgb_qpixmap = QPixmap.fromImage(qimg)
+            self.camera_detection_qpixmap = QPixmap.fromImage(qimg)
             self.any_msg_received = True
-            self.last_rgb_time = self.get_clock().now()
+            self.last_detection_time = self.get_clock().now()
         except Exception as e:
-            self.get_logger().warning(f"Error en cb_camera_rgb: {e}")
+            self.get_logger().warning(f"Error en cb_camera_detection: {e}")
 
-    def cb_camera_depth(self, msg: Image):
+    def cb_camera_segmentation(self, msg: Image):
         try:
-            depth_image = self.bridge.imgmsg_to_cv2(msg, "passthrough")
-            # Normalizar y colormap como haces en UI, pero aquí
-            depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
-            h, w = depth_colormap.shape[:2]
-
-            rgb = cv2.cvtColor(depth_colormap, cv2.COLOR_BGR2RGB)
+            seg_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            rgb = cv2.cvtColor(seg_image, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb.shape
             bytes_per_line = ch * w
             qimg = QImage(rgb.copy().data, w, h, bytes_per_line, QImage.Format_RGB888)
-            self.camera_depth_qpixmap = QPixmap.fromImage(qimg)
+            self.camera_segmentation_qpixmap = QPixmap.fromImage(qimg)
             self.any_msg_received = True
-            self.last_depth_time = self.get_clock().now()
+            self.last_segmentation_time = self.get_clock().now()
         except Exception as e:
-            self.get_logger().warning(f"Error en cb_camera_depth: {e}")
+            self.get_logger().warning(f"Error en cb_camera_segmentation: {e}")
 
 
-    def publish_goal(self, x, y, frame_id='map'):
+    def publish_goal_latlon(self, lat, lon):
         """
-        Publica un destino en el mapa.
+        Publica un destino en coordenadas geográficas.
         
         Args:
-            x: Coordenada X del destino
-            y: Coordenada Y del destino
-            frame_id: Sistema de referencia del destino
+            lat: Latitud del destino
+            lon: Longitud del destino
         """
-        ps = PoseStamped()
-        ps.header.frame_id = frame_id
-        ps.header.stamp = self.get_clock().now().to_msg()
-        ps.pose.position.x = float(x)
-        ps.pose.position.y = float(y)
-        ps.pose.position.z = 0.0
-        ps.pose.orientation.w = 1.0
-        self.goal_pub.publish(ps)
-        self.get_logger().info(f'[ROSBridge] Publicado goal: {x:.2f}, {y:.2f}')
+        goal = GeoPoint()
+        goal.latitude = float(lat)
+        goal.longitude = float(lon)
+        goal.altitude = 0.0  # Puedes usar la altitud actual si quieres
+        
+        self.goal_latlon_pub.publish(goal)
+        #self.get_logger().info(f'[ROSBridge] Publicado goal lat/lon: {lat:.6f}, {lon:.6f}')

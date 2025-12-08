@@ -443,7 +443,8 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("👋 Safety Monitor apagado por usuario")
+        #node.get_logger().info("Safety Monitor apagado por usuario")
+        pass
     finally:
         try:
             node.destroy_node()

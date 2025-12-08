@@ -415,12 +415,12 @@ class SerialROSBridge(Node):
             # Echo of our own command - can be ignored or logged for debugging
             pass
         else:
-            #self.get_logger().debug(f'📨 Unknown serial line: {line}')
+            #self.get_logger().debug(f'Unknown serial line: {line}')
             pass
 
     def destroy_node(self):
         """Cleanup when node is destroyed"""
-        #self.get_logger().info('🛑 Shutting down serial bridge...')
+        #self.get_logger().info('Shutting down serial bridge...')
         # Send stop command before shutting down
         if self.is_connected:
             self.send_serial_cmd(0.0, 0.0, reset=0, update_velocity=False)
@@ -434,7 +434,8 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info('👋 Serial bridge stopped by user')
+        #node.get_logger().info('Serial bridge stopped by user')
+        pass
     except Exception as e:
         node.get_logger().error(f'🚨 Fatal error in serial bridge: {e}')
     finally:        

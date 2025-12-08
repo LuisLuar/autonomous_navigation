@@ -28,8 +28,9 @@ setup(
     entry_points={
         'console_scripts': [
             'gps = robot_drivers.gps:main',
-            'camera_reconnect_node = robot_drivers.camera_reconnect_node:main',
+            'camera = robot_drivers.camera_reconnect:main',
             'websocket_bridge = robot_drivers.websocket_bridge:main',
+            'webrtc_streamer = robot_drivers.webrtc_streamer:main',
         ],
     },
 )

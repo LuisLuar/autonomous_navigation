@@ -1,13 +1,13 @@
 //microros_configuration.ino
 
 //____________INTERNET_________________
-/*const char* ssid = "OMEN";
-  const char* password = "12345678";
-  const char* agent_ip = "10.42.0.1";  // ← IP de tu PC (donde corre el agent)*/
+const char* ssid = "OMEN";
+const char* password = "12345678";
+const char* agent_ip = "10.42.0.1";  // ← IP de tu PC (donde corre el agent)
 
-const char* ssid = "Fastnett-Fibra-ConstructoraVasqu";
+/*const char* ssid = "Fastnett-Fibra-ConstructoraVasqu";
 const char* password = "1706312434";
-const char* agent_ip = "192.168.100.169";
+const char* agent_ip = "192.168.100.98";*/
 
 const uint32_t agent_port = 8888;
 //___________________________

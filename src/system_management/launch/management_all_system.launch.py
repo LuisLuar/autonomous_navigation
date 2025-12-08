@@ -65,17 +65,6 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
         
-        # Lanza la visualización en RVIZ2
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('robot_description'),
-                    'launch',
-                    'rviz2.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ),
 
         # Lanza los nodos de safety
         IncludeLaunchDescription(
@@ -113,3 +102,17 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),   
     ])
+
+"""
+# Lanza la visualización en RVIZ2
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('robot_description'),
+                    'launch',
+                    'rviz2.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
+"""

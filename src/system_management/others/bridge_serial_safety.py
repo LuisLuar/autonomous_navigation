@@ -296,9 +296,10 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info('👋 Safety serial bridge stopped by user')
+        #node.get_logger().info('Safety serial bridge stopped by user')
+        pass
     except Exception as e:
-        node.get_logger().error(f'🚨 Fatal error in safety serial bridge: {e}')
+        node.get_logger().error(f'Fatal error in safety serial bridge: {e}')
     finally:        
         try:
             node.disconnect_serial()

@@ -44,6 +44,14 @@ def generate_launch_description():
             package='robot_drivers',
             executable='websocket_bridge',
             output='screen',
-            name='websocket_ros_bridge'
+            name='websocket'
         ),
+
+        # Lanzar el nodo de webrtc
+        Node(
+            package='robot_drivers',
+            executable='webrtc_streamer',
+            output='screen',
+            name='webrtc_streamer'
+        ),  
     ])

@@ -9,11 +9,13 @@ from PySide6.QtCore import Qt, QTimer
 
 from utils.styles_light import get_app_style, get_map_widget_style, get_theme_colors
 
+import math
+
 class MapWidget(QWidget):
     def __init__(self, ros_node=None, offline_tiles_path=None, leaflet_path=None):
         super().__init__()
         self.ros_node = ros_node
-        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/casa" #OpenStreetMap GoogleImagenes
+        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/OpenStreetMap" #OpenStreetMap GoogleImagenes
         
         # Ruta a los recursos de Leaflet offline
         if leaflet_path:
@@ -32,6 +34,7 @@ class MapWidget(QWidget):
                     break
         
         self.current_position = None
+        self.current_yaw = 0.0
         self.destination = None
         self.temp_destination = None  # Destino temporal del click en mapa
         self.html_file = None
@@ -112,10 +115,12 @@ class MapWidget(QWidget):
         
         # Preparar rutas de iconos (offline o fallback)
         if self.leaflet_path and os.path.exists(self.leaflet_path):
+            icon_car = f"file://{self.leaflet_path}/images/car-icon.png"
             icon_red = f"file://{self.leaflet_path}/images/marker-icon-red.png"
             icon_green = f"file://{self.leaflet_path}/images/marker-icon-green.png"
             icon_shadow = f"file://{self.leaflet_path}/images/marker-shadow.png"
         else:
+            icon_car = "https://cdn-icons-png.flaticon.com/512/744/744465.png"  # ← ICONO DE CARRO ONLINE
             icon_red = "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png"
             icon_green = "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png"
             icon_shadow = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png"
@@ -149,6 +154,7 @@ class MapWidget(QWidget):
     <title>Mapa Offline</title>
     <link rel="stylesheet" href="{leaflet_css}" />
     <script src="{leaflet_js}"></script>
+    <script src="file://{self.leaflet_path}/leaflet.rotatedMarker.js"></script>
     <style>
         body {{
             margin: 0;
@@ -173,18 +179,23 @@ class MapWidget(QWidget):
             minZoom: 1
         }}).addTo(map);
         
+
         // Marcador del robot
         var robotMarker = L.marker([{robot_lat}, {robot_lng}], {{
             icon: L.icon({{
-                iconUrl: '{icon_green}',
+                iconUrl: '{icon_car}',
                 shadowUrl: '{icon_shadow}',
-                iconSize: [25, 41],
-                iconAnchor: [12, 41],
-                popupAnchor: [1, -34],
+                iconSize: [41, 25],
+                iconAnchor: [15, 15],
+                popupAnchor: [0, -15],
                 shadowSize: [41, 41]
-            }})
+            }}),
+            rotationAngle: {self.current_yaw},  // ← AGREGAR ROTACIÓN
+            rotationOrigin: 'center'    // ← ORIGEN DE ROTACIÓN
         }}).addTo(map);
-        robotMarker.bindPopup("Robot<br>Lat: {robot_lat:.6f}<br>Lng: {robot_lng:.6f}");
+
+        window.robotMarker = robotMarker;
+        robotMarker.bindPopup("Robot<br>Lat: {robot_lat:.6f}<br>Lng: {robot_lng:.6f}<br>Yaw: {self.current_yaw:.1f}°");
         
         // Marcador de destino (si existe)
         {destination_marker_html}
@@ -319,14 +330,20 @@ class MapWidget(QWidget):
         print(f"  Latitud:  {lat:.6f}")
         print(f"  Longitud: {lng:.6f}")
         print(f"{'='*60}\n")"""
-
+        
         # Publicar a ROS si está disponible
         if self.ros_node:
-            try:
-                self.ros_node.publish_goal(lat, lng)
-                #print(f"[MapWidget] ✓ Goal publicado a ROS exitosamente")
+            try:                
+                # OPCIÓN B: Nuevo método para lat/lon (RECOMENDADO)
+                if hasattr(self.ros_node.ros_bridge, 'publish_goal_latlon'):
+                    self.ros_node.ros_bridge.publish_goal_latlon(lat, lng)
+                else:
+                    # Fallback al método antiguo
+                    self.ros_node.publish_goal(lat, lng)
+                    
+                #print(f"[MapWidget] ✓ Goal lat/lon publicado: {lat:.6f}, {lng:.6f}")
             except Exception as e:
-                #print(f"[MapWidget] ✗ Error publicando goal a ROS: {e}")
+                #print(f"[MapWidget] ✗ Error publicando goal: {e}")
                 pass
     
     def set_destination(self, lat, lng):
@@ -374,14 +391,15 @@ class MapWidget(QWidget):
         
         #print(f"[MapWidget] Posición del robot actualizada: {lat:.6f}, {lng:.6f}")
     
-    def update_map_position(self, lat, lng):
+    def update_map_position(self, lat, lng, yaw):
         """Actualiza solo la posición del robot sin recrear todo el mapa"""
         # Crear JavaScript para mover el marcador
         js_code = f"""
         if (window.robotMarker) {{
             var newLatLng = L.latLng({lat}, {lng});
+            window.robotMarker.setRotationAngle({yaw});
             window.robotMarker.setLatLng(newLatLng);
-            window.robotMarker.getPopup().setContent("Robot<br>Lat: {lat:.6f}<br>Lng: {lng:.6f}");
+            window.robotMarker.getPopup().setContent("Robot<br>Lat: {lat:.6f}<br>Lng: {lng:.6f}<br>Yaw: {yaw:.1f}°");
             
             // Opcional: centrar el mapa en la nueva posición
             // map.panTo(newLatLng);
@@ -407,6 +425,24 @@ class MapWidget(QWidget):
 
             bridge = rn.ros_bridge
 
+            if bridge.odom_local:
+                orientation = bridge.odom_local.pose.pose.orientation
+                yaw_rad = math.atan2(2.0*(orientation.w*orientation.z + orientation.x*orientation.y),
+                                    1.0 - 2.0*(orientation.y*orientation.y + orientation.z*orientation.z))
+                yaw_deg = math.degrees(yaw_rad)
+
+                # Ajustar según REP-105: X hacia el Este = 0°
+                # En Leaflet 0° = Norte, REP-105 0° = Este, así que sumamos 90°
+                yaw_deg = (-1*yaw_deg ) % 360
+                if yaw_deg < 0:
+                    yaw_deg += 360
+                
+                if (abs(yaw_deg - self.current_yaw) > 5.0):  # Solo actualizar si hay un cambio significativo
+                    
+                    self.current_yaw =  yaw_deg  # ← ACTUALIZAR VARIABLE
+                #self.get_logger().info(f"[MapWidget] Yaw actualizado: {self.current_yaw:.1f}°")
+                    self.update_map_position(self.current_position[0], self.current_position[1], yaw_deg)
+
             if bridge.gps_fix:
                 lat = bridge.gps_fix.latitude  
                 lng = bridge.gps_fix.longitude
@@ -419,7 +455,8 @@ class MapWidget(QWidget):
                     self.current_position = (lat, lng)
                     
                     # Actualizar el mapa con la nueva posición
-                    self.update_map_position(lat, lng)
+                    self.update_map_position(lat, lng, yaw_deg)
+                    
 
 
         except AttributeError as e:

@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""
+websocket_bridge.py - Puente WebSocket para control remoto y monitoreo de diagnóstico.
+Permite controlar el robot mediante mensajes WebSocket y envía estados de diagnóstico en tiempo real.
+Características principales:
+ - Publica comandos de movimiento y control basados en mensajes WebSocket entrantes
+ - Envía estados de diagnóstico ROS2 a todos los clientes WebSocket conectados
+"""
 import asyncio
 import json
 import os
@@ -42,7 +49,8 @@ def obtener_ip_local():
                     if (ip and not ip.startswith("127.") and not ip.startswith("169.254.")):
                         ips.append(ip)
     except Exception as e:
-        print(f"Error con netifaces: {e}")
+        #print(f"Error con netifaces: {e}")
+        pass
     
     for ip in ips:
         if ip.startswith("192.168.") or ip.startswith("10.") or ip.startswith("172."):
@@ -70,12 +78,13 @@ def obtener_todas_las_ips():
                     }
                     todas_ips.append(ip_info)
     except Exception as e:
-        print(f"Error obteniendo todas las IPs: {e}")
+        #print(f"Error obteniendo todas las IPs: {e}")
+        pass
     return todas_ips
 
 class WebSocketROSBridge(Node):
     def __init__(self):
-        super().__init__('websocket_ros_bridge')
+        super().__init__('websocket')
         global WS_HOST
         
         ip_local = obtener_ip_local()
@@ -87,9 +96,9 @@ class WebSocketROSBridge(Node):
         
         if ip_local and not ip_local.startswith("127."):
             WS_HOST = ip_local
-            #self.get_logger().info(f"✅ IP seleccionada para WebSocket: {WS_HOST}")
+            #self.get_logger().info(f"IP seleccionada para WebSocket: {WS_HOST}")
         else:
-            #self.get_logger().error("❌ No se pudo detectar una IP válida")
+            #self.get_logger().error("No se pudo detectar una IP válida")
             pass
 
         # Publishers
@@ -100,6 +109,7 @@ class WebSocketROSBridge(Node):
         self.pub_light_right = self.create_publisher(Bool, '/light/right', 10)
         self.pub_light_safety = self.create_publisher(Bool, '/light/safety', 10)
         self.pub_capture = self.create_publisher(Bool, '/capture', 10)
+        self.pub_emergency = self.create_publisher(Bool, '/emergency', 10)
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
 
         # Lista de conexiones WebSocket activas
@@ -119,7 +129,15 @@ class WebSocketROSBridge(Node):
             '/status/motor_left',
             '/status/motor_right',
             '/status/rplidar',
-            '/status/voltage_5v'
+            '/status/voltage_5v',
+            '/status/cpu_temperature',
+            '/status/gpu_temperature',
+            '/status/battery_laptop',
+            '/status/ram',
+            '/status/cpu_usage',
+            '/status/gpu_usage',
+            '/status/disk_temperature',
+            '/status/uptime'
         ]
         
         for topic in diagnostic_topics:
@@ -130,6 +148,11 @@ class WebSocketROSBridge(Node):
                 10
             )
         
+        try:
+            self.asyncio_loop = asyncio.get_event_loop()
+        except RuntimeError:
+            self.asyncio_loop = None
+        
         #self.get_logger().info(f"Inicializando WebSocket ws://{WS_HOST}:{WS_PORT}")
         asyncio.ensure_future(self.start_server())
 
@@ -138,7 +161,7 @@ class WebSocketROSBridge(Node):
         def callback(msg):
             try:
                 # DEBUG: Mostrar información completa del mensaje
-                #self.get_logger().info(f"📡 Mensaje recibido en {topic}:")
+                #self.get_logger().info(f"Mensaje recibido en {topic}:")
                 #self.get_logger().info(f"   - Name: {msg.name}")
                 #self.get_logger().info(f"   - Level: {msg.level} (raw type: {type(msg.level)})")
                 #self.get_logger().info(f"   - Message: {msg.message}")
@@ -175,9 +198,19 @@ class WebSocketROSBridge(Node):
                     'timestamp': self.get_clock().now().nanoseconds
                 }
                 
-                # Enviar actualización a todos los clientes conectados
-                asyncio.ensure_future(self.broadcast_diagnostic_status())
-                
+
+                # Programar broadcast en el event loop
+                if self.asyncio_loop and self.asyncio_loop.is_running():
+                    # Método thread-safe para agregar tareas al event loop
+                    asyncio.run_coroutine_threadsafe(
+                        self.broadcast_diagnostic_status(),
+                        self.asyncio_loop
+                    )
+                else:
+                    # Fallback
+                    # Enviar actualización a todos los clientes conectados
+                    asyncio.ensure_future(self.broadcast_diagnostic_status())
+          
             except Exception as e:
                 #self.get_logger().error(f"Error en callback de diagnóstico {topic}: {e}")
                 pass
@@ -204,7 +237,7 @@ class WebSocketROSBridge(Node):
             }
             
             # DEBUG: Mostrar qué se está enviando
-            #self.get_logger().info(f"📤 Enviando diagnóstico: {len(diagnostic_list)} items")
+            #self.get_logger().info(f"Enviando diagnóstico: {len(diagnostic_list)} items")
             #for item in diagnostic_list:
                 #self.get_logger().info(f"   - {item['name']}: {item['level']} - {item['message']}")
             
@@ -258,7 +291,7 @@ class WebSocketROSBridge(Node):
                 mtype = data.get("type", "")
                 
                 # ------------------- Booleanos -------------------
-                if mtype in ["motor_left", "motor_right", "light_stop", "light_left", "light_right", "light_safety", "capture"]:
+                if mtype in ["motor_left", "motor_right", "light_stop", "light_left", "light_right", "light_safety", "capture","emergency"]:
                     val = bool(data.get("value", False))
                     msg = Bool()
                     msg.data = val
@@ -277,6 +310,8 @@ class WebSocketROSBridge(Node):
                         self.pub_light_safety.publish(msg)
                     elif mtype == "capture":
                         self.pub_capture.publish(msg)
+                    elif mtype == "emergency":
+                        self.pub_emergency.publish(msg)
                         
                     #self.get_logger().debug(f"Publicado Bool {mtype}={val}")
                 

@@ -312,9 +312,10 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("👋 Supervisor de RPLIDAR apagado por usuario")
+        #node.get_logger().info("Supervisor de RPLIDAR apagado por usuario")
+        pass
     except Exception as e:
-        node.get_logger().error(f"🚨 Error fatal: {e}")
+        node.get_logger().error(f"Error fatal: {e}")
     finally:
         try:
             node.destroy_node()

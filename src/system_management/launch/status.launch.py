@@ -45,6 +45,12 @@ def generate_launch_description():
             executable='VC_supervisor',
             output='screen'
         ),
+
+        Node(
+            package='system_management',
+            executable='system_health',
+            output='screen'
+        ),
         
     ])
 

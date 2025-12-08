@@ -52,7 +52,7 @@ class CameraSupervisor(Node):
         self.topic_subscribers = {}
         self.setup_topic_monitors()
 
-        #self.get_logger().info('🟢 Supervisor de Cámara iniciado')
+        #self.get_logger().info('Supervisor de Cámara iniciado')
 
     def setup_topic_monitors(self):
         """Configura suscriptores para monitorear actividad de topics críticos"""
@@ -81,9 +81,9 @@ class CameraSupervisor(Node):
                     qos_profile=10
                 )
                 self.topic_subscribers[topic] = subscriber
-                #self.get_logger().info(f"🔍 Monitoreando actividad en: {topic}")
+                #self.get_logger().info(f"Monitoreando actividad en: {topic}")
             except Exception as e:
-                #self.get_logger().warning(f"⚠️ No se pudo suscribir a {topic}: {e}")
+                #self.get_logger().warning(f"No se pudo suscribir a {topic}: {e}")
                 pass
 
     def topic_activity_callback(self, topic_name):
@@ -94,7 +94,7 @@ class CameraSupervisor(Node):
         
         # Debug ocasional (cada 20 mensajes)
         #if self.message_counter % 20 == 0:
-            #self.get_logger().debug(f"📷 Actividad cámara: {topic_name} (msg #{self.message_counter})")
+            #self.get_logger().debug(f"Actividad cámara: {topic_name} (msg #{self.message_counter})")
 
     def check_activity_timeout(self):
         """Verifica si la cámara ha estado inactiva por más del timeout"""
@@ -224,7 +224,7 @@ class CameraSupervisor(Node):
             self.publisher.publish(msg)
 
         except Exception as e:
-            #self.get_logger().error(f"🚨 Error en check_camera: {e}")
+            #self.get_logger().error(f"Error en check_camera: {e}")
             pass
 
     def destroy_node(self):
@@ -246,9 +246,10 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("👋 Supervisor de cámara apagado por usuario")
+        #node.get_logger().info("Supervisor de cámara apagado por usuario")
+        pass
     except Exception as e:
-        node.get_logger().error(f"🚨 Error fatal: {e}")
+        node.get_logger().error(f"Error fatal: {e}")
     finally:
         try:
             node.destroy_node()

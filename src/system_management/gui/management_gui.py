@@ -37,7 +37,7 @@ class ApplicationManager:
             return
             
         self._shutting_down = True
-        print("🧹 Cerrando aplicación...")
+        #print("Cerrando aplicación...")
         
         if self.spin_timer:
             self.spin_timer.stop()
@@ -58,7 +58,7 @@ class ApplicationManager:
 
 
 def signal_handler(signum, frame):
-    print(f"\n🛑 Señal {signum} recibida")
+    #print(f"\n Señal {signum} recibida")
     app_manager.shutdown()
 
 
@@ -96,23 +96,23 @@ def main():
 
     # Cierre por ventana
     def on_window_close(event):
-        print("🔒 Ventana cerrada por usuario")
+        #print("Ventana cerrada por usuario")
         app_manager.shutdown()
         event.accept()
 
     app_manager.window.closeEvent = on_window_close
 
-    print("✅ Interfaz GUI iniciada correctamente")
-    print("📡 Nodo ROS2 activo: /management_gui")
-    print("💡 Usa Ctrl+C para cerrar")
+    #print("Interfaz GUI iniciada correctamente")
+    #print("Nodo ROS2 activo: /management_gui")
+    #print("Usa Ctrl+C para cerrar")
 
     # Ejecutar
     try:
         exit_code = app_manager.app.exec()
-        print(f"🔚 Aplicación terminada con código: {exit_code}")
+        #print(f"Aplicación terminada con código: {exit_code}")
         sys.exit(exit_code)
     except KeyboardInterrupt:
-        print("\n🛑 Ctrl+C detectado")
+        #print("\nCtrl+C detectado")
         app_manager.shutdown()
     finally:
         try:
