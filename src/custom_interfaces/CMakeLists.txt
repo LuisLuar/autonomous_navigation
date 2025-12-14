@@ -12,12 +12,17 @@ find_package(ament_cmake REQUIRED)
 # find_package(<dependency> REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(std_msgs REQUIRED)
 
-#rosidl_generate_interfaces(${PROJECT_NAME}
-  #"srv/MoveRobot.srv"
-  #"msg/AprilTagWorld.msg"
-#  DEPENDENCIES builtin_interfaces
-#)
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/SegmentationData.msg"
+  "msg/Lane.msg"
+  "msg/LaneArray.msg"
+  "msg/Detection.msg"
+  "msg/DetectionArray.msg"
+  DEPENDENCIES builtin_interfaces
+  DEPENDENCIES std_msgs
+)
 
 ament_export_dependencies(rosidl_default_runtime)
 

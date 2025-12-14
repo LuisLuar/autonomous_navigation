@@ -124,6 +124,9 @@ class CameraReconnectNode(Node):
                     pass
             
             self.camera_process = None
+    
+    def destroy_node(self):
+        super().destroy_node()
 
 def main(args=None):
     rclpy.init(args=args)

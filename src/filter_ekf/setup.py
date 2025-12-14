@@ -30,6 +30,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'simulate_imu_odom = filter_ekf.simulate_imu_odom:main',
+            'utm_map_origin = filter_ekf.utm_map_origin:main',
         ],
     },
 )

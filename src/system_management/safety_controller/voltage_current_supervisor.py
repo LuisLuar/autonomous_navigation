@@ -437,6 +437,9 @@ class VoltageCurrentSupervisor(Node):
             self.motor_left_relay_pub.publish(emergency_relay)
             self.motor_right_relay_pub.publish(emergency_relay)
 
+    def destroy_node(self):
+        super().destroy_node()
+
 def main(args=None):
     rclpy.init(args=args)
     node = VoltageCurrentSupervisor()

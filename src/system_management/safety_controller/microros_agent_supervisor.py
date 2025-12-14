@@ -53,6 +53,9 @@ class MicroROSAgentSupervisor(Node):
             stdout=subprocess.DEVNULL
         )
         return result.returncode == 0
+    
+    def destroy_node(self):
+        super().destroy_node()
 
 
 def main(args=None):

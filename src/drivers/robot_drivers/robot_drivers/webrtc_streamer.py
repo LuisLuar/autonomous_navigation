@@ -109,6 +109,9 @@ class RosMultiStream(Node):
 
     def get_latest_frame(self, stream_type: StreamType):
         return self.latest_frames.get(stream_type)
+    
+    def destroy_node(self):
+        super().destroy_node()
 
 # ---------------- WebRTC video track para múltiples streams ----------------
 class RosVideoTrack(VideoStreamTrack):

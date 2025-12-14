@@ -10,6 +10,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import os
 import time
+from custom_interfaces.msg import SegmentationData
 
 # ---------------------------------------------------------
 # Clase ligera para manejar engine TensorRT (buffers reutilizables)
@@ -82,23 +83,13 @@ class TensorRTInference:
 # ---------------------------------------------------------
 class LaneSegmenterNode(Node):
     def __init__(self):
-        super().__init__('lane_segmenter_overlay_only')
+        super().__init__('segmenter')
 
         self.bridge = CvBridge()
 
         # Tamaño de entrada (debe coincidir con el engine)
         self.input_size = (512, 512)   # (w,h)
         self.model_classes = 19        # ajustar si tu modelo tiene distinto nclass
-        self.alpha = 0.6               # mezcla overlay
-
-        # Colores precomputados (RGB) - index 0 = fondo
-        self.colors = np.array([
-            [128, 64,128], [244, 35,232], [ 70, 70, 70], [102,102,156],
-            [190,153,153], [153,153,153], [250,170, 30], [220,220,  0],
-            [107,142, 35], [152,251,152], [ 70,130,180], [220, 20, 60],
-            [255,  0,  0], [  0,  0,142], [  0,  0, 70], [  0, 60,100],
-            [  0, 80,100], [  0,  0,230], [119, 11, 32]
-        ], dtype=np.uint8)
 
         # Cargar engine TensorRT (ruta relativa u absoluta)
         engine_path = os.getenv('SEG_ENGINE', '/home/raynel/autonomous_navigation/src/perception_stack/semantic_segmentation/pretrained/bisenetv1.engine')
@@ -107,14 +98,13 @@ class LaneSegmenterNode(Node):
             #self.get_logger().info("TensorRT engine cargado correctamente")
         except Exception as e:
             #self.get_logger().error(f"Fallo cargando engine TensorRT: {e}")
-            pass
             raise
 
         # Suscripción: cola pequeña para evitar acumulación (1)
         self.sub = self.create_subscription(Image, '/camera/rgb/image_raw', self.callback_image, 1)
 
-        # Publicador: SOLO overlay BGR
-        self.pub_overlay = self.create_publisher(Image, '/segmentation/overlay', 1)
+        # Publicador: datos de segmentacióñ
+        self.pub_seg_data = self.create_publisher(SegmentationData, '/segmentation/data', 1)
 
         # Pre-allocaciones para evitar nuevas asignaciones:
         # tensor de entrada (1,3,H,W) float32 contiguous
@@ -142,18 +132,24 @@ class LaneSegmenterNode(Node):
         x = x - np.max(x, axis=1, keepdims=True)
         exp = np.exp(x)
         return exp / np.sum(exp, axis=1, keepdims=True)
+    
+    def publish_segmentation_data(self, mask, header):
+        #self.get_logger().info(f'PUBLICANDO')
+        try:
+            msg = SegmentationData()
+            msg.header = header
+            msg.height = mask.shape[0]
+            msg.width = mask.shape[1]
+            msg.mask_data = mask.flatten().tobytes()  # o comprimir
+            #msg.probabilities = probabilities.flatten()  # si quieres enviar
+            self.pub_seg_data.publish(msg)
+        except Exception as e:
+            #self.get_logger().error(f'Error publicando SegmentationData: {e}')
+            pass
+
 
     def callback_image(self, msg: Image):
-        # Rate limiting / drop frames if estamos ocupados
-        now = self.get_clock().now()
-        dt = (now - self.last_frame_time).nanoseconds / 1e9
-        if dt < 0.03:   # ~33 FPS límite (ajustable)
-            return
-        self.last_frame_time = now
-
         try:
-            t0 = time.time()
-
             # 1) ROS -> BGR OpenCV (evitar conversion adicional si se publica BGR)
             frame_bgr = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
             orig_h, orig_w = frame_bgr.shape[:2]
@@ -179,38 +175,18 @@ class LaneSegmenterNode(Node):
             probs = self.numpy_softmax(out_arr)
             mask = np.argmax(probs[0], axis=0).astype(np.uint8)   # (H,W)
 
-            # 5) Resize mask al tamaño original y crear máscara coloreada
+            # 5) Resize mask al tamaño original
             mask_big = cv2.resize(mask, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)  # mono
-            # vectorizado: map indices->color (RGB)
-            color_big = self.colors[mask_big]  # shape (orig_h, orig_w, 3) (RGB uint8)
-            # convertir a BGR para publicar overlay
-            color_bgr = cv2.cvtColor(color_big, cv2.COLOR_RGB2BGR)
-
-            # 6) Overlay (solo para pixeles que no sean fondo (index 0))
-            non_bg = mask_big != 0
-            overlay = frame_bgr.copy()
-            if np.any(non_bg):
-                # mezcla vectorizada solo sobre píxeles relevantes
-                overlay[non_bg] = (self.alpha * color_bgr[non_bg] + (1.0 - self.alpha) * frame_bgr[non_bg]).astype(np.uint8)
-
-            # 7) Publicar SÓLO overlay (bgr8)
-            ros_img = self.bridge.cv2_to_imgmsg(overlay, encoding='bgr8')
-            ros_img.header = msg.header
-            self.pub_overlay.publish(ros_img)
-
-            # métricas cada 2s
-            self.frame_count += 1
-            elapsed = (self.get_clock().now() - self.last_time).nanoseconds / 1e9
-            if elapsed >= 2.0:
-                avg = (time.time() - t0) * 1000.0 / 1.0  # aproximado por frame (solo informativo)
-                fps = self.frame_count / elapsed
-                #self.get_logger().info(f'⚡ FPS aprox: {fps:.1f} | Inferencia: {inf_ms:.1f} ms')
-                self.frame_count = 0
-                self.last_time = self.get_clock().now()
+            
+            # 6) Publicar datos de segmentación
+            self.publish_segmentation_data(mask_big, msg.header)
 
         except Exception as e:
             #self.get_logger().error(f'Error en callback segmentation: {e}')
             pass
+    
+    def destroy_node(self):
+        super().destroy_node()
 
 def main(args=None):
     rclpy.init(args=args)
@@ -218,7 +194,8 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info('Segmenter detenido por usuario')
+        #node.get_logger().info('Segmenter detenido por usuario')
+        pass
     finally:
         try:
             node.destroy_node()

@@ -10,6 +10,11 @@ from sensor_msgs.msg import NavSatFix, NavSatStatus
 from std_msgs.msg import Header, String
 from sensor_msgs.msg import Image
 from geographic_msgs.msg import GeoPoint
+from nav_msgs.msg import Path
+from pyproj import Transformer
+from geometry_msgs.msg import PointStamped
+
+
 
 from cv_bridge import CvBridge
 from PySide6.QtGui import QImage, QPixmap
@@ -80,6 +85,17 @@ class ROSBridge(Node):
         self.camera_segmentation_qpixmap = None
         self.camera_detection_qpixmap = None
 
+        # Path global
+        self.global_path = None
+        self.map_origin = None   # (utm_x, utm_y)
+        self.current_latlon = None
+
+
+        # Conversor UTM → lat/lon (MISMO CRS que el planner)
+        self.xy_to_ll = Transformer.from_crs(
+            "EPSG:32717", "EPSG:4326", always_xy=True
+        )
+
 
         # Bandera para indicar si recibimos al menos un mensaje
         self.any_msg_received = False
@@ -90,7 +106,7 @@ class ROSBridge(Node):
         # Publisher de ejemplo para destino
         self.goal_latlon_pub = self.create_publisher(GeoPoint, '/goal_latlon', 10)
 
-        self.get_logger().info('[ROSBridge] Inicializado y suscrito a topics.')
+        #self.get_logger().info('[ROSBridge] Inicializado y suscrito a topics.')
 
     def _setup_subscriptions(self):
         """Configura todas las suscripciones a topics de ROS2."""
@@ -137,9 +153,10 @@ class ROSBridge(Node):
         
 
         # Señal del gps
-        self.create_subscription(NavSatFix, '/gps/fix', self.cb_gps_fix,10)
+        self.create_subscription(NavSatFix, '/gps/filtered', self.cb_gps_fix,10)
         self.create_subscription(String, '/gps/raw', self.cb_gps_raw,10)
         self.create_subscription(String, '/gps/info', self.cb_gps_info,10)
+        
 
         #Camara
         #self.create_subscription(Image, '/camera/rgb/image_raw', self.cb_camera_rgb, 1)
@@ -149,9 +166,29 @@ class ROSBridge(Node):
         self.create_subscription(Image, '/segmentation/overlay', self.cb_camera_segmentation, 1)
         self.create_subscription(Image, '/detection/annotated_image', self.cb_camera_detection, 1)
 
+        # Path global
+        self.create_subscription(Path, '/global_path', self.cb_global_path, 10)
+        self.create_subscription(PointStamped,"/utm_map_origin",self.cb_map_origin,1)
+
+
+
+    #FUNCIONES ADICIONALES
+    def map_to_latlon(self, x_map, y_map):
+        if self.map_origin is None:
+            return None
+
+        utm_x = self.map_origin[0] + x_map
+        utm_y = self.map_origin[1] + y_map
+
+        lon, lat = self.xy_to_ll.transform(utm_x, utm_y)
+        return lat, lon
 
 
     # Callbacks: guardan el último mensaje recibido
+    def cb_map_origin(self, msg: PointStamped):
+        self.map_origin = (msg.point.x, msg.point.y)
+        self.any_msg_received = True
+
     def cb_range_front(self, msg: Range):
         self.range_front = msg
         self.any_msg_received = True
@@ -281,7 +318,19 @@ class ROSBridge(Node):
     
     def cb_odom_global(self, msg: Odometry):
         self.odom_global = msg
+
+        if self.map_origin is None:
+            return
+
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+
+        latlon = self.map_to_latlon(x, y)
+        if latlon:
+            self.current_latlon = latlon
+
         self.any_msg_received = True
+
     
 
     
@@ -310,6 +359,24 @@ class ROSBridge(Node):
             self.last_segmentation_time = self.get_clock().now()
         except Exception as e:
             self.get_logger().warning(f"Error en cb_camera_segmentation: {e}")
+
+    def cb_global_path(self, msg: Path):
+        if self.map_origin is None:
+            return
+
+        path_latlon = []
+
+        for pose in msg.poses:
+            x = pose.pose.position.x
+            y = pose.pose.position.y
+
+            latlon = self.map_to_latlon(x, y)
+            if latlon:
+                path_latlon.append(latlon)
+
+        self.global_path = path_latlon
+        self.any_msg_received = True
+
 
 
     def publish_goal_latlon(self, lat, lon):

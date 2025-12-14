@@ -109,8 +109,12 @@ class WebSocketROSBridge(Node):
         self.pub_light_right = self.create_publisher(Bool, '/light/right', 10)
         self.pub_light_safety = self.create_publisher(Bool, '/light/safety', 10)
         self.pub_capture = self.create_publisher(Bool, '/capture', 10)
+        self.pub_manual = self.create_publisher(Bool, '/manual', 10)
         self.pub_emergency = self.create_publisher(Bool, '/emergency', 10)
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+
+        #Publicación inicial
+        self.pub_manual.publish(Bool(data=False))
 
         # Lista de conexiones WebSocket activas
         self.connected_websockets = set()
@@ -327,6 +331,12 @@ class WebSocketROSBridge(Node):
                     twist.linear.x = x * LINEAR_SCALE
                     twist.angular.z = y * ANGULAR_SCALE
                     self.cmd_vel_pub.publish(twist)
+
+                    if x != 0.0 or y != 0.0:
+                        self.pub_manual.publish(Bool(data=True))
+                    else:
+                        self.pub_manual.publish(Bool(data=False))
+
                     #self.get_logger().debug(f"Publicado Twist linear={twist.linear.x} angular={twist.angular.z}")
                 
                 # ------------------- Comando directo -------------------
@@ -374,6 +384,9 @@ class WebSocketROSBridge(Node):
         )
         #self.get_logger().info(f"WebSocket LISTO en ws://{WS_HOST}:{WS_PORT}")
         await server.wait_closed()
+    
+    def destroy_node(self):
+        super().destroy_node()
 
 def main(args=None):
     rclpy.init(args=args)

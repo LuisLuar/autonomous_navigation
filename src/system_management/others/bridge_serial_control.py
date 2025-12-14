@@ -87,7 +87,7 @@ class SerialROSBridge(Node):
         # Resetear attempts si ha pasado mucho tiempo desde el último intento exitoso
         if current_time - self.last_successful_comm > 300.0:  # 5 minutos
             self.reconnect_attempts = 0
-            #self.get_logger().info('🔄 Resetting reconnection attempts after long period')
+            #self.get_logger().info('Resetting reconnection attempts after long period')
         
         self.last_reconnect_attempt = current_time
         self.reconnect_attempts += 1
@@ -113,7 +113,7 @@ class SerialROSBridge(Node):
                 self.last_successful_comm = self.get_current_time()
                 self.reconnect_attempts = 0  # Reset solo en conexión exitosa
                 
-                #self.get_logger().info(f'✅ Connected to serial {self.serial_port}')
+                #self.get_logger().info(f'Connected to serial {self.serial_port}')
                 
                 # Publish connection state
                 conn_state = Bool()
@@ -129,7 +129,7 @@ class SerialROSBridge(Node):
             self.is_connected = False
             # Limitar logs para evitar spam - solo loggear cada 5 intentos después de los primeros 3
             if self.reconnect_attempts <= 3 or self.reconnect_attempts % 5 == 0:
-                #self.get_logger().warning(f'⚠️ Serial connection attempt {self.reconnect_attempts} failed: {str(e)[:100]}')
+                #self.get_logger().warning(f'Serial connection attempt {self.reconnect_attempts} failed: {str(e)[:100]}')
                 pass
             return False
 
@@ -146,7 +146,7 @@ class SerialROSBridge(Node):
             conn_state.data = False
             self.connection_state_pub.publish(conn_state)
             
-            #self.get_logger().info('🔌 Serial connection closed')
+            #self.get_logger().info('Serial connection closed')
         except Exception as e:
             #self.get_logger().warning(f'Error closing serial: {e}')
             pass
@@ -159,7 +159,7 @@ class SerialROSBridge(Node):
             # Check if we've received data recently
             time_since_last_comm = current_time - self.last_successful_comm
             if time_since_last_comm > self.connection_timeout:
-                #self.get_logger().warning(f'🔄 Serial connection timeout ({time_since_last_comm:.1f}s), attempting reconnect...')
+                #self.get_logger().warning(f'Serial connection timeout ({time_since_last_comm:.1f}s), attempting reconnect...')
                 self.disconnect_serial()
         else:
             # Not connected - ALWAYS attempt reconnect with exponential backoff
@@ -171,14 +171,14 @@ class SerialROSBridge(Node):
             
             if current_time - self.last_reconnect_attempt >= current_delay:
                 if self.reconnect_attempts >= self.max_reconnect_attempts:
-                    #self.get_logger().info(f'🔁 Continuing reconnection attempts (interval: {current_delay:.1f}s)')
+                    #self.get_logger().info(f'Continuing reconnection attempts (interval: {current_delay:.1f}s)')
                     pass
                 self.connect_serial()
             else:
                 # Solo loggear ocasionalmente para evitar spam
                 remaining = current_delay - (current_time - self.last_reconnect_attempt)
                 if remaining > 1.0 and current_time % 10 < 1:  # Log cada ~10 segundos
-                    #self.get_logger().debug(f'⏳ Next reconnection attempt in {remaining:.1f}s')
+                    #self.get_logger().debug(f'Next reconnection attempt in {remaining:.1f}s')
                     pass
 
     def use_serial_cb(self, msg: Bool):
@@ -186,11 +186,11 @@ class SerialROSBridge(Node):
         if new_use_serial != self.use_serial:
             self.use_serial = new_use_serial
             if self.use_serial:
-                #self.get_logger().info('🔛 use_serial enabled - switching to cmd_vel frequency')
+                #self.get_logger().info('use_serial enabled - switching to cmd_vel frequency')
                 # Reset velocity update flag when switching to cmd_vel mode
                 self.update_velocity = True
             else:
-                #self.get_logger().info('🔚 use_serial disabled - switching to periodic updates')
+                #self.get_logger().info('use_serial disabled - switching to periodic updates')
                 # Send zero velocity when disabling serial control
                 self.current_linear = 0.0
                 self.current_angular = 0.0
@@ -239,11 +239,11 @@ class SerialROSBridge(Node):
                 
                 # Log only occasionally to avoid spam
                 if self.get_clock().now().nanoseconds % 10 == 0:  # Log ~10% of messages
-                    #self.get_logger().debug(f'📤 Sent: {cmd_str.strip()}')
+                    #self.get_logger().debug(f'Sent: {cmd_str.strip()}')
                     pass
                     
             except Exception as e:
-                #self.get_logger().error(f'❌ Error sending serial CMD: {e}')
+                #self.get_logger().error(f'Error sending serial CMD: {e}')
                 self.is_connected = False
                 self.disconnect_serial()
 
@@ -281,12 +281,12 @@ class SerialROSBridge(Node):
                     if line:
                         self.process_serial_line(line)
         except serial.SerialException as e:
-            #self.get_logger().error(f'❌ Serial read error: {e}')
+            #self.get_logger().error(f'Serial read error: {e}')
             self.is_connected = False
             self.disconnect_serial()
         except Exception as e:
             # Other errors (decode, etc) - don't disconnect for these
-            #self.get_logger().warning(f'⚠️ Serial processing error: {e}')
+            #self.get_logger().warning(f'Serial processing error: {e}')
             pass
 
     def safe_float(self, s):
@@ -406,10 +406,10 @@ class SerialROSBridge(Node):
                     self.serial_hb_pub.publish(hb)
                     
                 except Exception as e:
-                    #self.get_logger().warning(f'⚠️ Error processing DATA line: {e}')
+                    #self.get_logger().warning(f'Error processing DATA line: {e}')
                     pass
             else:
-                #self.get_logger().debug(f'⚠️ Incomplete DATA line: {line}')
+                #self.get_logger().debug(f'Incomplete DATA line: {line}')
                 pass
         elif line.startswith('CMD,'):
             # Echo of our own command - can be ignored or logged for debugging

@@ -19,6 +19,7 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
         
+
         # Lanzar Asus Xtion
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -55,3 +56,13 @@ def generate_launch_description():
             name='webrtc_streamer'
         ),  
     ])
+
+"""
+        # Lanzar test webcam 
+        Node(
+            package='robot_drivers',
+            executable='webcam_tester',
+            output='screen',
+            name='webcam_tester'
+        ),
+"""

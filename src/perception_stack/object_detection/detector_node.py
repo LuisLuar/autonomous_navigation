@@ -5,6 +5,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge
+from custom_interfaces.msg import DetectionArray, Detection
 
 import numpy as np
 import cv2
@@ -31,22 +32,22 @@ class YoloDetectorNode(Node):
 
         self.imgsz = 640
 
-        self.get_logger().info(f"Cargando modelo TensorRT engine: {self.model_path}")
+        #self.get_logger().info(f"Cargando modelo TensorRT engine: {self.model_path}")
         
         try:
             # Cargar el modelo TensorRT engine
-            self.model = YOLO(self.model_path)
-            self.get_logger().info("Modelo TensorRT engine cargado correctamente")
+            self.model = YOLO(self.model_path, task='detect')
+            #self.get_logger().info("Modelo TensorRT engine cargado correctamente")
         except Exception as e:
-            self.get_logger().error(f"Error cargando TensorRT engine: {e}")
+            #self.get_logger().error(f"Error cargando TensorRT engine: {e}")
             # Fallback a ONNX
             try:
                 onnx_path = self.model_path.replace('.engine', '.onnx')
-                self.get_logger().info(f"Fallback a ONNX: {onnx_path}")
-                self.model = YOLO(onnx_path)
+                #self.get_logger().info(f"Fallback a ONNX: {onnx_path}")
+                self.model = YOLO(onnx_path, task='detect')
                 self.device = "cuda"  # Cambiar a cuda para ONNX
             except Exception as e2:
-                self.get_logger().error(f"Fallback falló: {e2}")
+                #self.get_logger().error(f"Fallback falló: {e2}")
                 raise
 
         # CV Bridge
@@ -59,7 +60,7 @@ class YoloDetectorNode(Node):
 
         # Publishers
         self.pub_annotated = self.create_publisher(Image, '/detection/annotated_image', 1)
-        self.pub_results = self.create_publisher(String, '/detection/results', 1)
+        self.pub_results = self.create_publisher(DetectionArray, '/detection/results', 1)
 
         # Class names
         self.class_names = {}
@@ -81,7 +82,7 @@ class YoloDetectorNode(Node):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8")
         except Exception as e:
-            self.get_logger().error(f"cv_bridge error: {e}")
+            #self.get_logger().error(f"cv_bridge error: {e}")
             return
 
         # Run inference
@@ -95,11 +96,17 @@ class YoloDetectorNode(Node):
                 verbose=False
             )
         except Exception as e:
-            self.get_logger().error(f"Inference error: {e}")
+            #self.get_logger().error(f"Inference error: {e}")
             return
 
         inference_time = time.time() - inference_start
         self.inference_times.append(inference_time)
+
+        # Crear mensaje DetectionArray (CAMBIOS AQUÍ)
+        detection_array = DetectionArray()
+        detection_array.header = msg.header
+        detection_array.inference_time_ms = inference_time*1000
+        detection_array.backend = self.backend
 
         # Procesar resultados
         detections = []
@@ -118,62 +125,57 @@ class YoloDetectorNode(Node):
 
                     x1, y1, x2, y2 = map(int, xyxy)
                     name = self.class_names.get(cls, str(cls))
-                    detections.append({
-                        "class_id": cls,
-                        "class_name": name,
-                        "confidence": float(conf),
-                        "x1": x1, "y1": y1, "x2": x2, "y2": y2
-                    })
 
+                    # Crear mensaje Detection (CAMBIOS AQUÍ)
+                    detection = Detection()
+                    detection.class_id = cls
+                    detection.class_name = name
+                    detection.confidence = float(conf)
+                    detection.x1 = x1
+                    detection.y1 = y1
+                    detection.x2 = x2
+                    detection.y2 = y2
+                    detection.center_x = (x1 + x2) / 2.0
+                    detection.center_y = (y1 + y2) / 2.0
+                    
+                    detection_array.detections.append(detection)
         # Annotate and publish
-        annotated = draw_detections(cv_image.copy(), detections)
+        annotated = draw_detections(cv_image.copy(), detection_array.detections)
+
+        # Publish detections (CAMBIOS AQUÍ - MUCHO MÁS SIMPLE)
+        self.pub_results.publish(detection_array)
         
         try:
             ros_img = self.bridge.cv2_to_imgmsg(annotated, encoding='rgb8')
             ros_img.header = msg.header
             self.pub_annotated.publish(ros_img)
         except Exception as e:
-            self.get_logger().error(f"Error publicando imagen: {e}")
+            #self.get_logger().error(f"Error publicando imagen: {e}")
+            pass
 
-        # Publish detections
-        try:
-            payload = {
-                "header": {
-                    "stamp": {"sec": msg.header.stamp.sec, "nanosec": msg.header.stamp.nanosec},
-                    "frame_id": msg.header.frame_id
-                },
-                "detections": detections,
-                "inference_time": inference_time,
-                "backend": self.backend
-            }
-            str_msg = String()
-            str_msg.data = json.dumps(payload)
-            self.pub_results.publish(str_msg)
-        except Exception as e:
-            self.get_logger().error(f"Error publicando resultados: {e}")
+        
 
         # Logging cada 20 frames
-        self.count += 1
+        """self.count += 1
         if self.count % 20 == 0:
             elapsed = time.time() - self.start_time
             fps = self.count / elapsed
             avg_inference = np.mean(self.inference_times[-20:]) if self.inference_times else 0
-            self.get_logger().info(f"Frames: {self.count} | FPS: {fps:.1f} | Inference: {avg_inference*1000:.1f}ms | Backend: {self.backend}")
+            #self.get_logger().info(f"Frames: {self.count} | FPS: {fps:.1f} | Inference: {avg_inference*1000:.1f}ms | Backend: {self.backend}")"""
 
 def draw_detections(img: np.ndarray, detections: list):
     for det in detections:
-        x1, y1, x2, y2 = det["x1"], det["y1"], det["x2"], det["y2"]
-        cls_name = det["class_name"]
-        conf = det["confidence"]
-
-        color = class_color_hash(cls_name)
-        cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+        color = class_color_hash(det.class_name)
+        cv2.rectangle(img, (det.x1, det.y1), (det.x2, det.y2), color, 2)
         
-        label = f"{cls_name} {conf:.2f}"
+        label = f"{det.class_name} {det.confidence:.2f}"
         (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-        cv2.rectangle(img, (x1, y1 - th - baseline - 6), (x1 + tw + 6, y1), color, -1)
-        cv2.putText(img, label, (x1 + 3, y1 - baseline - 3), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+        cv2.rectangle(img, (det.x1, det.y1 - th - baseline - 6), 
+                      (det.x1 + tw + 6, det.y1), color, -1)
+        cv2.putText(img, label, (det.x1 + 3, det.y1 - baseline - 3), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
     return img
+
 
 def class_color_hash(name: str):
     h = 0

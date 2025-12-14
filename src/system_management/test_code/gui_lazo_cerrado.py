@@ -88,6 +88,9 @@ class RosGuiNode(Node):
         # ROS doesn't require us to set header timestamps for cmd messages
         self.cli_pub.publish(msg)
         return t_cmd_local  # return local timestamp for record
+    
+    def destroy_node(self):
+        super().destroy_node()
 
 class GUI:
     def __init__(self, master, ros_node: RosGuiNode):

@@ -19,6 +19,8 @@ import os
 import time
 from datetime import datetime
 import glob
+from std_msgs.msg import Bool
+
 
 class SystemHealthMonitor(Node):
     def __init__(self):
@@ -34,19 +36,24 @@ class SystemHealthMonitor(Node):
         self.disk_temp_pub = self.create_publisher(DiagnosticStatus, '/status/disk_temperature', 10)
         self.uptime_pub = self.create_publisher(DiagnosticStatus, '/status/uptime', 10)
         self.system_summary_pub = self.create_publisher(DiagnosticStatus, '/status/system_summary', 10)
+
+        # Publisher para estado de la tapa (lid)
+        self.lid_pub = self.create_publisher(Bool, '/lid_closed', 10)
+
         
-        # Limites de seguridad (ajustables según tu laptop)
+        # Limites de seguridad 
         self.limits = {
-            'cpu_temp_warning': 80.0,    # °C - Warning
-            'cpu_temp_critical': 90.0,   # °C - Critical
-            'gpu_temp_warning': 85.0,    # °C - Warning  
-            'gpu_temp_critical': 95.0,   # °C - Critical
-            'disk_temp_warning': 60.0,   # °C - Warning
-            'battery_warning': 20.0,     # % - Warning
-            'battery_critical': 10.0,    # % - Critical
-            'cpu_usage_warning': 90.0,   # % - Warning
-            'ram_usage_warning': 90.0,   # % - Warning
+            'cpu_temp_warning': 85.0,    # °C – Advertencia cuando CPU empieza a estar “caliente”.
+            'cpu_temp_critical': 95.0,   # °C – Crítico: cerca del límite seguro de muchos CPUs modernos en laptops.
+            'gpu_temp_warning': 80.0,    # °C – Advertencia cuando GPU se calienta bajo carga.
+            'gpu_temp_critical': 90.0,   # °C – Crítico: límite razonable antes de posible throttling o daño.
+            'disk_temp_warning': 55.0,   # °C – Advertencia para el disco (si es SSD/NVMe, mantener moderado).
+            'battery_warning': 25.0,     # % – Warning.
+            'battery_critical': 15.0,    # % – Critical.
+            'cpu_usage_warning': 90.0,   # % – Warning indicar cuando CPU esté saturada.
+            'ram_usage_warning': 90.0,   # % – Warning.
         }
+
         
         # Estado actual
         self.current_state = {
@@ -79,7 +86,7 @@ class SystemHealthMonitor(Node):
         # Timer para checks de seguridad (más lento)
         self.safety_timer = self.create_timer(5.0, self.safety_checks)
         
-        #self.get_logger().info("🚀 System Health Monitor iniciado (topics individuales)")
+        #self.get_logger().info("System Health Monitor iniciado (topics individuales)")
         
         # Detectar tipo de GPU (NVIDIA/Intel/AMD)
         self.gpu_type = self.detect_gpu_type()
@@ -291,6 +298,21 @@ class SystemHealthMonitor(Node):
         except Exception as e:
             #self.get_logger().warn(f"Error obteniendo stats: {e}")
             return {}
+    
+    def get_lid_state(self):
+        """Detecta si la tapa de la laptop está cerrada."""
+        try:
+            lid_paths = glob.glob('/proc/acpi/button/lid/*/state')
+            if lid_paths:
+                with open(lid_paths[0], 'r') as f:
+                    content = f.read().lower()
+                    if "closed" in content:
+                        return True
+                    return False
+        except:
+            pass
+        return False
+
     
     def update_current_state(self):
         """Actualiza todos los estados del sistema"""
@@ -507,11 +529,18 @@ class SystemHealthMonitor(Node):
             ]
         )
         self.system_summary_pub.publish(summary_diag)
+
+        # 10. Estado de la tapa (lid)
+        lid_closed = self.get_lid_state()
+        lid_msg = Bool()
+        lid_msg.data = lid_closed
+        self.lid_pub.publish(lid_msg)   
+
         
         # Log periódico
         """if int(time.time()) % 10 == 0:  # Cada 10 segundos
             self.get_logger().info(
-                f"📊 Health: CPU {self.current_state['cpu_temp']:.1f}°C, "
+                f"Health: CPU {self.current_state['cpu_temp']:.1f}°C, "
                 f"GPU {self.current_state['gpu_temp']:.1f}°C, "
                 f"Bat {self.current_state['battery_percent']:.1f}%"
             )"""
@@ -600,6 +629,9 @@ class SystemHealthMonitor(Node):
             return "; ".join(messages)
         else:
             return "System healthy"
+        
+    def destroy_node(self):
+        super().destroy_node()
 
 
 def main(args=None):

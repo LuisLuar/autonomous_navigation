@@ -15,7 +15,7 @@ class MapWidget(QWidget):
     def __init__(self, ros_node=None, offline_tiles_path=None, leaflet_path=None):
         super().__init__()
         self.ros_node = ros_node
-        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/OpenStreetMap" #OpenStreetMap GoogleImagenes
+        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/GoogleImagenes" #OpenStreetMap GoogleImagenes
         
         # Ruta a los recursos de Leaflet offline
         if leaflet_path:
@@ -45,6 +45,10 @@ class MapWidget(QWidget):
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.update_from_ros)
         self.update_timer.start(500)  # cada 500 ms
+
+        # Path global
+        self.current_path = None
+
     
     def setup_ui(self):
         self.setStyleSheet(get_app_style() + get_map_widget_style())
@@ -168,7 +172,27 @@ class MapWidget(QWidget):
 </head>
 <body>
     <div id="map"></div>
+        
+
     <script>
+
+        // ============================
+        // RUTA GLOBAL
+        // ============================
+        window.globalPathLayer = null;
+
+        function drawGlobalPath(pathCoords) {{
+            if (window.globalPathLayer) {{
+                map.removeLayer(window.globalPathLayer);
+            }}
+
+            window.globalPathLayer = L.polyline(pathCoords, {{
+                color: 'blue',
+                weight: 5,
+                opacity: 0.9
+            }}).addTo(map);
+        }}
+
         // Crear mapa
         var map = L.map('map').setView([{robot_lat}, {robot_lng}], 17);
         
@@ -250,7 +274,7 @@ class MapWidget(QWidget):
         
         # Verificar directorios
         if not os.path.exists(self.offline_tiles_path):
-            #print(f"[MapWidget] ⚠️ ADVERTENCIA: No se encuentra el directorio de tiles: {self.offline_tiles_path}")
+            #print(f"[MapWidget] ADVERTENCIA: No se encuentra el directorio de tiles: {self.offline_tiles_path}")
             pass
         
         # Crear HTML del mapa
@@ -304,6 +328,26 @@ class MapWidget(QWidget):
         
         #print(f"[MapWidget] Mapa HTML guardado en: {self.html_file}")
     
+    def update_global_path(self, path_latlon):
+        """
+        Dibuja el path recibido desde ROS en Leaflet
+        """
+        if not path_latlon or len(path_latlon) < 2:
+            return
+
+        js_array = "[" + ",".join(
+            f"[{lat},{lon}]" for lat, lon in path_latlon
+        ) + "]"
+
+        js_code = f"""
+        if (typeof drawGlobalPath === 'function') {{
+            drawGlobalPath({js_array});
+        }}
+        """
+
+        self.map_view.page().runJavaScript(js_code)
+
+
     def confirm_destination(self):
         """Confirmar y establecer el destino seleccionado en el mapa"""
         if not self.temp_destination:
@@ -325,7 +369,7 @@ class MapWidget(QWidget):
 
         # Imprimir en terminal (monitor serial)
         """print(f"\n{'='*60}")
-        print(f"🎯 DESTINO ESTABLECIDO")
+        print(f"DESTINO ESTABLECIDO")
         print(f"{'='*60}")
         print(f"  Latitud:  {lat:.6f}")
         print(f"  Longitud: {lng:.6f}")
@@ -341,9 +385,9 @@ class MapWidget(QWidget):
                     # Fallback al método antiguo
                     self.ros_node.publish_goal(lat, lng)
                     
-                #print(f"[MapWidget] ✓ Goal lat/lon publicado: {lat:.6f}, {lng:.6f}")
+                #print(f"[MapWidget] Goal lat/lon publicado: {lat:.6f}, {lng:.6f}")
             except Exception as e:
-                #print(f"[MapWidget] ✗ Error publicando goal: {e}")
+                #print(f"[MapWidget] Error publicando goal: {e}")
                 pass
     
     def set_destination(self, lat, lng):
@@ -379,7 +423,7 @@ class MapWidget(QWidget):
     def handle_map_click(self, lat, lng):
         """Manejador alternativo para clicks en el mapa"""
         self.temp_destination = (lat, lng)
-        self.info_label.setText(f"📍 Punto seleccionado: {lat:.6f}, {lng:.6f}")
+        self.info_label.setText(f"Punto seleccionado: {lat:.6f}, {lng:.6f}")
         self.set_dest_btn.setEnabled(True)
     
     def update_robot_position(self, lat, lng):
@@ -443,32 +487,35 @@ class MapWidget(QWidget):
                 #self.get_logger().info(f"[MapWidget] Yaw actualizado: {self.current_yaw:.1f}°")
                     self.update_map_position(self.current_position[0], self.current_position[1], yaw_deg)
 
-            if bridge.gps_fix:
-                lat = bridge.gps_fix.latitude  
-                lng = bridge.gps_fix.longitude
+            if bridge.current_latlon:
+                lat, lng = bridge.current_latlon
 
-                # Solo actualizar si la posición cambió significativamente
                 if (not self.current_position or 
-                    abs(lat - self.current_position[0]) > 0.000001 or 
-                    abs(lng - self.current_position[1]) > 0.000001):
-                    
+                    abs(lat - self.current_position[0]) > 1e-7 or 
+                    abs(lng - self.current_position[1]) > 1e-7):
+
                     self.current_position = (lat, lng)
-                    
-                    # Actualizar el mapa con la nueva posición
                     self.update_map_position(lat, lng, yaw_deg)
-                    
+
+
+            # Actualizar path global si hay uno nuevo
+            if bridge.global_path:
+                if self.current_path != bridge.global_path:
+                    self.current_path = bridge.global_path
+                    self.update_global_path(self.current_path)
+                                
 
 
         except AttributeError as e:
-            #print(f"⚠️ Error accediendo a datos ROS: {e}")
+            #print(f"Error accediendo a datos ROS: {e}")
             pass
         except Exception as e:
-            #print(f"❌ Error inesperado en update_from_ros: {e}")
+            #print(f"Error inesperado en update_from_ros: {e}")
             pass
 
     def _show_no_bridge_error(self):
         """Muestra un mensaje de error cuando no hay bridge disponible."""
-        #print("❌ No hay bridge ROS disponible")
+        #print("No hay bridge ROS disponible")
         pass
     
     def closeEvent(self, event):

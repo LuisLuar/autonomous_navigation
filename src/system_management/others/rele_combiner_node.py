@@ -96,6 +96,9 @@ class ReleCombiner(Node):
 
         self.get_logger().debug(f"Estado combinado publicado: {bin(combined_value)}")
 
+    def destroy_node(self):
+        super().destroy_node()
+
 def main(args=None):
     rclpy.init(args=args)
     node = ReleCombiner()

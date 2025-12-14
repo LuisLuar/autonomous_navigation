@@ -171,7 +171,7 @@ class CameraWidget(QWidget):
                 self.detection_info.setProperty("class", "sensor-value-off")
 
             # Procesar imagen RGB si está disponible y la cámara está conectada
-            if hasattr(bridge, 'camera_detection_qpixmap') and bridge.camera_detection_qpixmap and self.camera_status and self._get_message_level(self.camera_status) == 0:
+            if hasattr(bridge, 'camera_detection_qpixmap') and bridge.camera_detection_qpixmap and self.camera_status: #and self._get_message_level(self.camera_status) == 0:
                 try:
                     self.detection_video_label.setPixmap(bridge.camera_detection_qpixmap)
                     self.detection_video_label.setScaledContents(True)
@@ -182,27 +182,7 @@ class CameraWidget(QWidget):
                 self.detection_video_label.setText("VIDEO NO DISPONIBLE")
 
 
-            """if hasattr(bridge, 'camera_rgb_qpixmap') and bridge.camera_rgb_qpixmap and self.camera_status and self._get_message_level(self.camera_status) == 0:
-                try:
-                    self.rgb_video_label.setPixmap(bridge.camera_rgb_qpixmap)
-                    self.rgb_video_label.setScaledContents(True)
-                except Exception as e:
-                    print(f"Error mostrando QPixmap RGB: {e}")
-            else:
-                self.rgb_video_label.clear()
-                self.rgb_video_label.setText("VIDEO NO DISPONIBLE")
-
-            if hasattr(bridge, 'camera_depth_qpixmap') and bridge.camera_depth_qpixmap and self.camera_status and self._get_message_level(self.camera_status) == 0:
-                try:
-                    self.depth_video_label.setPixmap(bridge.camera_depth_qpixmap)
-                    self.depth_video_label.setScaledContents(True)
-                except Exception as e:
-                    print(f"Error mostrando QPixmap Depth: {e}")
-            else:
-                self.depth_video_label.clear()
-                self.depth_video_label.setText("VIDEO NO DISPONIBLE")"""
-
-            if hasattr(bridge, 'camera_segmentation_qpixmap') and bridge.camera_segmentation_qpixmap and self.camera_status and self._get_message_level(self.camera_status) == 0:
+            if hasattr(bridge, 'camera_segmentation_qpixmap') and bridge.camera_segmentation_qpixmap and self.camera_status: #and self._get_message_level(self.camera_status) == 0:
                 try:
                     self.segmentation_video_label.setPixmap(bridge.camera_segmentation_qpixmap)
                     self.segmentation_video_label.setScaledContents(True)

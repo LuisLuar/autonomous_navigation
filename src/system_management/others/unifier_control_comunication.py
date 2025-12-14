@@ -375,6 +375,9 @@ class UnifierNode(Node):
         response.success = False
         response.message = "No hay servicios de reset disponibles"
         return response
+    
+    def destroy_node(self):
+        super().destroy_node()
 
 
 def main(args=None):

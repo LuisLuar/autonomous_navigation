@@ -23,6 +23,20 @@ def generate_launch_description():
             output='screen',
         ),
 
+        Node(
+            package='perception_stack',
+            executable='visualization_segmentation',
+            name='visualization_segmentation',
+            output='screen',
+        ),
+
+        Node(
+            package='perception_stack',
+            executable='lane_detector',
+            name='lane_detector',
+            output='screen',
+        ),
+
     ])
 
 
