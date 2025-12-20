@@ -16,4 +16,11 @@ def generate_launch_description():
             executable='global_planner',
             output='screen',
         ),
+
+        # Lanzar nodo de información del entorno OSM
+        Node(
+            package='navigation_system',
+            executable='information_osm',
+            output='screen',    
+        )
     ])

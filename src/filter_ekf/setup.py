@@ -32,6 +32,8 @@ setup(
         'console_scripts': [
             'simulate_imu_odom = filter_ekf.simulate_imu_odom:main',
             'utm_map_origin = filter_ekf.utm_map_origin:main',
+            'global_path = filter_ekf.path_global:main',
+            'local_path = filter_ekf.path_local:main',
         ],
     },
 )

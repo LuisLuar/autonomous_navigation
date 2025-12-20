@@ -139,10 +139,6 @@ class StatusMonitor(Node):
             safety_relay = Bool()
             safety_relay.data = self.blink_state
             self.light_safety_pub.publish(safety_relay)
-            
-            """self.get_logger().debug(
-                f'Parpadeo WARNING: {"ENCENDIDO" if self.blink_state else "APAGADO"}'
-            )"""
 
     def evaluate_global_status(self):
         """Evalúa el estado global basado en todos los estados individuales"""
@@ -206,12 +202,7 @@ class StatusMonitor(Node):
         elif self.current_global_state != DiagnosticStatus.WARN:
             # Para estados no-WARNING, publicar estado fijo
             self.light_safety_pub.publish(safety_relay)
-        
-        # Log informativo
-        #self.get_logger().debug(
-        #    f'Estado global: {global_status.message}'
-        #)
-    
+
     def destroy_node(self):
         """Override para limpiar recursos"""
         self.stop_blinking()
@@ -235,5 +226,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
-        

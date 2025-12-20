@@ -33,7 +33,7 @@ Visualization Manager:
     # 1. REJILLA DE REFERENCIA (GRID)
     # =============================================
     - Alpha: 0.5
-      Cell Size: 0.5
+      Cell Size: 100
       Class: rviz_default_plugins/Grid
       Color: 160; 160; 164
       Enabled: true
@@ -48,7 +48,7 @@ Visualization Manager:
         Z: 0
       Plane: XY
       Plane Cell Count: 10
-      Reference Frame: odom #base_link 
+      Reference Frame: map #odom base_link 
       Value: true
 
     # =============================================
@@ -292,13 +292,37 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
+    
+    # =============================================
+    # 8. VISUALIZACIÓN DE LA RUTA PATH
+    # =============================================
+    - Alpha: 1
+      Class: rviz_default_plugins/Path
+      Color: 0; 85; 255  # Azul brillante
+      Enabled: true
+      Line Style:
+        Line Width: 0.05
+        Value: Lines
+      Name: "Global Path"
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0.01  # Ligeramente elevado para evitar superposición
+      Pose Style: None
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /global_path
+      Value: true
 
 
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
     # FRAME FIJO: Cambiar entre 'odom' (navegación) o 'base_link' (visión)
-    Fixed Frame: odom
+    Fixed Frame: map #odom
     Frame Rate: 30
   Name: root
   Tools:

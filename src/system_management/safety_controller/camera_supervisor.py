@@ -135,7 +135,7 @@ class CameraSupervisor(Node):
             missing_topics = [t for t in self.expected_topics if t not in topic_list]
             found_topics_count = len(found_topics)
 
-            # ✅ VERIFICACIÓN CRÍTICA: Comprobar timeout de actividad
+            # VERIFICACIÓN CRÍTICA: Comprobar timeout de actividad
             activity_timed_out = self.check_activity_timeout()
             
             # Determinar estado real
@@ -149,13 +149,13 @@ class CameraSupervisor(Node):
                 self.last_activity_time = None
                 
             elif activity_timed_out and found_topics_count > 0:
-                # ⚠️ CÁMARA ZOMBIE: Tópicos presentes pero sin actividad
+                # CÁMARA ZOMBIE: Tópicos presentes pero sin actividad
                 msg.level = DiagnosticStatus.ERROR  # 2 = ERROR  
                 msg.message = "INACTIVA (TIMEOUT)"
                 camera_online = False
                 
             else:
-                # ✅ Cámara activa y comunicándose
+                # Cámara activa y comunicándose
                 camera_online = True
 
                 # Evaluar nivel según tópicos detectados
@@ -202,22 +202,6 @@ class CameraSupervisor(Node):
                 self.last_camera_state['level'] != current_state['level'] or
                 self.last_camera_state['activity_timed_out'] != current_state['activity_timed_out']):
                 
-                """if msg.level == DiagnosticStatus.OK:
-                    icon = "🟢"
-                elif msg.level == DiagnosticStatus.WARN:
-                    icon = "🟡"
-                else:
-                    icon = "🔴"
-
-                # Mensaje detallado según el tipo de problema
-                if found_topics_count == 0:
-                    status_msg = f"{icon} Cámara: No se detectaron tópicos - posiblemente desconectada"
-                elif activity_timed_out:
-                    status_msg = f"{icon} Cámara: Sin actividad por {time_since_activity}"
-                else:
-                    status_msg = f"{icon} Cámara: {msg.message}"
-                
-                #self.get_logger().info(status_msg)"""
                 self.last_camera_state = current_state
 
             # Publicar siempre el estado

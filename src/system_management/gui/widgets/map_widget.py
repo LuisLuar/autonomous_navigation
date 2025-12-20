@@ -415,6 +415,18 @@ class MapWidget(QWidget):
 
         # Recrear mapa sin destino
         self.setup_map()
+
+        # Publicar a ROS si está disponible
+        if self.ros_node:
+            try:                
+                # OPCIÓN B: Nuevo método para lat/lon (RECOMENDADO)
+                if hasattr(self.ros_node.ros_bridge, 'clear_path'):
+                    self.ros_node.ros_bridge.clear_path()
+                    
+                #print(f"[MapWidget] Goal lat/lon publicado: {lat:.6f}, {lng:.6f}")
+            except Exception as e:
+                #print(f"[MapWidget] Error publicando goal: {e}")
+                pass
         
         #print(f"\n{'='*60}")
         #print(f"🗑️ DESTINO LIMPIADO")

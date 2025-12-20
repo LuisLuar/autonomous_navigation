@@ -17,7 +17,7 @@ from pyproj import Transformer
 from shapely.geometry import LineString
 
 from geometry_msgs.msg import PointStamped
-
+from std_msgs.msg import Bool
 # CONFIG
 INTERP_DIST = 3.0
 LANE_WIDTH = 1.5
@@ -42,7 +42,7 @@ def latlon_to_xy(lat, lon):
         x, y = transformer_ll_to_xy.transform(lon, lat)
         return (x, y)
     except Exception as e:
-        print(f"Error convirtiendo lat/lon a UTM: {e}")
+        #self.get_logger()(f"Error convirtiendo lat/lon a UTM: {e}")
         return (0, 0)
 
 def interpolate_line(coords, step):
@@ -97,9 +97,9 @@ def cost(u, v, data):
 
 def find_osm_file():
     possible_paths = [
-        os.path.join(os.path.dirname(__file__), "maps", "espe_actualizado.osm"),
+        os.path.join(os.path.dirname(__file__), "maps", "espe_actualizadov2.osm"),
         os.path.join(os.path.dirname(__file__), "espe_actualizado.osm"),
-        "/home/raynel/Documents/offline_title/espe_actualizado.osm",
+        "/home/raynel/autonomous_navigation/src/navigation_system/maps/espe_actualizadov2.osm",
         "espe_actualizado.osm",
     ]
     
@@ -145,8 +145,25 @@ class OfflineGlobalPlanner(Node):
             1
         )
 
+        self.sub_clear = self.create_subscription(
+            Bool,
+            "/clear_path",
+            self.clear_cb,
+            10
+        )
+
 
         self.pub_path = self.create_publisher(Path, "/global_path", 10)
+
+    def clear_cb(self, msg):
+        if msg.data:
+            #self.get_logger().info("Clear path signal received.")
+            self.goal_utm = None
+            self.current_position_map = None
+            empty_path = Path()
+            empty_path.header.frame_id = "map"
+            empty_path.header.stamp = self.get_clock().now().to_msg()
+            self.pub_path.publish(empty_path)
 
     def origin_cb(self, msg):
         if self.utm_origin is not None:
@@ -154,14 +171,10 @@ class OfflineGlobalPlanner(Node):
 
         self.utm_origin = (msg.point.x, msg.point.y)
 
-        self.get_logger().info(
-            f"Planner received UTM origin: {self.utm_origin}"
-        )
+        #self.get_logger().info(f"Planner received UTM origin: {self.utm_origin}")
 
         self.G = self.build_complete_graph()
-        self.get_logger().info(
-            f"OSM graph built: {len(self.G.nodes)} nodes, {len(self.G.edges)} edges"
-        )
+        #self.get_logger().info(f"OSM graph built: {len(self.G.nodes)} nodes, {len(self.G.edges)} edges")
 
 
     def utm_to_map(self, utm):
@@ -177,9 +190,7 @@ class OfflineGlobalPlanner(Node):
             return
 
         if self.utm_origin is None:
-            self.get_logger().warn(
-                "GPS received but UTM origin not set yet"
-            )
+            #self.get_logger().warn("GPS received but UTM origin not set yet")
             return
 
         utm_x, utm_y = latlon_to_xy(msg.latitude, msg.longitude)
@@ -189,9 +200,7 @@ class OfflineGlobalPlanner(Node):
     def goal_cb(self, msg):
 
         if self.utm_origin is None:
-            self.get_logger().warn(
-                "Goal received but UTM origin not set yet"
-            )
+            #self.get_logger().warn("Goal received but UTM origin not set yet")
             return
 
         self.goal_utm = latlon_to_xy(msg.latitude, msg.longitude)
@@ -430,19 +439,19 @@ class OfflineGlobalPlanner(Node):
     # CÁLCULO DE RUTA
     def compute_path(self):
         if self.utm_origin is None:
-            self.get_logger().warn("UTM origin not set yet")
+            #self.get_logger().warn("UTM origin not set yet")
             return
 
         if not hasattr(self, "G") or self.G is None or len(self.G.nodes) == 0:
-            self.get_logger().warn("Graph not ready")
+            #self.get_logger().warn("Graph not ready")
             return
 
         if self.current_position_map is None:
-            self.get_logger().warn("Current position not available")
+            #self.get_logger().warn("Current position not available")
             return
 
         if self.goal_map is None:
-            self.get_logger().warn("Goal not available")
+            #self.get_logger().warn("Goal not available")
             return
 
 
@@ -510,7 +519,6 @@ class OfflineGlobalPlanner(Node):
         self.pub_path.publish(path_msg)
     
     def destroy_node(self):
-        """Override para limpiar recursos"""
         super().destroy_node()
 
 
@@ -525,7 +533,7 @@ def main():
         #print(f"\nERROR: {e}")
         pass
     except KeyboardInterrupt:
-        print("\nPlanner detenido")
+        #print("\nPlanner detenido")
         pass
     except Exception as e:
         #print(f"\nError inesperado: {e}")
@@ -537,7 +545,7 @@ def main():
             node.destroy_node()
             rclpy.shutdown()
         except:
-            pass  # Ignorar error si ya se hizo shutdown
+            pass 
 
 
 if __name__ == "__main__":

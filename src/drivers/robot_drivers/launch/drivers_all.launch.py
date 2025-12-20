@@ -19,18 +19,15 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
         
-
-        # Lanzar Asus Xtion
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('robot_drivers'),
-                    'launch',
-                    'asus_xtion.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
+        # Lanzar test webcam 
+        Node(
+            package='robot_drivers',
+            executable='webcam_tester',
+            output='screen',
+            name='webcam_tester'
         ),
+
+        
         
         # Lanzar nodo GPS
         Node(
@@ -58,11 +55,18 @@ def generate_launch_description():
     ])
 
 """
-        # Lanzar test webcam 
-        Node(
-            package='robot_drivers',
-            executable='webcam_tester',
-            output='screen',
-            name='webcam_tester'
+
+        # Lanzar Asus Xtion
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('robot_drivers'),
+                    'launch',
+                    'asus_xtion.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
         ),
+
+        
 """

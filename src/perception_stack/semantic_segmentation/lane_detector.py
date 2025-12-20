@@ -38,7 +38,7 @@ class LaneDetectorNode(Node):
         
         # 3) Identificar clases de carril (depende de tu modelo)
         # Ejemplo: clases 6, 7, 8 podrían ser carriles
-        lane_mask = np.isin(roi_mask, [6, 7, 11])
+        lane_mask = np.isin(roi_mask, [0, 7, 11])
         
         # 4) Detectar carriles (algoritmo simplificado)
         lanes = self.detect_lanes(lane_mask)

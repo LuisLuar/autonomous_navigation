@@ -28,11 +28,12 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'detector_node = object_detection.detector_node:main',
-            'segmenter_node = semantic_segmentation.segmenter_node:main',
-            'capture_frame = perception_stack.capture_frame:main',  
+            'capture_frame = perception_stack.capture_frame:main',
+            'detector_yolo = object_detection.detector_yolo:main',
+            'visualizer_detector = object_detection.visualizer_detector:main',
+            'segmenter_yolop = semantic_segmentation.segmenter_yolop:main',              
+            'visualizer_segmentation = semantic_segmentation.visualizer_segmentation:main',
             'lane_detector = semantic_segmentation.lane_detector:main',
-            'visualization_segmentation = semantic_segmentation.visualization_segmentation:main',
         ],
     },
 )

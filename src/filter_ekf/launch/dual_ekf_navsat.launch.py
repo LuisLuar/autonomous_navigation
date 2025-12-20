@@ -39,7 +39,19 @@ def generate_launch_description():
             package='filter_ekf',
             executable='utm_map_origin',
             output='screen'
-        ),            
+        ), 
+
+        Node(
+            package='filter_ekf',
+            executable='global_path',
+            output='screen'
+        ),  
+
+        Node(
+            package='filter_ekf',
+            executable='local_path',
+            output='screen'
+        ),           
 	
         launch_ros.actions.Node(
                 package='robot_localization', 
@@ -69,7 +81,7 @@ def generate_launch_description():
                             ('gps/fix', 'gps/fix'), 
                             ('gps/filtered', 'gps/filtered'),
                             ('odometry/gps', 'odometry/gps'),
-                            ('odometry/filtered', 'odometry/local')]           
+                            ('odometry/filtered', 'odometry/global')]           
 
             )
 ])

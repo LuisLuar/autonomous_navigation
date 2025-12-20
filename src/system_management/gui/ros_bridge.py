@@ -13,6 +13,7 @@ from geographic_msgs.msg import GeoPoint
 from nav_msgs.msg import Path
 from pyproj import Transformer
 from geometry_msgs.msg import PointStamped
+from std_msgs.msg import Bool
 
 
 
@@ -103,8 +104,11 @@ class ROSBridge(Node):
         # Configurar suscripciones
         self._setup_subscriptions()
 
-        # Publisher de ejemplo para destino
+        # Publisher para destino
         self.goal_latlon_pub = self.create_publisher(GeoPoint, '/goal_latlon', 10)
+
+        #Publisher para limpiar destino
+        self.clear_goal_pub = self.create_publisher(Bool, '/clear_path',10)
 
         #self.get_logger().info('[ROSBridge] Inicializado y suscrito a topics.')
 
@@ -377,6 +381,14 @@ class ROSBridge(Node):
         self.global_path = path_latlon
         self.any_msg_received = True
 
+    def clear_path(self):
+        """
+        Publica una señal para limpiar el path actual.
+        """
+        clear_msg = Bool()
+        clear_msg.data = True
+        self.clear_goal_pub.publish(clear_msg)
+        #self.get_logger().info(f'[ROSBridge] Publicado clear path signal.')
 
 
     def publish_goal_latlon(self, lat, lon):

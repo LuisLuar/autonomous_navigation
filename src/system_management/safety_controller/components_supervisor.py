@@ -95,7 +95,7 @@ class ComponentDiagnosticNode(Node):
             'imu_linear_acceleration_max': 20.0  # m/s²
         }
 
-        #self.get_logger().info("🟢 Nodo de diagnóstico de componentes iniciado")
+        #self.get_logger().info("Nodo de diagnóstico de componentes iniciado")
 
     # Callbacks para cada componente
     def encoder_callback(self, msg):
@@ -108,7 +108,8 @@ class ComponentDiagnosticNode(Node):
         self.encoder_data_history.append((current_time, is_valid))
         
         if not is_valid:
-            self.get_logger().warn("⚠️ Datos de encoder potencialmente inválidos")
+            #self.get_logger().warn("Datos de encoder potencialmente inválidos")
+            pass
 
     def imu_callback(self, msg):
         current_time = time.time()
@@ -120,7 +121,8 @@ class ComponentDiagnosticNode(Node):
         self.imu_data_history.append((current_time, is_valid))
         
         if not is_valid:
-            self.get_logger().warn("⚠️ Datos de IMU potencialmente inválidos")
+            #self.get_logger().warn("Datos de IMU potencialmente inválidos")
+            pass
 
     def sharp_front_callback(self, msg):
         current_time = time.time()
@@ -132,7 +134,8 @@ class ComponentDiagnosticNode(Node):
         self.sharp_front_history.append((current_time, is_valid))
         
         if not is_valid:
-            self.get_logger().warn("⚠️ Datos de Sharp frontal potencialmente inválidos")
+            #self.get_logger().warn("Datos de Sharp frontal potencialmente inválidos")
+            pass
 
     def sharp_left_callback(self, msg):
         current_time = time.time()
@@ -144,7 +147,8 @@ class ComponentDiagnosticNode(Node):
         self.sharp_left_history.append((current_time, is_valid))
         
         if not is_valid:
-            self.get_logger().warn("⚠️ Datos de Sharp izquierdo potencialmente inválidos")
+            #self.get_logger().warn("Datos de Sharp izquierdo potencialmente inválidos")
+            pass
 
     def sharp_right_callback(self, msg):
         current_time = time.time()
@@ -156,7 +160,8 @@ class ComponentDiagnosticNode(Node):
         self.sharp_right_history.append((current_time, is_valid))
         
         if not is_valid:
-            self.get_logger().warn("⚠️ Datos de Sharp derecho potencialmente inválidos")
+            #self.get_logger().warn("Datos de Sharp derecho potencialmente inválidos")
+            pass
 
     # Métodos de validación de datos
     def validate_encoder_data(self, msg):
@@ -322,7 +327,8 @@ class ComponentDiagnosticNode(Node):
             self.log_status_changes(components_status, overall_level)
             
         except Exception as e:
-            self.get_logger().error(f"🚨 Error en check_components_health: {e}")
+            #self.get_logger().error(f"Error en check_components_health: {e}")
+            pass
 
     def log_status_changes(self, components_status, overall_level):
         """Loggear solo cuando hay cambios significativos en el estado"""
@@ -342,12 +348,6 @@ class ComponentDiagnosticNode(Node):
         
         # Verificar cambio en estado general
         if self.last_logged_overall != overall_level:
-            """if overall_level == DiagnosticStatus.OK:
-                self.get_logger().info("🎯 Todos los componentes funcionando correctamente")
-            elif overall_level == DiagnosticStatus.WARN:
-                self.get_logger().warn("⚠️ Algunos componentes con advertencias")
-            else:
-                self.get_logger().error("🚨 Error crítico en componentes")"""
             self.last_logged_overall = overall_level
 
     def destroy_node(self):
@@ -360,7 +360,8 @@ class ComponentDiagnosticNode(Node):
             self.sharp_left_history.clear()
             self.sharp_right_history.clear()
         except Exception as e:
-            self.get_logger().warning(f"Error en cleanup: {e}")
+            #self.get_logger().warning(f"Error en cleanup: {e}")
+            pass
         finally:
             super().destroy_node()
 

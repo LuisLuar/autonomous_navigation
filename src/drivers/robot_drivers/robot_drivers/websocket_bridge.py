@@ -19,8 +19,8 @@ import inspect
 import socket
 import netifaces
 
-LINEAR_SCALE = float(os.environ.get("LINEAR_SCALE", "0.5"))
-ANGULAR_SCALE = float(os.environ.get("ANGULAR_SCALE", "1.0"))
+LINEAR_SCALE = float(os.environ.get("LINEAR_SCALE", "10.0"))
+ANGULAR_SCALE = float(os.environ.get("ANGULAR_SCALE", "5.0"))
 WS_HOST = os.environ.get("WS_HOST", "192.168.100.169")
 WS_PORT = int(os.environ.get("WS_PORT", "8765"))
 

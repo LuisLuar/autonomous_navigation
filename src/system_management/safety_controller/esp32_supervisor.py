@@ -62,7 +62,7 @@ class Esp32DynamicSupervisor(Node):
         self.topic_subscribers = {}
         self.setup_topic_monitors()
 
-        #self.get_logger().info('🟢 Supervisor ESP32 dinámico iniciado')
+        #self.get_logger().info('Supervisor ESP32 dinámico iniciado')
 
     def setup_topic_monitors(self):
         """Configura suscriptores específicos para monitorear actividad de topics críticos"""
@@ -89,9 +89,10 @@ class Esp32DynamicSupervisor(Node):
                         qos_profile=10
                     )
                     self.topic_subscribers[topic] = subscriber
-                    #self.get_logger().info(f"🔍 Monitoreando actividad en: {topic}")
+                    #self.get_logger().info(f"Monitoreando actividad en: {topic}")
                 except Exception as e:
-                    self.get_logger().warning(f"⚠️ No se pudo suscribir a {topic}: {e}")
+                    #self.get_logger().warning(f"No se pudo suscribir a {topic}: {e}")
+                    pass
 
     def topic_activity_callback(self, node_name, topic_name):
         """Callback que registra actividad en topics"""
@@ -101,7 +102,8 @@ class Esp32DynamicSupervisor(Node):
         
         # Debug ocasional (cada 10 mensajes)
         if self.message_counters[node_name] % 10 == 0:
-            self.get_logger().debug(f"📡 Actividad {node_name}: {topic_name} (msg #{self.message_counters[node_name]})")
+            #self.get_logger().debug(f"Actividad {node_name}: {topic_name} (msg #{self.message_counters[node_name]})")
+            pass
 
     def check_activity_timeout(self, node_name):
         """Verifica si el nodo ha estado inactivo por más del timeout"""
@@ -126,7 +128,8 @@ class Esp32DynamicSupervisor(Node):
                 return [name for name, namespace in node_names_and_namespaces]
             except Exception as e:
                 if attempt == 2:
-                    self.get_logger().error(f"Error obteniendo nodos: {e}")
+                    #self.get_logger().error(f"Error obteniendo nodos: {e}")
+                    pass
                 time.sleep(0.1)
         return []
 
@@ -138,7 +141,8 @@ class Esp32DynamicSupervisor(Node):
                 return [name for name, types in topic_names_and_types]
             except Exception as e:
                 if attempt == 2:
-                    self.get_logger().error(f"Error obteniendo topics: {e}")
+                    #self.get_logger().error(f"Error obteniendo topics: {e}")
+                    pass
                 time.sleep(0.1)
         return []
 
@@ -164,10 +168,10 @@ class Esp32DynamicSupervisor(Node):
                 msg.name = f"{esp_name}"
                 msg.hardware_id = esp_name
 
-                # ✅ Corrección: comparación robusta de nombres
+                #Corrección: comparación robusta de nombres
                 node_detected = any(expected_node.lower() in n.lower() for n in node_list)
 
-                # ✅ VERIFICACIÓN CRÍTICA: Comprobar timeout de actividad
+                #VERIFICACIÓN CRÍTICA: Comprobar timeout de actividad
                 activity_timed_out = self.check_activity_timeout(expected_node)
                 
                 # Determinar estado real
@@ -183,7 +187,7 @@ class Esp32DynamicSupervisor(Node):
                     self.last_activity_time[expected_node] = None
                     
                 elif activity_timed_out:
-                    # ⚠️ NODO ZOMBIE: Está en el graph pero sin actividad
+                    # NODO ZOMBIE: Está en el graph pero sin actividad
                     msg.level = DiagnosticStatus.ERROR  # 2 = ERROR  
                     msg.message = "INACTIVO (TIMEOUT)" #f"Nodo {expected_node} inactivo (timeout)"
                     missing_topics = expected_topics
@@ -191,7 +195,7 @@ class Esp32DynamicSupervisor(Node):
                     node_online = False
                     
                 else:
-                    # ✅ Nodo activo y comunicándose
+                    # Nodo activo y comunicándose
                     node_online = True
                     
                     # Verificar tópicos del nodo
@@ -269,7 +273,8 @@ class Esp32DynamicSupervisor(Node):
                 pub.publish(msg)
 
         except Exception as e:
-            self.get_logger().error(f"🚨 Error en check_nodes: {e}")
+            #self.get_logger().error(f"Error en check_nodes: {e}")
+            pass
 
     def destroy_node(self):
         """Cleanup al destruir el nodo"""
@@ -279,7 +284,8 @@ class Esp32DynamicSupervisor(Node):
                 self.destroy_subscription(subscriber)
             self.topic_subscribers.clear()
         except Exception as e:
-            self.get_logger().warning(f"Error en cleanup: {e}")
+            #self.get_logger().warning(f"Error en cleanup: {e}")
+            pass
         finally:
             super().destroy_node()
 

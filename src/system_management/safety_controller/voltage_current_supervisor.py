@@ -53,19 +53,19 @@ class VoltageCurrentSupervisor(Node):
         self.battery_msg_count = 0
         self.motors_msg_count = 0
         
-        # 🔥 NUEVO: Timer para publicación inmediata al inicio
+        # NUEVO: Timer para publicación inmediata al inicio
         self.initial_publish_timer = self.create_timer(1.0, self.initial_status_publish)
         self.initial_publications_done = False
         
         # Timer para verificación periódica de timeouts
         self.timeout_timer = self.create_timer(2.0, self.check_timeouts)
         
-        #self.get_logger().info("🟢 Safety Monitor Inicializado - Enviando estados iniciales")
+        #self.get_logger().info("Safety Monitor Inicializado - Enviando estados iniciales")
 
     def initial_status_publish(self):
         """Publica estados iniciales inmediatamente al iniciar el nodo"""
         if not self.initial_publications_done:
-            #self.get_logger().info("📢 Publicando estados iniciales...")
+            #self.get_logger().info("Publicando estados iniciales...")
             
             # Publicar estados de "ESPERANDO DATOS" para todos los componentes
             self.publish_initial_battery_status()
@@ -74,14 +74,14 @@ class VoltageCurrentSupervisor(Node):
             # Marcar que ya se hicieron las publicaciones iniciales
             self.initial_publications_done = True
             self.initial_publish_timer.cancel()  # Detener este timer después de la primera ejecución
-            #self.get_logger().info("✅ Estados iniciales publicados")
+            #self.get_logger().info("Estados iniciales publicados")
 
     def publish_initial_battery_status(self):
         """Publica estado inicial de batería (ESPERANDO DATOS)"""
         # Batería 12V - Estado INICIAL
         battery_status = DiagnosticStatus()
         battery_status.name = "Voltaje de la bateria"
-        battery_status.level = DiagnosticStatus.WARN  # 🔥 WARN en lugar de ERROR para estado inicial
+        battery_status.level = DiagnosticStatus.ERROR  #WARN en lugar de ERROR para estado inicial
         battery_status.message = "ESPERANDO PRIMEROS DATOS"
         
         battery_status.values = [
@@ -94,12 +94,12 @@ class VoltageCurrentSupervisor(Node):
         ]
         
         self.battery_12v_pub.publish(battery_status)
-        #self.get_logger().info("🔶 Batería 12V: Estado inicial publicado (ESPERANDO DATOS)")
+        #self.get_logger().info("Batería 12V: Estado inicial publicado (ESPERANDO DATOS)")
 
         # Voltaje 5V - Estado INICIAL
         voltage_5v_status = DiagnosticStatus()
         voltage_5v_status.name = "Voltaje del sistema de control"
-        voltage_5v_status.level = DiagnosticStatus.WARN  # 🔥 WARN en lugar de ERROR para estado inicial
+        voltage_5v_status.level = DiagnosticStatus.ERROR  # WARN en lugar de ERROR para estado inicial
         voltage_5v_status.message = "ESPERANDO PRIMEROS DATOS"
         
         voltage_5v_status.values = [
@@ -110,14 +110,14 @@ class VoltageCurrentSupervisor(Node):
         ]
         
         self.voltage_5v_pub.publish(voltage_5v_status)
-        #self.get_logger().info("🔶 Voltaje 5V: Estado inicial publicado (ESPERANDO DATOS)")
+        #self.get_logger().info("Voltaje 5V: Estado inicial publicado (ESPERANDO DATOS)")
 
     def publish_initial_motor_status(self):
         """Publica estado inicial de motores (ESPERANDO DATOS)"""
         # Motor izquierdo - Estado INICIAL
         left_status = DiagnosticStatus()
         left_status.name = "Corriente del motor izquierdo"
-        left_status.level = DiagnosticStatus.WARN  # 🔥 WARN en lugar de ERROR para estado inicial
+        left_status.level = DiagnosticStatus.ERROR  # WARN en lugar de ERROR para estado inicial
         left_status.message = "ESPERANDO PRIMEROS DATOS"
         
         left_status.values = [
@@ -128,12 +128,12 @@ class VoltageCurrentSupervisor(Node):
             self.create_key_value("timestamp", f"{time.time():.2f}")
         ]
         self.motor_left_status_pub.publish(left_status)
-        #self.get_logger().info("🔶 Motor izquierdo: Estado inicial publicado (ESPERANDO DATOS)")
+        #self.get_logger().info("Motor izquierdo: Estado inicial publicado (ESPERANDO DATOS)")
 
         # Motor derecho - Estado INICIAL
         right_status = DiagnosticStatus()
         right_status.name = "Corriente del motor derecho"
-        right_status.level = DiagnosticStatus.WARN  # 🔥 WARN en lugar de ERROR para estado inicial
+        right_status.level = DiagnosticStatus.ERROR  #WARN en lugar de ERROR para estado inicial
         right_status.message = "ESPERANDO PRIMEROS DATOS"
         
         right_status.values = [
@@ -143,7 +143,7 @@ class VoltageCurrentSupervisor(Node):
             self.create_key_value("timestamp", f"{time.time():.2f}")
         ]
         self.motor_right_status_pub.publish(right_status)
-        #self.get_logger().info("🔶 Motor derecho: Estado inicial publicado (ESPERANDO DATOS)")
+        #self.get_logger().info("Motor derecho: Estado inicial publicado (ESPERANDO DATOS)")
 
     def battery_callback(self, msg):
         """Callback para datos de batería con timestamp"""
@@ -157,7 +157,7 @@ class VoltageCurrentSupervisor(Node):
             
             # Solo procesar si es la primera vez o si se recuperó de timeout
             if not self.battery_connected:
-                #self.get_logger().info("🔋 Batería: Conexión establecida - Primeros datos recibidos")
+                #self.get_logger().info("Batería: Conexión establecida - Primeros datos recibidos")
                 self.battery_connected = True
             
             self.publish_battery_status()
@@ -175,7 +175,7 @@ class VoltageCurrentSupervisor(Node):
             
             # Solo procesar si es la primera vez o si se recuperó de timeout
             if not self.motors_connected:
-                #self.get_logger().info("⚙️ Motores: Conexión establecida - Primeros datos recibidos")
+                #self.get_logger().info("Motores: Conexión establecida - Primeros datos recibidos")
                 self.motors_connected = True
             
             self.publish_motor_status()
@@ -190,13 +190,13 @@ class VoltageCurrentSupervisor(Node):
         if self.last_battery_time is not None:
             battery_timeout = current_time - self.last_battery_time > self.TIMEOUT_DURATION
             if battery_timeout and self.battery_connected:
-                #self.get_logger().error(f"🔴 TIMEOUT Batería: Sin datos por {self.TIMEOUT_DURATION}s")
+                #self.get_logger().error(f"TIMEOUT Batería: Sin datos por {self.TIMEOUT_DURATION}s")
                 self.battery_connected = False
                 battery_timed_out = True
         elif self.last_battery_time is None and self.initial_publications_done:
             # Si ya pasó el tiempo inicial y nunca recibió datos
             if not hasattr(self, '_battery_never_received_logged') or not self._battery_never_received_logged:
-                #self.get_logger().warn("🔶 Batería: Aún no se recibieron datos iniciales")
+                #self.get_logger().warn("Batería: Aún no se recibieron datos iniciales")
                 self._battery_never_received_logged = True
         
         # Verificar timeout de motores
@@ -204,13 +204,13 @@ class VoltageCurrentSupervisor(Node):
         if self.last_motors_time is not None:
             motors_timeout = current_time - self.last_motors_time > self.TIMEOUT_DURATION
             if motors_timeout and self.motors_connected:
-                #self.get_logger().error(f"🔴 TIMEOUT Motores: Sin datos por {self.TIMEOUT_DURATION}s")
+                #self.get_logger().error(f"TIMEOUT Motores: Sin datos por {self.TIMEOUT_DURATION}s")
                 self.motors_connected = False
                 motors_timed_out = True
         elif self.last_motors_time is None and self.initial_publications_done:
             # Si ya pasó el tiempo inicial y nunca recibió datos
             if not hasattr(self, '_motors_never_received_logged') or not self._motors_never_received_logged:
-                #self.get_logger().warn("🔶 Motores: Aún no se recibieron datos iniciales")
+                #self.get_logger().warn("Motores: Aún no se recibieron datos iniciales")
                 self._motors_never_received_logged = True
         
         # Publicar estados de error por timeout
@@ -222,7 +222,7 @@ class VoltageCurrentSupervisor(Node):
         
         # Verificar si AMBOS tópicos tienen timeout
         if battery_timed_out and motors_timed_out:
-            #self.get_logger().error("🚨 CRÍTICO: Ambos tópicos (batería y motores) tienen timeout!")
+            #self.get_logger().error("CRÍTICO: Ambos tópicos (batería y motores) tienen timeout!")
             self.publish_global_timeout_status()
 
     def publish_battery_timeout_status(self):
@@ -292,7 +292,7 @@ class VoltageCurrentSupervisor(Node):
     def publish_global_timeout_status(self):
         """Publica estado crítico cuando ambos tópicos fallan"""
         # Log adicional para estado crítico
-        #self.get_logger().error("💀 SISTEMA CRÍTICO: Sin datos de batería ni motores")
+        #self.get_logger().error("SISTEMA CRÍTICO: Sin datos de batería ni motores")
         pass
 
     def publish_battery_status(self):

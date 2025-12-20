@@ -55,7 +55,7 @@ class RPLidarSupervisor(Node):
         # Suscriptores para monitorear actividad
         self.setup_scan_monitor()
 
-        #self.get_logger().info('🟢 Supervisor de RPLIDAR iniciado')
+        #self.get_logger().info('Supervisor de RPLIDAR iniciado')
 
     def setup_scan_monitor(self):
         """Configura suscriptor para monitorear datos del LIDAR"""
@@ -66,9 +66,9 @@ class RPLidarSupervisor(Node):
                 self.scan_callback,
                 10
             )
-            #self.get_logger().info("🔍 Monitoreando actividad en: /scan")
+            #self.get_logger().info("Monitoreando actividad en: /scan")
         except Exception as e:
-            #self.get_logger().warning(f"⚠️ No se pudo suscribir a /scan: {e}")
+            #self.get_logger().warning(f"No se pudo suscribir a /scan: {e}")
             pass
 
     def scan_callback(self, msg):
@@ -177,7 +177,7 @@ class RPLidarSupervisor(Node):
             missing_topics = [t for t in self.expected_topics if t not in topic_list]
             found_topics_count = len(found_topics)
 
-            # ✅ VERIFICACIONES CRÍTICAS
+            # VERIFICACIONES CRÍTICAS
             activity_timed_out = self.check_activity_timeout()
             scan_timed_out = self.check_scan_timeout()
             has_good_data = self.has_good_scan_data()
@@ -192,25 +192,25 @@ class RPLidarSupervisor(Node):
                 self.last_activity_time = None
                 
             elif activity_timed_out and found_topics_count > 0:
-                # ⚠️ LIDAR ZOMBIE: Tópicos presentes pero sin actividad
+                # LIDAR ZOMBIE: Tópicos presentes pero sin actividad
                 msg.level = DiagnosticStatus.ERROR
                 msg.message = "INACTIVO (TIMEOUT)"
                 lidar_online = False
                 
             elif scan_timed_out and has_scan_data:
-                # ⚠️ LIDAR CON PROBLEMAS: Tiempo entre scans muy largo
+                # LIDAR CON PROBLEMAS: Tiempo entre scans muy largo
                 msg.level = DiagnosticStatus.WARN
                 msg.message = "CON BAJA FRECUENCIA"
                 lidar_online = True
                 
             elif has_scan_data and not has_good_data:
-                # ⚠️ LIDAR CON DATOS DE BAJA CALIDAD
+                # LIDAR CON DATOS DE BAJA CALIDAD
                 msg.level = DiagnosticStatus.WARN
                 msg.message = "CON DATOS DE BAJA CALIDAD"
                 lidar_online = True
                 
             else:
-                # ✅ LIDAR activo y con buena calidad de datos
+                # LIDAR activo y con buena calidad de datos
                 lidar_online = True
                 msg.level = DiagnosticStatus.OK
                 msg.message = f"Conectado - {self.scan_point_count} puntos, {self.valid_points_ratio*100:.1f}% válidos"
@@ -261,7 +261,7 @@ class RPLidarSupervisor(Node):
             }
 
             # Solo loggear si hay cambios significativos
-            if (self.last_lidar_state['online'] != current_state['online'] or
+            """if (self.last_lidar_state['online'] != current_state['online'] or
                 self.last_lidar_state['has_scan_data'] != current_state['has_scan_data'] or
                 self.last_lidar_state['level'] != current_state['level'] or
                 abs(self.last_lidar_state['point_count'] - current_state['point_count']) > 50):  # Cambio significativo en puntos
@@ -272,27 +272,13 @@ class RPLidarSupervisor(Node):
                     icon = "🟡"
                 else:
                     icon = "🔴"
-
-                # Mensaje detallado según el tipo de problema
-                """if found_topics_count == 0:
-                    status_msg = f"{icon} RPLIDAR: No se detectó tópico /scan - posiblemente desconectado"
-                elif activity_timed_out:
-                    status_msg = f"{icon} RPLIDAR: Sin actividad por {time_since_activity}"
-                elif scan_timed_out:
-                    status_msg = f"{icon} RPLIDAR: Último scan hace {time_since_scan} - frecuencia baja"
-                elif not has_good_data:
-                    status_msg = f"{icon} RPLIDAR: Datos de baja calidad - {self.valid_points_ratio*100:.1f}% puntos válidos"
-                else:
-                    status_msg = f"{icon} RPLIDAR: {msg.message}"
-                
-                self.get_logger().info(status_msg)"""
-                self.last_lidar_state = current_state
+                self.last_lidar_state = current_state"""
 
             # Publicar siempre el estado
             self.publisher.publish(msg)
 
         except Exception as e:
-            #self.get_logger().error(f"🚨 Error en check_rplidar: {e}")
+            #self.get_logger().error(f"Error en check_rplidar: {e}")
             pass
 
     def destroy_node(self):

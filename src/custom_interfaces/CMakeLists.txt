@@ -20,6 +20,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/LaneArray.msg"
   "msg/Detection.msg"
   "msg/DetectionArray.msg"
+  "msg/OSMElement.msg"
+  "msg/NearbyOSMElements.msg"
   DEPENDENCIES builtin_interfaces
   DEPENDENCIES std_msgs
 )

@@ -180,6 +180,9 @@ class UTMMapOrigin(Node):
         except Exception as e:
             self.get_logger().error(f"Error in GPS callback: {e}")
 
+    def destroy_node(self):
+        super().destroy_node()
+
 def main(args=None):
     rclpy.init(args=args)
     node = UTMMapOrigin()
@@ -189,8 +192,11 @@ def main(args=None):
     except KeyboardInterrupt:
         node.get_logger().info("Shutting down UTM Map Origin node...")
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            node.destroy_node()
+            rclpy.shutdown()
+        except:
+            pass  # Ignorar error si ya se hizo shutdown
 
 if __name__ == "__main__":
     main()

@@ -32,6 +32,7 @@ setup(
             'global_planner = path_planner.global_planner:main',
             'local_planner = path_planner.local_planner:main',
             'bt_manager = behavior_tree.bt_manager:main',
+            'information_osm = path_planner.information_osm:main',
         ],
     },
 )

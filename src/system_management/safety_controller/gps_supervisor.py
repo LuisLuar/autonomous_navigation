@@ -73,7 +73,7 @@ class GPSSupervisor(Node):
             'poor': {'sats_min': 3, 'hdop_max': 10.0}
         }
 
-        #self.get_logger().info('🟢 Supervisor de GPS iniciado')
+        #self.get_logger().info('Supervisor de GPS iniciado')
 
     def setup_topic_monitors(self):
         """Configura suscriptores para monitorear actividad de topics críticos"""
@@ -90,9 +90,9 @@ class GPSSupervisor(Node):
                 10
             )
             self.topic_subscribers['/gps/fix'] = self.fix_subscriber
-            #self.get_logger().info("🔍 Monitoreando actividad en: /gps/fix")
+            #self.get_logger().info("Monitoreando actividad en: /gps/fix")
         except Exception as e:
-            #self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/fix: {e}")
+            #self.get_logger().warning(f"No se pudo suscribir a /gps/fix: {e}")
             pass
 
         # Suscriptor para /gps/vel
@@ -106,7 +106,7 @@ class GPSSupervisor(Node):
             self.topic_subscribers['/gps/vel'] = self.vel_subscriber
             #self.get_logger().info("🔍 Monitoreando actividad en: /gps/vel")
         except Exception as e:
-            #self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/vel: {e}")
+            #self.get_logger().warning(f"No se pudo suscribir a /gps/vel: {e}")
             pass
 
         # Suscriptor para /gps/raw (actividad general)
@@ -118,9 +118,9 @@ class GPSSupervisor(Node):
                 10
             )
             self.topic_subscribers['/gps/raw'] = self.raw_subscriber
-            #self.get_logger().info("🔍 Monitoreando actividad en: /gps/raw")
+            #self.get_logger().info("Monitoreando actividad en: /gps/raw")
         except Exception as e:
-            #self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/raw: {e}")
+            #self.get_logger().warning(f"No se pudo suscribir a /gps/raw: {e}")
             pass
 
         # Suscriptor para /gps/info (información detallada)
@@ -132,9 +132,9 @@ class GPSSupervisor(Node):
                 10
             )
             self.topic_subscribers['/gps/info'] = self.info_subscriber
-            #self.get_logger().info("🔍 Monitoreando actividad en: /gps/info")
+            #self.get_logger().info("Monitoreando actividad en: /gps/info")
         except Exception as e:
-            #self.get_logger().warning(f"⚠️ No se pudo suscribir a /gps/info: {e}")
+            #self.get_logger().warning(f"No se pudo suscribir a /gps/info: {e}")
             pass
 
     def fix_callback(self, msg):
@@ -296,14 +296,14 @@ class GPSSupervisor(Node):
             missing_topics = [t for t in self.expected_topics if t not in topic_list]
             found_topics_count = len(found_topics)
 
-            # ✅ VERIFICACIÓN CRÍTICA: Comprobar timeout de actividad
+            # VERIFICACIÓN CRÍTICA: Comprobar timeout de actividad
             activity_timed_out = self.check_activity_timeout()
             
             # Verificar si tiene fix usando nuestra función mejorada
             has_fix = self.has_gps_fix()
             fix_status_desc = self.get_fix_status_description()
             
-            # ✅ NUEVO: Evaluar calidad del posicionamiento
+            # NUEVO: Evaluar calidad del posicionamiento
             quality_level, quality_desc, quality_advice = self.evaluate_gps_quality()
 
             # Determinar estado real
@@ -317,13 +317,13 @@ class GPSSupervisor(Node):
                 self.last_activity_time = None
                 
             elif activity_timed_out and found_topics_count > 0:
-                # ⚠️ GPS ZOMBIE: Tópicos presentes pero sin actividad
+                # GPS ZOMBIE: Tópicos presentes pero sin actividad
                 msg.level = DiagnosticStatus.ERROR  
                 msg.message = "INACTIVO (TIMEOUT)"
                 gps_online = False
                 
             else:
-                # ✅ GPS activo y comunicándose
+                # GPS activo y comunicándose
                 gps_online = True
 
                 # Evaluar nivel según calidad y tópicos detectados
@@ -367,7 +367,7 @@ class GPSSupervisor(Node):
                 KeyValue(key="missing_topics_list", value=", ".join(missing_topics) if missing_topics else "Ninguno"),
                 KeyValue(key="status", value="ONLINE" if gps_online else "OFFLINE"),
                 
-                # ✅ NUEVO: Información de calidad mejorada
+                # NUEVO: Información de calidad mejorada
                 KeyValue(key="has_fix", value=str(has_fix)),
                 KeyValue(key="fix_status", value=fix_status_desc),
                 KeyValue(key="fix_quality", value=str(self.fix_quality)),
@@ -413,7 +413,7 @@ class GPSSupervisor(Node):
             self.publisher.publish(msg)
 
         except Exception as e:
-            #self.get_logger().error(f"🚨 Error en check_gps: {e}")
+            #self.get_logger().error(f"Error en check_gps: {e}")
             pass
 
     def interpret_hdop(self):
