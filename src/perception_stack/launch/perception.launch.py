@@ -9,6 +9,13 @@ def generate_launch_description():
             output='screen',
         ),
 
+        
+
+    ])
+
+
+"""
+
         Node(
             package='perception_stack',
             executable='segmenter_yolop',
@@ -32,11 +39,5 @@ def generate_launch_description():
             executable='visualizer_segmentation',
             output='screen',
         ),
-
-    ])
-
-
-"""
-
 
 """
