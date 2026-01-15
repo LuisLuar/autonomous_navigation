@@ -3,15 +3,15 @@
 #include <motorControl.h>
 
 //___________ENCODER DERECHO_____________
-#define RightA 13
-#define RightB 16
-#define RightZ 14
+#define RightA 27
+#define RightB 14
+#define RightZ 26
 //_______________________________________
 
 //__________ENCODER LeftUIERDO____________
-#define LeftA 18
-#define LeftB 19
-#define LeftZ 5
+#define LeftA 5
+#define LeftB 18
+#define LeftZ 19
 //_______________________________________
 
 
@@ -64,7 +64,7 @@ String inputString = "";
 bool stringComplete = false;
 
 void setup() {
-  
+  Serial.begin(115200);
    // Esperar a que se estabilice la comunicación serial
   delay(2000);
   
@@ -80,7 +80,7 @@ void setup() {
   
   lastTime_enc = millis();
 
-  Serial.begin(115200);
+  
   Serial.println("Left_w_actual,Right_w_actual,Left_w_ref,Right_w_ref");
 }
 
@@ -92,7 +92,9 @@ void loop() {
   dt_enc = millis() - lastTime_enc; //milisegundos
   if (dt_enc >= sampleTime_enc) {// Se actualiza cada tiempo de muestreo
     lastTime_enc = millis();  // Almacenamos el tiempo actual.
-    encoderPID();
+    //encoderPID();
+    Left.w = encoderL.getCount();
+    Right.w = encoderR.getCount();
     sendToSerialPlotter();
   }
   //delay(10);
@@ -129,11 +131,17 @@ void processCommand(String command) {
     float linear = linearStr.toFloat();
     float angular = angularStr.toFloat();
 
-    float vI = linear - (angular * L) / 2;
-    float vD = linear + (angular * L) / 2;
+    Left.wRef = linear;
+    Right.wRef = angular;
+
+    ST.motor(1, linear);
+    ST.motor(2, angular);
+
+    //float vI = linear - (angular * L) / 2;
+    //float vD = linear + (angular * L) / 2;
   
-    Left.wRef = (2 * vI) / D;
-    Right.wRef = (2 * vD) / D;
+    //Left.wRef = (2 * vI) / D;
+    //Right.wRef = (2 * vD) / D;
     
     /*Serial.print("Comando recibido - Linear: ");
     Serial.print(linear);
@@ -155,6 +163,18 @@ void sendToSerialPlotter() {
   Serial.print(Left.wRef);   // Velocidad referencia izquierda
   Serial.print(",");
   Serial.println(Right.wRef); // Velocidad referencia derecha
+
+  if(digitalRead(LeftZ) == LOW){
+    Serial.println();
+    Serial.println("IZQUIERDO");
+    Serial.println();
+  }
+
+  if(digitalRead(RightZ) == LOW){
+    Serial.println();
+    Serial.println("DERECHO");
+    Serial.println();
+  }
   
   // También puedes imprimir en formato legible para el Monitor Serial normal
   /*

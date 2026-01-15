@@ -40,7 +40,7 @@ class YOLOPv2SegmenterNode(Node):
             'perception_stack/semantic_segmentation/pretrained/yolopv2.pt'
         )
 
-        self.get_logger().info(f'Cargando YOLOPv2 en {self.device}')
+        #self.get_logger().info(f'Cargando YOLOPv2 en {self.device}')
         self.model = torch.jit.load(model_path, map_location=self.device)
         self.model.eval()
 
@@ -126,7 +126,8 @@ class YOLOPv2SegmenterNode(Node):
             self.pub.publish(out)
 
         except Exception as e:
-            self.get_logger().error(str(e))
+            #self.get_logger().error(str(e))
+            pass
 
     def destroy_node(self):
         super().destroy_node()

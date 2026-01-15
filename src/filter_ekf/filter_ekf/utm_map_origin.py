@@ -54,9 +54,9 @@ class UTMMapOrigin(Node):
         )
 
         hemisphere = "S" if southern_hemisphere else "N"
-        self.get_logger().info(f"UTM Map Origin node initialized")
-        self.get_logger().info(f"Configuration: Zone {utm_zone}{hemisphere}")
-        self.get_logger().info("Waiting for GPS data...")
+        #self.get_logger().info(f"UTM Map Origin node initialized")
+        #self.get_logger().info(f"Configuration: Zone {utm_zone}{hemisphere}")
+        #self.get_logger().info("Waiting for GPS data...")
 
     def calculate_utm_zone(self, longitude):
         """Calcula la zona UTM automáticamente basado en la longitud"""
@@ -81,11 +81,11 @@ class UTMMapOrigin(Node):
             calculated_zone = self.calculate_utm_zone(longitude)
             current_zone = self.get_parameter('utm_zone').value
             
-            if calculated_zone != current_zone:
-                self.get_logger().warn(
-                    f"UTM zone mismatch! Calculated: {calculated_zone}, "
-                    f"Configured: {current_zone}. Using configured zone."
-                )
+            #if calculated_zone != current_zone:
+                #self.get_logger().warn(
+                #    f"UTM zone mismatch! Calculated: {calculated_zone}, "
+                #    f"Configured: {current_zone}. Using configured zone."
+                #)
         
         try:
             # Método 1: Usar Proj directamente (simple)
@@ -97,7 +97,7 @@ class UTMMapOrigin(Node):
             return utm_x, utm_y
             
         except Exception as e:
-            self.get_logger().error(f"pyproj conversion error: {e}")
+            #self.get_logger().error(f"pyproj conversion error: {e}")
             raise
 
     def gps_cb(self, msg):
@@ -108,12 +108,12 @@ class UTMMapOrigin(Node):
             return
 
         if msg.status.status < 0:
-            self.get_logger().warn("GPS status negative, waiting for valid fix...")
+            #self.get_logger().warn("GPS status negative, waiting for valid fix...")
             return
             
         # Verificar calidad GPS
         if msg.position_covariance[0] > 1.0 or msg.position_covariance[4] > 1.0:
-            self.get_logger().warn("GPS covariance too high, waiting for better fix...")
+            #self.get_logger().warn("GPS covariance too high, waiting for better fix...")
             return
 
         try:
@@ -124,25 +124,25 @@ class UTMMapOrigin(Node):
             
             # Validar coordenada Este (x)
             if not (160000 <= utm_x <= 834000):
-                self.get_logger().error(
-                    f"UTM Easting out of range: {utm_x:.2f}. "
-                    f"Expected 160,000-834,000 for zone {utm_zone}"
-                )
+                #self.get_logger().error(
+                #    f"UTM Easting out of range: {utm_x:.2f}. "
+                #    f"Expected 160,000-834,000 for zone {utm_zone}"
+                #)
                 return
                 
             # Validar coordenada Norte (y) según hemisferio
             southern = self.get_parameter('southern_hemisphere').value
             if southern and not (0 <= utm_y <= 10000000):
-                self.get_logger().error(
-                    f"UTM Northing out of range: {utm_y:.2f}. "
-                    f"Expected 0-10,000,000 for southern hemisphere"
-                )
+                #self.get_logger().error(
+                #    f"UTM Northing out of range: {utm_y:.2f}. "
+                #    f"Expected 0-10,000,000 for southern hemisphere"
+                #)
                 return
             elif not southern and not (0 <= utm_y <= 10000000):
-                self.get_logger().error(
-                    f"UTM Northing out of range: {utm_y:.2f}. "
-                    f"Expected 0-10,000,000 for northern hemisphere"
-                )
+                #self.get_logger().error(
+                #    f"UTM Northing out of range: {utm_y:.2f}. "
+                #    f"Expected 0-10,000,000 for northern hemisphere"
+                #)
                 return
 
             self.origin_utm = (utm_x, utm_y, msg.altitude)
@@ -161,24 +161,25 @@ class UTMMapOrigin(Node):
 
             self.pub.publish(p)
 
-            self.get_logger().info("=" * 50)
-            self.get_logger().info("UTM ORIGIN SUCCESSFULLY SET")
-            self.get_logger().info("=" * 50)
-            self.get_logger().info(f"GPS Coordinates:")
-            self.get_logger().info(f"  Latitude:  {msg.latitude:.8f}°")
-            self.get_logger().info(f"  Longitude: {msg.longitude:.8f}°")
-            self.get_logger().info(f"  Altitude:  {msg.altitude:.2f} m")
-            self.get_logger().info(f"UTM Coordinates (Zone {utm_zone}{hemisphere}):")
-            self.get_logger().info(f"  Easting (x):  {utm_x:.3f} m")
-            self.get_logger().info(f"  Northing (y): {utm_y:.3f} m")
-            self.get_logger().info(f"  Frame ID:     {p.header.frame_id}")
-            self.get_logger().info("=" * 50)
+            #self.get_logger().info("=" * 50)
+            #self.get_logger().info("UTM ORIGIN SUCCESSFULLY SET")
+            #self.get_logger().info("=" * 50)
+            #self.get_logger().info(f"GPS Coordinates:")
+            #self.get_logger().info(f"  Latitude:  {msg.latitude:.8f}°")
+            #self.get_logger().info(f"  Longitude: {msg.longitude:.8f}°")
+            #self.get_logger().info(f"  Altitude:  {msg.altitude:.2f} m")
+            #self.get_logger().info(f"UTM Coordinates (Zone {utm_zone}{hemisphere}):")
+            #self.get_logger().info(f"  Easting (x):  {utm_x:.3f} m")
+            #self.get_logger().info(f"  Northing (y): {utm_y:.3f} m")
+            #self.get_logger().info(f"  Frame ID:     {p.header.frame_id}")
+            #self.get_logger().info("=" * 50)
             
             # Opcional: puedes deshabilitar la suscripción después de establecer el origen
             # self.destroy_subscription(self.sub)
             
         except Exception as e:
-            self.get_logger().error(f"Error in GPS callback: {e}")
+            #self.get_logger().error(f"Error in GPS callback: {e}")
+            pass
 
     def destroy_node(self):
         super().destroy_node()
@@ -190,7 +191,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Shutting down UTM Map Origin node...")
+        pass
     finally:
         try:
             node.destroy_node()

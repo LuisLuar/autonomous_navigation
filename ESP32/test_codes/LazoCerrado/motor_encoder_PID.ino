@@ -1,5 +1,5 @@
 //motor_encoder.ino
-unsigned int ppr = 2000;         // Número de muescas que tiene el disco del encoder.
+unsigned int ppr = 4000;         // Número de muescas que tiene el disco del encoder.
 
 void beginEncoder(int LA,int LB,int LZ,int RA,int RB,int RZ){
   ESP32Encoder::useInternalWeakPullResistors = puType::up; // Opcional
@@ -17,14 +17,25 @@ void beginEncoder(int LA,int LB,int LZ,int RA,int RB,int RZ){
 }
 
 void beginPid(){
-  motorL.setGains (0.7, 0.11, 0.03); // (Kc,Ti,Td)
-  motorR.setGains (0.4, 0.11, 0.03); // (Kc,Ti,Td);
+  /*Matlab Derecho: 
+   *   Kc = 0.025224 / 0.025689 / 0.025399
+   *   Ti = 0.002533 s / 0.005
+   *   Td = 0.000000 s
+   */
+  motorR.setGains (0.024224, 0.005, 0.0); // (Kc,Ti,Td)
+
+  /*Matlab Izquierdo:
+   *   Kc = 0.027532 / 0.027923 / 0.028193
+   *   Ti = 0.005 s / 0.005
+   *   Td = 0.000000 s
+   */
+  motorL.setGains (0.026532, 0.005, 0.0); // (Kc,Ti,Td);
 
   motorL.setCvLimits(63, 0);
   motorR.setCvLimits(63, 0);
 
-  motorL.setPvLimits(16.9, 0); 
-  motorR.setPvLimits(16.9, 0); 
+  motorL.setPvLimits(12.03, 0); 
+  motorR.setPvLimits(12.71 , 0); 
   
   Serial.println("Controlador PID configurado y listo.");
 }

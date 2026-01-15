@@ -1,5 +1,5 @@
 //motor_encoder.ino
-unsigned int ppr = 2000;         // Número de muescas que tiene el disco del encoder.
+unsigned int ppr = 4000;         // Número de muescas que tiene el disco del encoder.
 
 void beginEncoder(int LA,int LB,int LZ,int RA,int RB,int RZ){
   ESP32Encoder::useInternalWeakPullResistors = puType::up; // Opcional
@@ -13,7 +13,7 @@ void beginEncoder(int LA,int LB,int LZ,int RA,int RB,int RZ){
   pinMode(LZ, INPUT_PULLUP);
 
   pinMode(RZ, INPUT_PULLUP);
-  //Serial.println("Encoder Omron E6B2-CWZ3E listo.");
+  Serial.println("Encoder Omron E6B2-CWZ3E listo.");
 }
 
 void beginPid(){
@@ -52,7 +52,7 @@ void encoderPID(){
 void updateMotor(DatosMotores &m, ESP32Encoder &enc, motorControl &ctrl, int id) {
   const float alpha = 0.8;
   long count = enc.getCount();
-  enc.setCount(0);
+  //enc.setCount(0);
   
   m.wSinFilter = count * (2 * PI * 1000) / (dt_enc * ppr);
   m.w = alpha * m.wSinFilter + (1-alpha) * m.wAnterior;

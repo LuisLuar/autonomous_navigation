@@ -33,7 +33,7 @@ class ReleCombiner(Node):
         # Lock para thread safety
         self.lock = threading.Lock()
 
-        self.get_logger().info("Nodo 'rele_combiner' iniciado. Envío periódico cada 500 ms.")
+        #self.get_logger().info("Nodo 'rele_combiner' iniciado. Envío periódico cada 500 ms.")
 
     # Callbacks de cada tópico
     def cb_left_motor(self, msg):
@@ -94,7 +94,7 @@ class ReleCombiner(Node):
         msg.data = combined_value
         self.rele_pub.publish(msg)
 
-        self.get_logger().debug(f"Estado combinado publicado: {bin(combined_value)}")
+        #self.get_logger().debug(f"Estado combinado publicado: {bin(combined_value)}")
 
     def destroy_node(self):
         super().destroy_node()

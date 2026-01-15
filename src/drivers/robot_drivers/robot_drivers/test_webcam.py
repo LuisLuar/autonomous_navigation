@@ -16,7 +16,7 @@ class WebcamPublisher(Node):
         self.bridge = CvBridge()
         
         # Configuración de la cámara
-        self.camera_index = 0  # Usualmente 0 es la cámara integrada
+        self.camera_index = 3 # Usualmente 0 es la cámara integrada
         self.frame_width = 640
         self.frame_height = 480
         self.fps = 30  # Frames por segundo

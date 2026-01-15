@@ -45,8 +45,8 @@ class SimulateImuOdom(Node):
         self.angular_vel_z = 0.0
         
         # Punto de origen GPS fijo
-        self.origin_latitude = -0.31700598389186346
-        self.origin_longitude = -78.44395726919176
+        self.origin_latitude = -0.043394529 #-0.31700598389186346
+        self.origin_longitude = -78.303024138 #-78.44395726919176
         self.latitude = self.origin_latitude
         self.longitude = self.origin_longitude
         self.altitude = 2850.0

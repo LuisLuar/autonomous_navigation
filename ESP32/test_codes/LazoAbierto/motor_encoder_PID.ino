@@ -1,5 +1,5 @@
 //motor_encoder.ino
-unsigned int ppr = 2000;         // Número de muescas que tiene el disco del encoder.
+unsigned int ppr = 4000;         // Número de muescas que tiene el disco del encoder.
 
 void beginEncoder(int LA,int LB,int LZ,int RA,int RB,int RZ){
   ESP32Encoder::useInternalWeakPullResistors = puType::up; // Opcional

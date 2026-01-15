@@ -70,7 +70,7 @@ class RosMultiStream(Node):
         self.subscription_camera = self.create_subscription(Image,"/camera/rgb/image_raw",self.camera_listener,10)
 
         # Suscriptor para detecciones
-        self.subscription_detection = self.create_subscription(Image,"/detection/annotated_image",self.detection_listener,10)
+        self.subscription_detection = self.create_subscription(Image,"/detection/annotated_image",self.detection_listener,10) #/segmentation/droidcam/overlay /detection/annotated_image 
 
         # Suscriptor para segmentación
         self.subscription_segmentation = self.create_subscription(Image,"/segmentation/overlay",self.segmentation_listener,10)

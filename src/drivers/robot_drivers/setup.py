@@ -32,6 +32,9 @@ setup(
             'websocket_bridge = robot_drivers.websocket_bridge:main',
             'webrtc_streamer = robot_drivers.webrtc_streamer:main',
             'webcam_tester = robot_drivers.test_webcam:main',
+            'droidcam_camera = robot_drivers.droidcam_camera:main',
+            'test_webcam = robot_drivers.test_webcam:main',
+            'image_folder = robot_drivers.image_folder:main'
         ],
     },
 )

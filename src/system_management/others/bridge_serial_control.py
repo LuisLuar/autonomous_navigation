@@ -339,19 +339,19 @@ class SerialROSBridge(Node):
                     odom.pose.pose.orientation.w = q[3]
                     odom.twist.twist.linear.x = vx
                     odom.twist.twist.angular.z = wz
-                    odom.pose.covariance = [0.01, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                            0.0, 0.01, 0.0, 0.0, 0.0, 0.0,
-                                            0.0, 0.0, 0.01, 0.0, 0.0, 0.0,
-                                            0.0, 0.0, 0.0, 0.01, 0.0, 0.0,     
-                                            0.0, 0.0, 0.0, 0.0, 0.01, 0.0,
-                                            0.0, 0.0, 0.0, 0.0, 0.0, 0.01]
+                    odom.pose.covariance = [0.001, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                            0.0, 0.001, 0.0, 0.0, 0.0, 0.0,
+                                            0.0, 0.0, 0.1, 0.0, 0.0, 0.0,
+                                            0.0, 0.0, 0.0, 0.1, 0.0, 0.0,     
+                                            0.0, 0.0, 0.0, 0.0, 0.1, 0.0,
+                                            0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
                     
-                    odom.twist.covariance = [0.01, 0.0, 0.0, 0.0, 0.0, 0.0,
-                                             0.0, 0.01, 0.0, 0.0, 0.0, 0.0,
-                                             0.0, 0.0, 0.01, 0.0, 0.0, 0.0,
-                                             0.0, 0.0, 0.0, 0.01, 0.0, 0.0,
-                                             0.0, 0.0, 0.0, 0.0, 0.01, 0.0,
-                                             0.0, 0.0, 0.0, 0.0, 0.0, 0.01]
+                    odom.twist.covariance = [0.001, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                            0.0, 0.01, 0.0, 0.0, 0.0, 0.0,
+                                            0.0, 0.0, 0.1, 0.0, 0.0, 0.0,
+                                            0.0, 0.0, 0.0, 0.1, 0.0, 0.0,
+                                            0.0, 0.0, 0.0, 0.0, 0.1, 0.0,
+                                            0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
                     self.odom_pub.publish(odom)
 
                     # publish IMU / serial
@@ -369,15 +369,15 @@ class SerialROSBridge(Node):
                     imu.linear_acceleration.x = ax
                     imu.linear_acceleration.y = ay
                     imu.linear_acceleration.z = az
-                    imu.orientation_covariance = [0.01, 0.0, 0.0,
-                                                  0.0, 0.01, 0.0,
-                                                  0.0, 0.0, 0.01]
-                    imu.angular_velocity_covariance = [0.01, 0.0, 0.0,
-                                                       0.0, 0.01, 0.0,
-                                                       0.0, 0.0, 0.01]
-                    imu.linear_acceleration_covariance = [0.01, 0.0, 0.0,
-                                                          0.0, 0.01, 0.0,
-                                                          0.0, 0.0, 0.01]
+                    imu.orientation_covariance = [0.0001, 0.0, 0.0,
+                                                    0.0, 0.0001, 0.0,
+                                                    0.0, 0.0, 0.001]
+                    imu.angular_velocity_covariance = [0.001, 0.0, 0.0,
+                                                        0.0, 0.001, 0.0,
+                                                        0.0, 0.0, 0.001]
+                    imu.linear_acceleration_covariance = [0.1, 0.0, 0.0,
+                                                            0.0, 0.1, 0.0,
+                                                            0.0, 0.0, 0.1]
                     self.imu_pub.publish(imu)
 
                     # ranges

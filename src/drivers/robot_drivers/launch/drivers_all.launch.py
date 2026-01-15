@@ -19,7 +19,8 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
 
-        # Lanzar Asus Xtion
+
+        # Lanzar nodo cámara con reconexión
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
                 PathJoinSubstitution([
@@ -55,9 +56,17 @@ def generate_launch_description():
             output='screen',
             name='webrtc_streamer'
         ),  
+        
     ])
 
 """
+
+         # Lanzar nodo DroidCam
+        Node(
+            package='robot_drivers',
+            executable='droidcam_camera',
+            output='screen',
+        ),
 
         # Lanzar test webcam 
         Node(
@@ -66,6 +75,8 @@ def generate_launch_description():
             output='screen',
             name='webcam_tester'
         ),
+
+        
 
         
 

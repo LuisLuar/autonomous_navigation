@@ -15,7 +15,7 @@ class MapWidget(QWidget):
     def __init__(self, ros_node=None, offline_tiles_path=None, leaflet_path=None):
         super().__init__()
         self.ros_node = ros_node
-        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/GoogleImagenes" #OpenStreetMap GoogleImagenes
+        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/casa_ext" #OpenStreetMap GoogleImagenes
         
         # Ruta a los recursos de Leaflet offline
         if leaflet_path:
@@ -48,6 +48,8 @@ class MapWidget(QWidget):
 
         # Path global
         self.current_path = None
+        self.current_global_path = None
+        self.current_local_path = None
 
     
     def setup_ui(self):
@@ -177,17 +179,49 @@ class MapWidget(QWidget):
     <script>
 
         // ============================
+        // RUTA GLOBAL PLANIFICADA
+        // ============================
+        window.plannedlPathLayer = null;
+
+        function drawPlannedPath(pathCoords) {{
+            if (window.plannedPathLayer) {{
+                map.removeLayer(window.plannedPathLayer);
+            }}
+
+            window.plannedPathLayer = L.polyline(pathCoords, {{
+                color: 'blue',
+                weight: 5,
+                opacity: 0.9
+            }}).addTo(map);
+        }}
+
+        // ============================
         // RUTA GLOBAL
         // ============================
         window.globalPathLayer = null;
-
         function drawGlobalPath(pathCoords) {{
             if (window.globalPathLayer) {{
                 map.removeLayer(window.globalPathLayer);
             }}
 
             window.globalPathLayer = L.polyline(pathCoords, {{
-                color: 'blue',
+                color: 'green',
+                weight: 5,
+                opacity: 0.9
+            }}).addTo(map);
+        }}
+
+        // ============================
+        // RUTA LOCAL
+        // ============================
+        window.LocalPathLayer = null;
+        function drawLocalPath(pathCoords) {{
+            if (window.LocalPathLayer) {{
+                map.removeLayer(window.LocalPathLayer);
+            }}
+
+            window.LocalPathLayer = L.polyline(pathCoords, {{
+                color: 'red',
                 weight: 5,
                 opacity: 0.9
             }}).addTo(map);
@@ -328,9 +362,28 @@ class MapWidget(QWidget):
         
         #print(f"[MapWidget] Mapa HTML guardado en: {self.html_file}")
     
+    def update_planned_path(self, path_latlon):
+        """
+        Dibuja el path planificado recibido desde ROS en Leaflet
+        """
+        if not path_latlon or len(path_latlon) < 2:
+            return
+
+        js_array = "[" + ",".join(
+            f"[{lat},{lon}]" for lat, lon in path_latlon
+        ) + "]"
+
+        js_code = f"""
+        if (typeof drawPlannedPath === 'function') {{
+            drawPlannedPath({js_array});
+        }}
+        """
+
+        self.map_view.page().runJavaScript(js_code)
+
     def update_global_path(self, path_latlon):
         """
-        Dibuja el path recibido desde ROS en Leaflet
+        Dibuja el path global recibido desde ROS en Leaflet
         """
         if not path_latlon or len(path_latlon) < 2:
             return
@@ -347,6 +400,24 @@ class MapWidget(QWidget):
 
         self.map_view.page().runJavaScript(js_code)
 
+    def update_local_path(self, path_latlon):
+        """
+        Dibuja el path global recibido desde ROS en Leaflet
+        """
+        if not path_latlon or len(path_latlon) < 2:
+            return
+
+        js_array = "[" + ",".join(
+            f"[{lat},{lon}]" for lat, lon in path_latlon
+        ) + "]"
+
+        js_code = f"""
+        if (typeof drawLocalPath === 'function') {{
+            drawLocalPath({js_array});
+        }}
+        """
+
+        self.map_view.page().runJavaScript(js_code)
 
     def confirm_destination(self):
         """Confirmar y establecer el destino seleccionado en el mapa"""
@@ -510,12 +581,24 @@ class MapWidget(QWidget):
                     self.update_map_position(lat, lng, yaw_deg)
 
 
-            # Actualizar path global si hay uno nuevo
-            if bridge.global_path:
-                if self.current_path != bridge.global_path:
-                    self.current_path = bridge.global_path
-                    self.update_global_path(self.current_path)
+            # Actualizar path global planificado si hay uno nuevo
+            if bridge.planned_path:
+                if self.current_path != bridge.planned_path:
+                    self.current_path = bridge.planned_path
+                    self.update_planned_path(self.current_path)
                                 
+            #Actualizar path global si hay uno nuevo
+            if bridge.global_path_accumulated:
+                #if self.current_global_path != bridge.global_path:
+                #    self.current_global_path = bridge.global_path
+                self.update_global_path(bridge.global_path_accumulated)
+
+            #Actualizar path local si hay uno nuevo
+            if bridge.local_path_accumulated:
+                #if self.current_local_path != bridge.local_path:
+                #    self.current_local_path = bridge.local_path
+                self.update_local_path(bridge.local_path_accumulated)
+
 
 
         except AttributeError as e:

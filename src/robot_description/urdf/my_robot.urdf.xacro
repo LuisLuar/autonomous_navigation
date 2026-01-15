@@ -50,23 +50,23 @@
             rpy: orientación (roll, pitch, yaw en radianes)
     -->
     <xacro:sensor_asus_xtion parent="base_link" name="camera">
-        <origin xyz="0.4 0.0 0.35" rpy="0.0 0.0 0.0"/>
+        <origin xyz="0.31 0.0 0.22" rpy="0.0 0.0 0.0"/>
     </xacro:sensor_asus_xtion>
 
     <!--Union entre base_link y el GPS BU353N5-->
     <xacro:sensor_gps_bu353n5 parent="base_link" name="gnss">
-        <origin xyz="0.0 0.0 0.60" rpy="0 0 0"/>
+        <origin xyz="-0.32 0.0 0.60" rpy="0 0 0"/>
     </xacro:sensor_gps_bu353n5>
 
 
     <!-- Unión entre base_link y el LIDAR RPLidar A1 / A1M8 -->
     <xacro:sensor_rplidar parent="base_link" name="laser">
-        <origin xyz="0.10 0.0 0.58" rpy="0 0 0"/>
+        <origin xyz="-0.35 0.0 0.7" rpy="0 0 0"/>
     </xacro:sensor_rplidar>
 
      <!-- IMU (posición estable, cerca del centro de masa) -->
     <xacro:sensor_mpu6050 parent="base_link" name="imu">
-        <origin xyz="0.0 0.0 0.05" rpy="0.0 0.0 0.0"/>
+        <origin xyz="0.0 0.0245 0.18" rpy="0.0 0.0 0.0"/>
     </xacro:sensor_mpu6050>
 
     <!-- Sensores de distancia Sharp (múltiples posiciones) -->

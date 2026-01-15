@@ -218,7 +218,7 @@ Visualization Manager:
       Value: true
 
     # =============================================
-    # 6. NUBE DE PUNTOS 3D (OPCIONAL)
+    # 6. NUBE DE PUNTOS 3D 
     # =============================================
     - Alpha: 1
       Autocompute Intensity Bounds: true
@@ -317,6 +317,133 @@ Visualization Manager:
         Value: /global_path
       Value: true
 
+    # =============================================
+    # 9. VISUALIZACIÓN DE LA RUTA ODOMETRY GLOBAL PATH
+    # =============================================
+    - Alpha: 1
+      Class: rviz_default_plugins/Path
+      Color: 255; 0; 13  # Rojo brillante
+      Enabled: true
+      Line Style:
+        Line Width: 0.05
+        Value: Lines
+      Name: "Odometria Global Path"
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0.01  # Ligeramente elevado para evitar superposición
+      Pose Style: None
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /path/global
+      Value: true
+
+    # =============================================
+    # 10. VISUALIZACIÓN DE LA RUTA ODOMETRY LOCAL PATH
+    # =============================================
+    - Alpha: 1
+      Class: rviz_default_plugins/Path
+      Color: 0; 255; 255  # Rojo brillante
+      Enabled: true
+      Line Style:
+        Line Width: 0.05
+        Value: Lines
+      Name: "Odometria Local Path"
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0.01  # Ligeramente elevado para evitar superposición
+      Pose Style: None
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /path/local
+      Value: true
+    
+    # =============================================
+    # 11. NUBE DE PUNTOS 3D CALLE SEGMENTADA
+    # =============================================
+    - Class: rviz_default_plugins/PointCloud2
+      Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: "Nube de Puntos Calle 3D"
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.01
+      Style: Points
+      Topic: /ipm/points
+      Use Fixed Frame: true
+      Use rainbow: false
+
+    # =============================================
+    # 12. VISUALIZACIÓN DEL LANE CARRIL DERECHO CAMARA
+    # =============================================
+    - Class: rviz_default_plugins/Path
+      Alpha: 1
+      Color: 0; 0; 255  # AZUL - Borde derecho
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.05
+      Name: "LANE RIGHT CAMERA"
+      Pose Style: None
+      Topic: /lane/edge_path
+
+    # =============================================
+    # 13. VISUALIZACIÓN DEL LANE TRACKED CENTER CAMERA
+    # =============================================
+    - Class: rviz_default_plugins/Path
+      Alpha: 1
+      Color: 0; 255; 0  # Verde 
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.05
+      Name: "LANE TRACKED CENTER CAMERA"
+      Pose Style: None
+      Topic: /lane/tracked_path
+
+    # =============================================
+    # 14. VISUALIZACIÓN DEL LANE CARRIL CALZADA
+    # =============================================
+    - Class: rviz_default_plugins/Path
+      Alpha: 1
+      Color: 0; 255; 255  # Amarillo 
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.05
+      Name: "LANE EGO"
+      Pose Style: None
+      Topic: /lane_ego
+
+    # =============================================
+    # 15. VISUALIZACIÓN DEL LANE CONTROL
+    # =============================================
+    - Class: rviz_default_plugins/Path
+      Alpha: 1
+      Color: 255; 0; 0  # ROJO 
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.05
+      Name: "LANE LOCAL"
+      Pose Style: None
+      Topic: /lane_local
 
   Enabled: true
   Global Options:

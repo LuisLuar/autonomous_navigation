@@ -20,15 +20,15 @@ SemaphoreHandle_t i2cMutex;
 
 
 //___________ENCODER DERECHO_____________
-#define RightA 13
-#define RightB 25
-#define RightZ 14
+#define RightA 27
+#define RightB 14
+#define RightZ 26
 //_______________________________________
 
 //__________ENCODER LeftUIERDO____________
-#define LeftA 18
-#define LeftB 19
-#define LeftZ 5
+#define LeftA 5
+#define LeftB 18
+#define LeftZ 19
 //_______________________________________
 
 //______________SENSORES SHARP_____________
@@ -51,8 +51,8 @@ bool reset = false;
 //_____________________________________________________________________
 
 //___________Parametros del robot_____________
-float L = 0.196; // distancia entre ruedas metros
-float D = 0.0853; // Diametro de la rueda en metros
+float L = 0.84; // distancia entre ruedas metros
+float D = 0.33; // Diametro de la rueda en metros
 //_______________________________________________
 
 //_______VARIABLES IMU_________________________________
@@ -62,6 +62,7 @@ unsigned long lastTime_imu = 0, dt_imu = 0;
 float ax = 0.0, ay = 0.0, az = 0.0;
 float gx = 0.0, gy = 0.0, gz = 0.0;
 float roll_imu = 0.0, pitch_imu = 0.0, yaw_imu = 0.0;
+float offset = 0.0;
 //______________________________________________________
 
 //________CONFIGURACION ENCODER__________
@@ -70,6 +71,7 @@ unsigned long lastTime_enc = 0, dt_enc = 0;;
 
 float vx = 0, wz = 0; //Velocidad lineal y angular del robot [m/s] y [rad/s]
 float x_pos = 0.0, y_pos = 0.0; //Posición estimada por odometría METROS
+float x_pose = 0.0, y_pose = 0.0;
 float yaw_enc = 0.0; //Orientación estimada por odometría RADIANES
 //_______________________________________
 
@@ -156,12 +158,12 @@ void setup() {
   //_______________________________
 
   //___________SENSOR SHARP____________________
-  sensor1.init(SHARP_PIN1);
-  sensor2.init(SHARP_PIN2);
-  sensor3.init(SHARP_PIN3);
-  sensor1.calibrateAnalog(2500, 400, 4, 50);
-  sensor2.calibrateAnalog(2500, 400, 4, 50);
-  sensor3.calibrateAnalog(2500, 400, 4, 50);
+  /*sensor1.init(SHARP_PIN1);
+    sensor2.init(SHARP_PIN2);
+    sensor3.init(SHARP_PIN3);
+    sensor1.calibrateAnalog(2500, 400, 4, 50);
+    sensor2.calibrateAnalog(2500, 400, 4, 50);
+    sensor3.calibrateAnalog(2500, 400, 4, 50);*/
 
   //_____________CONTROL PID_______________
   beginPid();
@@ -241,12 +243,12 @@ void ControlLoop(void *parameter) {
       encoderPID();
     }
 
-    if (millis() - lastTime_range >= sampleTime_range) {
+    /*if (millis() - lastTime_range >= sampleTime_range) {
       lastTime_range = millis();
       range_front = sensor1.distAnalog() / 100.0;
       range_left = sensor2.distAnalog() / 100.0;
       range_right = sensor3.distAnalog() / 100.0;
-    }
+      }*/
 
     if (millis() - lastTime_serial > sampleTime_serial) {
       lastTime_serial = millis();

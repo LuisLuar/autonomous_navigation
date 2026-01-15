@@ -87,10 +87,19 @@ class ROSBridge(Node):
         self.camera_detection_qpixmap = None
 
         # Path global
+        self.planned_path = None
         self.global_path = None
+        self.local_path = None
         self.map_origin = None   # (utm_x, utm_y)
         self.current_latlon = None
 
+        # Path global - ACUMULADOS
+        self.global_path_accumulated = []   # Path global acumulado  
+        self.local_path_accumulated = []    # Path local acumulado
+
+        # Para tracking del último punto añadido (evitar duplicados)
+        self.last_local_point = None
+        self.last_global_point = None
 
         # Conversor UTM → lat/lon (MISMO CRS que el planner)
         self.xy_to_ll = Transformer.from_crs(
@@ -168,13 +177,16 @@ class ROSBridge(Node):
 
         # Redes neuronales
         self.create_subscription(Image, '/segmentation/overlay', self.cb_camera_segmentation, 1)
-        self.create_subscription(Image, '/detection/annotated_image', self.cb_camera_detection, 1)
+        self.create_subscription(Image, '/detection/annotated_image', self.cb_camera_detection, 1) #/detection/annotated_image
 
         # Path global
-        self.create_subscription(Path, '/global_path', self.cb_global_path, 10)
+        self.create_subscription(Path, '/global_path', self.cb_planned_path, 10)
+        self.create_subscription(Path, '/path/global', self.cb_global_path, 10)
+
+        # Path local
+        self.create_subscription(Path, '/path/local', self.cb_local_path, 10)
+
         self.create_subscription(PointStamped,"/utm_map_origin",self.cb_map_origin,1)
-
-
 
     #FUNCIONES ADICIONALES
     def map_to_latlon(self, x_map, y_map):
@@ -334,9 +346,6 @@ class ROSBridge(Node):
             self.current_latlon = latlon
 
         self.any_msg_received = True
-
-    
-
     
     def cb_camera_detection(self, msg: Image):
         try:
@@ -364,7 +373,7 @@ class ROSBridge(Node):
         except Exception as e:
             self.get_logger().warning(f"Error en cb_camera_segmentation: {e}")
 
-    def cb_global_path(self, msg: Path):
+    def cb_planned_path(self, msg: Path):
         if self.map_origin is None:
             return
 
@@ -378,8 +387,78 @@ class ROSBridge(Node):
             if latlon:
                 path_latlon.append(latlon)
 
-        self.global_path = path_latlon
+        self.planned_path = path_latlon
         self.any_msg_received = True
+
+    def cb_global_path(self, msg: Path):
+        if self.map_origin is None:
+            return
+        
+        # Si no hay poses, salir
+        if not msg.poses:
+            return
+        
+        # Tomar solo el ÚLTIMO punto del path recibido
+        last_pose = msg.poses[-1]
+        x = last_pose.pose.position.x
+        y = last_pose.pose.position.y
+        
+        # Convertir a lat/lon
+        latlon = self.map_to_latlon(x, y)
+        if not latlon:
+            return
+        
+        # Verificar si es un punto nuevo (comparar con el último almacenado)
+        if self.last_global_point and self._are_points_close(latlon, self.last_global_point, threshold=0.000001):
+            # Punto muy similar al anterior, no lo añadimos
+            return
+        
+        # Añadir al path acumulado
+        self.global_path_accumulated.append(latlon)
+        self.last_global_point = latlon
+        
+        # Actualizar el path actual (con todos los puntos acumulados)
+        #self.global_path = self.local_path_accumulated
+        
+        self.any_msg_received = True
+
+    def cb_local_path(self, msg: Path):
+        if self.map_origin is None:
+            return
+        
+        # Si no hay poses, salir
+        if not msg.poses:
+            return
+        
+        # Tomar solo el ÚLTIMO punto del path recibido
+        last_pose = msg.poses[-1]
+        x = last_pose.pose.position.x
+        y = last_pose.pose.position.y
+        
+        # Convertir a lat/lon
+        latlon = self.map_to_latlon(x, y)
+        if not latlon:
+            return
+        
+        # Verificar si es un punto nuevo (comparar con el último almacenado)
+        if self.last_local_point and self._are_points_close(latlon, self.last_local_point, threshold=0.000001):
+            # Punto muy similar al anterior, no lo añadimos
+            return
+        
+        # Añadir al path acumulado
+        self.local_path_accumulated.append(latlon)
+        self.last_local_point = latlon
+        
+        # Actualizar el path actual (con todos los puntos acumulados)
+        #self.local_path = self.local_path_accumulated
+        
+        self.any_msg_received = True
+
+    def _are_points_close(self, point1, point2, threshold=0.000001):
+        """Verifica si dos puntos (lat, lon) están muy cerca"""
+        lat_diff = abs(point1[0] - point2[0])
+        lon_diff = abs(point1[1] - point2[1])
+        return lat_diff < threshold and lon_diff < threshold
 
     def clear_path(self):
         """

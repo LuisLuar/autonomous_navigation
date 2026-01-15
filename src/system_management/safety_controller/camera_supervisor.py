@@ -230,10 +230,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        #node.get_logger().info("Supervisor de cámara apagado por usuario")
         pass
-    except Exception as e:
-        node.get_logger().error(f"Error fatal: {e}")
     finally:
         try:
             node.destroy_node()

@@ -11,16 +11,9 @@ def generate_launch_description():
 
         Node(
             package='system_management',
-            executable='components_supervisor',
-            output='screen'
-        ),
-
-        Node(
-            package='system_management',
             executable='gps_supervisor',
             output='screen'
         ),
-
         
         Node(
             package='system_management',
@@ -40,11 +33,6 @@ def generate_launch_description():
             output='screen'
         ),
 
-        Node(
-            package='system_management',
-            executable='VC_supervisor',
-            output='screen'
-        ),
 
         Node(
             package='system_management',
@@ -59,3 +47,19 @@ def generate_launch_description():
 #            executable='esp32_supervisor',
 #            output='screen'
 #        ),
+
+"""
+        Node(
+            package='system_management',
+            executable='components_supervisor',
+            output='screen'
+        ),
+
+        Node(
+            package='system_management',
+            executable='VC_supervisor',
+            output='screen'
+        ),
+        
+
+"""

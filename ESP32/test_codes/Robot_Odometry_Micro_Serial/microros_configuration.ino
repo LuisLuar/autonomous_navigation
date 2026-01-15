@@ -14,8 +14,8 @@ const char* agent_ip = "10.42.0.1";  // ← IP de tu PC (donde corre el agent)
 
 /*const char* ssid = "Fastnett-Fibra-ConstructoraVasqu";
   const char* password = "1706312434";
-  const char* agent_ip = "192.168.100.98";*/
-  const uint32_t agent_port = 8888;
+  const char* agent_ip = "192.168.100.175";*/
+const uint32_t agent_port = 8888;
 //_____________________________________________________________
 
 
@@ -36,6 +36,7 @@ rcl_service_t set_bool_service;
 
 rcl_subscription_t subscriber;
 rcl_publisher_t odom_publisher;
+//rcl_publisher_t pose_publisher;
 rcl_publisher_t imu_publisher;
 rcl_publisher_t range_front_publisher;
 rcl_publisher_t range_left_publisher;
@@ -46,6 +47,7 @@ std_srvs__srv__SetBool_Response set_bool_res;
 
 geometry_msgs__msg__Twist msg;
 nav_msgs__msg__Odometry odom_msg;
+//nav_msgs__msg__Odometry pose_msg;
 sensor_msgs__msg__Imu imu_msg;
 sensor_msgs__msg__Range range_front_msg;
 sensor_msgs__msg__Range range_left_msg;
@@ -239,6 +241,7 @@ bool beginMicroros() {
 
   // Publishers
   if (rclc_publisher_init_default(&odom_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry), "odom/microros") != RCL_RET_OK) return false;
+  //if (rclc_publisher_init_default(&pose_publisher,&node,ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry),"robot/pose")!= RCL_RET_OK) return false;
   if (rclc_publisher_init_default(&imu_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/microros") != RCL_RET_OK) return false;
   if (rclc_publisher_init_default(&range_front_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Range), "range/front/microros") != RCL_RET_OK) return false;
   if (rclc_publisher_init_default(&range_left_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Range), "range/left/microros") != RCL_RET_OK) return false;
@@ -312,6 +315,12 @@ void publish_odom(rcl_timer_t* timer, int64_t last_call_time) {
   imu_msg.header.stamp.sec = time_stamp.tv_sec;
   imu_msg.header.stamp.nanosec = time_stamp.tv_nsec;
   RCSOFTCHECK(rcl_publish(&imu_publisher, &imu_msg, NULL));
+
+  /*odometry.update(0.0, 0.0, x_pose, y_pose, yaw_enc);
+  pose_msg = odometry.getData();
+  pose_msg.header.stamp.sec = time_stamp.tv_sec;
+  pose_msg.header.stamp.nanosec = time_stamp.tv_nsec;
+  RCSOFTCHECK(rcl_publish(&pose_publisher, &pose_msg, NULL));*/
 }
 
 void publish_ranges_all(rcl_timer_t * timer, int64_t last_call_time) {

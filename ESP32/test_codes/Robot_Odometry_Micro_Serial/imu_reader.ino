@@ -1,13 +1,13 @@
 //imu_reader.ino
 
 // ---- Valores de calibración del magnetómetro (segunda calibración, en mG) ----
-const float MAG_BIAS_X = 295.85f;
-const float MAG_BIAS_Y = 537.51f;
-const float MAG_BIAS_Z = 199.37f;
+const float MAG_BIAS_X = 205.65; //203.85; //137.1f;
+const float MAG_BIAS_Y = 334.81; //342.05; //327.58f;
+const float MAG_BIAS_Z = -577.31; //-575.58; //-572.11;
 
-const float MAG_SCALE_X = 1.23f;
-const float MAG_SCALE_Y = 0.67f;
-const float MAG_SCALE_Z = 1.43f;
+const float MAG_SCALE_X = 1.81; //1.83; //2.53f;
+const float MAG_SCALE_Y = 1.11; //1.09; //1.06f;
+const float MAG_SCALE_Z = 0.65; //0.6f;
 
 // Declinación magnética
 // -5° 4'  => -5.0666667 grados (negativa = WEST)
@@ -15,7 +15,20 @@ const float MAG_DECLINATION_DEG = -5.0666667f;
 
 // conversion constants
 const float G_TO_MS2 = 9.80665f;
+bool first = false;
+float yaw_gyro = 0.0;
+float yaw_integral = 0.0;
+float error = 0.0;
+static float yaw_bias = 0.0f;
+static uint32_t last_correction = 0;
+float k = 0.0;
 
+// Si el pitch es negativo (robot inclinado hacia adelante) y estamos en el sentido contrario,
+// ajustar el yaw en 180°
+float threshold_pitch = 0.1f; // radianes, ajusta según tu robot
+
+// Solo aplicar esta corrección al inicio
+static bool first_orientation_set = false;
 
 bool IMU_begin() {
   Wire.begin();
@@ -59,18 +72,21 @@ bool IMU_begin() {
   mpu.calibrateAccelGyro(); // bloquea hasta terminar
   //Serial.println("Accel+Gyro calibration finished.");
 
+  delay(500);
+  mpu.calibrateMag();
   // ---- Aplicar valores preestablecidos del MAGNETÓMETRO (no recalibramos cada inicio) ----
   //Serial.println("Applying preset magnetometer bias/scale from saved calibration...");
   mpu.setMagBias(MAG_BIAS_X, MAG_BIAS_Y, MAG_BIAS_Z);   // unidades: mG (tal como tu salida)
   mpu.setMagScale(MAG_SCALE_X, MAG_SCALE_Y, MAG_SCALE_Z);
 
   // ---- Declinación magnética (para convertir heading magnético -> verdadero) ----
-  mpu.setMagneticDeclination(MAG_DECLINATION_DEG);
+  //mpu.setMagneticDeclination(MAG_DECLINATION_DEG);
 
   // ---- Configurar filtro de orientación (usar cuaternión AHRS) ----
   mpu.selectFilter(QuatFilterSel::MADGWICK);
-  mpu.setFilterIterations(10); // sugerido por ti
-  mpu.ahrs(true);              // asegurar que AHRS está activo
+  mpu.setFilterIterations(5);
+  mpu.ahrs(false);              // asegurar que AHRS está activo
+
 
   // Desactivar verbose para normal operation
   mpu.verbose(false);
@@ -81,9 +97,9 @@ bool IMU_begin() {
 
 void IMU_update() {
 
-  /*float magx_raw = mpu.getMagX();
+  float magx_raw = mpu.getMagX();
   float magy_raw = mpu.getMagY();
-  float magz_raw = mpu.getMagZ();*/
+  float magz_raw = mpu.getMagZ();
 
   //______________ACELERACION m/s2____________
   // Aceleración (ya escalada según fullscale): getAccX/Y/Z()
@@ -102,23 +118,65 @@ void IMU_update() {
   gy  = mpu.getGyroY() * DEG_TO_RAD;
   gz  = mpu.getGyroZ() * DEG_TO_RAD;
 
-  /*if (abs(gx) < 0.3) gx = 0;
-    if (abs(gy) < 0.3) gy = 0;
-    if (abs(gz) < 0.05) gz = 0;*/
+  if (abs(gx) < 0.0025) gx = 0;
+  if (abs(gy) < 0.0025) gy = 0;
+  if (abs(gz) < 0.0025) gz = 0;
 
   //__________ORIENTACION (Ángulos de Euler) rad_____________
-  float yaw_deg = (-mpu.getYaw() + 90.0f); // ya con declinación aplicada
+  yaw_integral += gz * dt_imu / 1000;
+  yaw_gyro = yaw_integral;
+  while (yaw_gyro >= PI) yaw_gyro -= 2 * PI; //3.1415926535f
+  while (yaw_gyro < -PI) yaw_gyro += 2 * PI;
 
-  // normalizar a [-180,180)
-  while (yaw_deg >= 180.0f) yaw_deg -= 360.0f;
-  while (yaw_deg < -180.0f) yaw_deg += 360.0f;
+
+  float yaw_mag = atan2(-magy_raw, magx_raw) + MAG_DECLINATION_DEG * DEG_TO_RAD; //- PI/2 ;
+
+  float pitch_acc = atan2(-ax, sqrt(ay*ay + az*az));
+  
+  if (!first_orientation_set && abs(pitch_acc) > threshold_pitch) {
+    // Determinar la dirección basada en el signo del pitch
+    if (pitch_acc > 0) {
+      // Robot inclinado hacia atrás
+      yaw_mag += PI; // Ajustar 180 grados
+    }
+    first_orientation_set = true;
+  }
+
+  while (yaw_mag >  PI) yaw_mag -= 2 * PI;
+  while (yaw_mag < -PI) yaw_mag += 2 * PI;
+
+  float mag_norm = sqrt(magx_raw * magx_raw + magy_raw * magy_raw + magz_raw * magz_raw);
+  bool mag_ok = (mag_norm > 300 && mag_norm < 600);
+
+  if (mag_ok && (millis() - last_correction) > 500)
+  {
+    if (abs(vx) < 0.05 && abs(gz) < 0.05) {
+      k = 0.009f;
+    } else {
+      k = 0.007f;
+    }
+
+    error = yaw_mag - yaw_imu;
+
+    // normalizar error
+    while (error >  PI) error -= 2 * PI;
+    while (error < -PI) error += 2 * PI;
+
+    yaw_bias += k * error;   // 🔑 corrección MUY suave
+    last_correction = millis();
+
+    if (!first) {
+      yaw_integral = yaw_mag;   // sincronizar estado continuo
+      yaw_bias = 0.0f;
+      first = true;
+    }
+  }
+
+  yaw_imu = yaw_gyro + yaw_bias;
+  while (yaw_imu >  PI) yaw_imu -= 2 * PI;
+  while (yaw_imu < -PI) yaw_imu += 2 * PI;
 
   roll_imu  = -mpu.getRoll() * DEG_TO_RAD;
   pitch_imu = -mpu.getPitch() * DEG_TO_RAD;
-  yaw_imu = yaw_deg * DEG_TO_RAD;
-
-  //Serial.printf("Acc [m/s^2]: %.4f, %.4f, %.4f\n", ax, ay, az);
-  //Serial.printf("Mag: %.4f, %.4f, %.4f\n", magx_raw, magy_raw, magz_raw);
-  //Serial.printf("Gyro [rad/s]: %.4f, %.4f, %.4f\n", gx, gy, gz);
-  //Serial.printf("roll %.2f pitch %.2f yaw %.2f\n", roll_imu, pitch_imu, yaw_imu);
+  //yaw_imu = yaw_deg * DEG_TO_RAD;
 }

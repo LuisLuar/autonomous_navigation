@@ -7,7 +7,9 @@ from std_msgs.msg import Bool
 from std_srvs.srv import SetBool
 from diagnostic_msgs.msg import DiagnosticStatus, KeyValue
 import time
-
+from geometry_msgs.msg import Quaternion
+import numpy as np
+from tf_transformations import quaternion_from_euler, euler_from_quaternion
 
 class UnifierNode(Node):
     def __init__(self):
@@ -18,11 +20,22 @@ class UnifierNode(Node):
         self.declare_parameter('serial_timeout_ms', 800)
         self.declare_parameter('recover_stable_ms', 2000)
         self.declare_parameter('data_expire_ms', 1000)
+        
+        # Nuevo parámetro para el offset de calibración del yaw (en grados)
+        self.declare_parameter('imu_yaw_offset_deg', 0.0)  # Offset en grados
 
         self.microros_timeout_ms = self.get_parameter('microros_timeout_ms').value
         self.serial_timeout_ms = self.get_parameter('serial_timeout_ms').value
         self.recover_stable_ms = self.get_parameter('recover_stable_ms').value
         self.data_expire_ms = self.get_parameter('data_expire_ms').value
+        
+        # Obtener offset de calibración del yaw
+        self.imu_yaw_offset_deg = self.get_parameter('imu_yaw_offset_deg').value
+        
+        # Convertir a radianes
+        self.imu_yaw_offset = np.deg2rad(self.imu_yaw_offset_deg)
+        
+        self.get_logger().info(f'IMU Yaw Calibration offset: {self.imu_yaw_offset_deg}° ({self.imu_yaw_offset:.4f} rad)')
 
         # Final unified publishers
         self.odom_pub = self.create_publisher(Odometry, 'odom/unfiltered', 10)
@@ -94,7 +107,59 @@ class UnifierNode(Node):
         # Service router
         self.reset_service = self.create_service(SetBool, 'robot_control_reset', self.reset_router_cb)
 
-        #self.get_logger().info('🚀 Unifier node started (microros heartbeat removed)')
+    # === Funciones de calibración de la IMU ===
+    def apply_yaw_calibration(self, imu_msg):
+        """
+        Aplica el offset de calibración al yaw de la IMU
+        """
+        if imu_msg is None:
+            return None
+        
+        # Si el offset es 0, no hacer nada
+        if abs(self.imu_yaw_offset) < 0.0001:  # ~0.0057 grados
+            return imu_msg
+        
+        # Crear una copia del mensaje para no modificar el original
+        calibrated_msg = Imu()
+        calibrated_msg.header = imu_msg.header
+        calibrated_msg.angular_velocity = imu_msg.angular_velocity
+        calibrated_msg.linear_acceleration = imu_msg.linear_acceleration
+        calibrated_msg.orientation_covariance = imu_msg.orientation_covariance
+        calibrated_msg.angular_velocity_covariance = imu_msg.angular_velocity_covariance
+        calibrated_msg.linear_acceleration_covariance = imu_msg.linear_acceleration_covariance
+        
+        # Extraer la orientación actual como cuaternión
+        q_original = imu_msg.orientation
+        q_original_list = [q_original.x, q_original.y, q_original.z, q_original.w]
+        
+        # Convertir a ángulos de Euler (roll, pitch, yaw)
+        try:
+            roll, pitch, yaw = euler_from_quaternion(q_original_list)
+            
+            # Aplicar offset SOLO al yaw
+            yaw += self.imu_yaw_offset
+            
+            # Normalizar el yaw a [-π, π]
+            while yaw > np.pi:
+                yaw -= 2 * np.pi
+            while yaw < -np.pi:
+                yaw += 2 * np.pi
+            
+            # Convertir de vuelta a cuaternión
+            q_calibrated_list = quaternion_from_euler(roll, pitch, yaw)
+            
+            # Asignar al mensaje calibrado
+            calibrated_msg.orientation.x = q_calibrated_list[0]
+            calibrated_msg.orientation.y = q_calibrated_list[1]
+            calibrated_msg.orientation.z = q_calibrated_list[2]
+            calibrated_msg.orientation.w = q_calibrated_list[3]
+            
+        except Exception as e:
+            self.get_logger().warn(f'Error applying IMU yaw calibration: {e}')
+            # En caso de error, mantener la orientación original
+            calibrated_msg.orientation = imu_msg.orientation
+        
+        return calibrated_msg
 
     # === Timestamps helper ===
     def now_ms(self):
@@ -271,6 +336,7 @@ class UnifierNode(Node):
             KeyValue(key="microros_timeout_ms", value=str(self.microros_timeout_ms)),
             KeyValue(key="serial_timeout_ms", value=str(self.serial_timeout_ms)),
             KeyValue(key="recover_stable_ms", value=str(self.recover_stable_ms)),
+            KeyValue(key="imu_yaw_offset_deg", value=str(self.imu_yaw_offset_deg)),
             KeyValue(key="timestamp", value=str(current_time)),
         ]
         
@@ -302,19 +368,33 @@ class UnifierNode(Node):
         use_serial_msg.data = (self.current_source == 'serial')
         self.use_serial_pub.publish(use_serial_msg)
 
-        # ========= PUBLICACIÓN SEGÚN FUENTE =========
+        # ========= PUBLICACIÓN SEGÚN FUENTE CON CALIBRACIÓN =========
         if self.current_source == 'microros':
-            if self.is_fresh('odom_m'): self.odom_pub.publish(self.last_odom_microros)
-            if self.is_fresh('imu_m'): self.imu_pub.publish(self.last_imu_microros)
-            if self.is_fresh('rf_m'): self.range_front_pub.publish(self.last_ranges['front_m'])
-            if self.is_fresh('lf_m'): self.range_left_pub.publish(self.last_ranges['left_m'])
-            if self.is_fresh('rr_m'): self.range_right_pub.publish(self.last_ranges['right_m'])
+            if self.is_fresh('odom_m'): 
+                self.odom_pub.publish(self.last_odom_microros)
+            if self.is_fresh('imu_m') and self.last_imu_microros is not None: 
+                # Aplicar calibración de yaw antes de publicar
+                calibrated_imu = self.apply_yaw_calibration(self.last_imu_microros)
+                self.imu_pub.publish(calibrated_imu)
+            if self.is_fresh('rf_m') and self.last_ranges['front_m'] is not None: 
+                self.range_front_pub.publish(self.last_ranges['front_m'])
+            if self.is_fresh('lf_m') and self.last_ranges['left_m'] is not None: 
+                self.range_left_pub.publish(self.last_ranges['left_m'])
+            if self.is_fresh('rr_m') and self.last_ranges['right_m'] is not None: 
+                self.range_right_pub.publish(self.last_ranges['right_m'])
         else:
-            if self.is_fresh('odom_s'): self.odom_pub.publish(self.last_odom_serial)
-            if self.is_fresh('imu_s'): self.imu_pub.publish(self.last_imu_serial)
-            if self.is_fresh('rf_s'): self.range_front_pub.publish(self.last_ranges['front_s'])
-            if self.is_fresh('lf_s'): self.range_left_pub.publish(self.last_ranges['left_s'])
-            if self.is_fresh('rr_s'): self.range_right_pub.publish(self.last_ranges['right_s'])
+            if self.is_fresh('odom_s') and self.last_odom_serial is not None: 
+                self.odom_pub.publish(self.last_odom_serial)
+            if self.is_fresh('imu_s') and self.last_imu_serial is not None: 
+                # Aplicar calibración de yaw antes de publicar
+                calibrated_imu = self.apply_yaw_calibration(self.last_imu_serial)
+                self.imu_pub.publish(calibrated_imu)
+            if self.is_fresh('rf_s') and self.last_ranges['front_s'] is not None: 
+                self.range_front_pub.publish(self.last_ranges['front_s'])
+            if self.is_fresh('lf_s') and self.last_ranges['left_s'] is not None: 
+                self.range_left_pub.publish(self.last_ranges['left_s'])
+            if self.is_fresh('rr_s') and self.last_ranges['right_s'] is not None: 
+                self.range_right_pub.publish(self.last_ranges['right_s'])
 
         # === Caso crítico: no hay datos frescos de ninguna fuente ===
         if not any([
@@ -386,10 +466,6 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        #node.get_logger().info('Unifier node apagado por usuario')
-        pass
-    except Exception as e:
-        #node.get_logger().error(f'Error fatal en Unifier: {e}')
         pass
     finally:
         try:

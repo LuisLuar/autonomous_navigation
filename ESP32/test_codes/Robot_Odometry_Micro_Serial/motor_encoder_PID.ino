@@ -1,5 +1,5 @@
 //motor_encoder.ino
-unsigned int ppr = 2000;         // Número de muescas que tiene el disco del encoder.
+unsigned int ppr = 4000;         // Número de muescas que tiene el disco del encoder.
 
 void beginEncoder(int LA,int LB,int LZ,int RA,int RB,int RZ){
   ESP32Encoder::useInternalWeakPullResistors = puType::up; // Opcional
@@ -17,28 +17,31 @@ void beginEncoder(int LA,int LB,int LZ,int RA,int RB,int RZ){
 }
 
 void beginPid(){
-  motorL.setGains (0.7, 0.11, 0.03); // (Kc,Ti,Td)
-  motorR.setGains (0.4, 0.11, 0.03); // (Kc,Ti,Td);
+  motorL.setGains (0.026532, 0.005, 0.0); // (Kc,Ti,Td);
+  motorR.setGains (0.024224, 0.005, 0.0); // (Kc,Ti,Td)
 
   motorL.setCvLimits(63, 0);
   motorR.setCvLimits(63, 0);
 
-  motorL.setPvLimits(16.9, 0); //Leftuierdo 16.4 rad/s
-  motorR.setPvLimits(16.9, 0); //derecho
+  motorL.setPvLimits(12.03, 0); 
+  motorR.setPvLimits(12.71 , 0); 
   
   //Serial.println("Controlador PID configurado y listo.");
 }
 
 void encoderPID(){
+  //Serial.print("IZQ: ");
   updateMotor(Left, encoderL, motorL, 1);
+
+  //Serial.print("DER: "); 
   updateMotor(Right, encoderR, motorR, 2);
 
   vx = (Right.v + Left.v) / 2;
   wz = (Right.v - Left.v) / L ; // rad/s
 
   // Filtro sencillo deadzone
-  if (abs(vx) < 0.05) vx = 0;
-  if (abs(wz) < 0.05) wz = 0;
+  if (abs(vx) < 0.06) vx = 0;
+  if (abs(wz) < 0.08) wz = 0;
 
   yaw_enc += wz * dt_enc / 1000; //radians
 
@@ -47,8 +50,16 @@ void encoderPID(){
   float delta_x = vx * cos_h * dt_enc / 1000; //m
   float delta_y = vx * sin_h * dt_enc / 1000; //m
 
+  /*float cos_h1 = cos(yaw_enc);
+  float sin_h1 = sin(yaw_enc);
+  float delta_x1 = vx * cos_h1 * dt_enc / 1000; //m
+  float delta_y1 = vx * sin_h1 * dt_enc / 1000; //m*/
+
   x_pos += delta_x;//*0.85;
   y_pos += delta_y;//*1.1;
+
+  //x_pose += delta_x1;//*0.85;
+  //y_pose += delta_y1;//*1.1;
 }
 
 void updateMotor(DatosMotores &m, ESP32Encoder &enc, motorControl &ctrl, int id) {
@@ -63,4 +74,10 @@ void updateMotor(DatosMotores &m, ESP32Encoder &enc, motorControl &ctrl, int id)
   m.v = (m.w * D) / 2;
   m.outValue = ctrl.compute(m.wRef, m.w);
   ST.motor(id, m.outValue);
+  /*Serial.print(m.wRef);
+  Serial.print(" / ");
+  Serial.print(m.w);
+  Serial.print(" / ");
+  Serial.println(m.outValue);
+  Serial.println();*/
 }

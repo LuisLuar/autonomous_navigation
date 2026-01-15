@@ -16,15 +16,15 @@
 #include <nav_msgs/msg/odometry.h>
 
 //___________ENCODER DERECHO_____________
-#define RightA 13
-#define RightB 25
-#define RightZ 14
+#define RightA 27
+#define RightB 14
+#define RightZ 26
 //_______________________________________
 
 //__________ENCODER IZQUIERDO____________
-#define LeftA 18
-#define LeftB 19
-#define LeftZ 5
+#define LeftA 5
+#define LeftB 18
+#define LeftZ 19
 //_______________________________________
 
 //________CONFIGURACION ENCODER__________

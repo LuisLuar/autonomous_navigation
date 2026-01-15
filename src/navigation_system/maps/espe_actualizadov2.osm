@@ -91,9 +91,11 @@
     <tag k='traffic_calming' v='bump' />
   </node>
   <node id='-102382' action='modify' visible='true' lat='-0.31430742006' lon='-78.44309700208'>
+    <tag k='crossing' v='marked' />
     <tag k='highway' v='crossing' />
   </node>
   <node id='-102393' action='modify' visible='true' lat='-0.31431352764' lon='-78.44299710112'>
+    <tag k='crossing' v='marked' />
     <tag k='highway' v='crossing' />
   </node>
   <node id='-102401' action='modify' visible='true' lat='-0.31432340704' lon='-78.44309812888'>
@@ -268,8 +270,13 @@
     <tag k='wikipedia' v='es:Universidad de las Fuerzas Armadas - ESPE' />
   </node>
   <node id='1855823937' timestamp='2012-09-14T01:13:34Z' uid='849727' user='Scalper' visible='true' version='2' changeset='13102335' lat='-0.3096708' lon='-78.4441734' />
-  <node id='1855823969' timestamp='2012-09-01T20:38:31Z' uid='849727' user='Scalper' visible='true' version='2' changeset='12946562' lat='-0.311803' lon='-78.445685' />
-  <node id='1855823998' timestamp='2023-05-05T13:40:03Z' uid='13510663' user='Pegasus21' visible='true' version='3' changeset='135742850' lat='-0.313283' lon='-78.4472093' />
+  <node id='1855823969' action='modify' timestamp='2012-09-01T20:38:31Z' uid='849727' user='Scalper' visible='true' version='2' changeset='12946562' lat='-0.31180232946' lon='-78.44571651596'>
+    <tag k='access' v='private' />
+    <tag k='highway' v='service' />
+    <tag k='oneway' v='no' />
+    <tag k='u_turn' v='yes' />
+  </node>
+  <node id='1855823998' action='modify' timestamp='2023-05-05T13:40:03Z' uid='13510663' user='Pegasus21' visible='true' version='3' changeset='135742850' lat='-0.31326221319' lon='-78.44721734663' />
   <node id='1855824017' timestamp='2023-05-05T13:40:03Z' uid='13510663' user='Pegasus21' visible='true' version='3' changeset='135742850' lat='-0.3148977' lon='-78.4430301' />
   <node id='1855824031' timestamp='2016-06-02T04:08:46Z' uid='3321532' user='JAAS' visible='true' version='3' changeset='39724696' lat='-0.3158553' lon='-78.4462351' />
   <node id='1855824037' timestamp='2012-09-01T20:38:31Z' uid='849727' user='Scalper' visible='true' version='2' changeset='12946562' lat='-0.3164162' lon='-78.4462988' />
@@ -631,7 +638,7 @@
   <node id='1893846275' timestamp='2012-09-01T20:38:26Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.3120573' lon='-78.4451751' />
   <node id='1893846277' timestamp='2012-09-01T20:38:26Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.3185803' lon='-78.4464116' />
   <node id='1893846279' timestamp='2012-09-01T20:38:26Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.3132857' lon='-78.4434853' />
-  <node id='1893846280' timestamp='2023-05-05T13:40:03Z' uid='13510663' user='Pegasus21' visible='true' version='2' changeset='135742850' lat='-0.3132938' lon='-78.4471116' />
+  <node id='1893846280' action='modify' timestamp='2023-05-05T13:40:03Z' uid='13510663' user='Pegasus21' visible='true' version='2' changeset='135742850' lat='-0.31327033102' lon='-78.4471129411' />
   <node id='1893846281' timestamp='2012-09-01T20:38:26Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.3182853' lon='-78.4450222' />
   <node id='1893846287' timestamp='2012-09-01T20:38:26Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.3167565' lon='-78.4438233' />
   <node id='1893846289' timestamp='2012-09-01T20:38:27Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.3188699' lon='-78.4460083' />
@@ -647,7 +654,7 @@
   <node id='1893846318' timestamp='2020-08-01T03:10:35Z' uid='11583100' user='Evelyn Angos' visible='true' version='2' changeset='88804232' lat='-0.3136508' lon='-78.44681' />
   <node id='1893846319' timestamp='2016-06-02T04:08:46Z' uid='3321532' user='JAAS' visible='true' version='2' changeset='39724696' lat='-0.3160686' lon='-78.4462265' />
   <node id='1893846320' timestamp='2012-09-01T20:38:27Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.3173063' lon='-78.4446601' />
-  <node id='1893846328' timestamp='2012-09-01T20:38:28Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.3118964' lon='-78.4456928' />
+  <node id='1893846328' action='modify' timestamp='2012-09-01T20:38:28Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.31188634187' lon='-78.44572163375' />
   <node id='1893846330' timestamp='2012-09-01T20:38:28Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.316936' lon='-78.4440289' />
   <node id='1893846334' timestamp='2012-09-01T20:38:28Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.3184999' lon='-78.4450759' />
   <node id='1893846336' timestamp='2012-09-01T20:38:28Z' uid='849727' user='Scalper' visible='true' version='1' changeset='12946562' lat='-0.3155752' lon='-78.4431361' />
@@ -1173,6 +1180,7 @@
     <tag k='highway' v='crossing' />
   </node>
   <node id='6360247466' action='modify' timestamp='2019-03-27T19:18:30Z' uid='9395904' user='Georafas' visible='true' version='2' changeset='68600199' lat='-0.31498370699' lon='-78.44303556472'>
+    <tag k='crossing' v='marked' />
     <tag k='highway' v='crossing' />
   </node>
   <node id='6365254246' timestamp='2023-05-05T14:17:52Z' uid='13510663' user='Pegasus21' visible='true' version='2' changeset='135744344' lat='-0.3204498' lon='-78.4426974' />
@@ -1195,6 +1203,7 @@
   <node id='6365805606' timestamp='2019-03-27T19:08:59Z' uid='9395904' user='Georafas' visible='true' version='1' changeset='68599794' lat='-0.318559' lon='-78.44783' />
   <node id='6365805607' timestamp='2019-03-27T19:08:59Z' uid='9395904' user='Georafas' visible='true' version='1' changeset='68599794' lat='-0.3185439' lon='-78.4478022' />
   <node id='6365837409' action='modify' timestamp='2023-05-05T13:40:03Z' uid='13510663' user='Pegasus21' visible='true' version='3' changeset='135742850' lat='-0.31497452482' lon='-78.44314309387'>
+    <tag k='crossing' v='marked' />
     <tag k='highway' v='crossing' />
   </node>
   <node id='6381179747' timestamp='2019-04-03T15:59:43Z' uid='9395904' user='Georafas' visible='true' version='1' changeset='68845783' lat='-0.3186304' lon='-78.4479829' />
@@ -2213,6 +2222,22 @@
     <tag k='traffic_calming' v='bump' />
     <tag k='width' v='3.7' />
   </way>
+  <way id='-104381' action='modify' visible='true'>
+    <nd ref='1893846306' />
+    <nd ref='1856522545' />
+    <tag k='access' v='private' />
+    <tag k='highway' v='service' />
+    <tag k='oneway' v='no' />
+    <tag k='service' v='turnaround' />
+    <tag k='u_turn' v='yes' />
+  </way>
+  <way id='-104382' action='modify' visible='true'>
+    <nd ref='7774587083' />
+    <nd ref='1893846306' />
+    <tag k='access' v='private' />
+    <tag k='highway' v='service' />
+    <tag k='oneway' v='no' />
+  </way>
   <way id='27936229' timestamp='2024-09-05T00:30:04Z' uid='21126491' user='ChristyElliott' visible='true' version='14' changeset='156208441'>
     <nd ref='306620538' />
     <nd ref='306620539' />
@@ -2954,10 +2979,7 @@
     <nd ref='1856523715' />
     <tag k='highway' v='footway' />
   </way>
-  <way id='175006848' timestamp='2023-05-05T14:33:04Z' uid='13510663' user='Pegasus21' visible='true' version='8' changeset='135744928'>
-    <nd ref='7774587083' />
-    <nd ref='1893846306' />
-    <nd ref='1856522545' />
+  <way id='175006848' action='delete' timestamp='2023-05-05T14:33:04Z' uid='13510663' user='Pegasus21' visible='true' version='8' changeset='135744928'>
     <tag k='access' v='private' />
     <tag k='highway' v='service' />
     <tag k='source' v='Reconocimiento cortográfico de campo 2016 por KG' />
@@ -3144,18 +3166,22 @@
     <nd ref='1893846272' />
     <tag k='access' v='private' />
     <tag k='highway' v='service' />
+    <tag k='lanes' v='2' />
+    <tag k='lanes:forward' v='2' />
     <tag k='oneway' v='yes' />
     <tag k='source' v='Reconocimiento cortográfico de campo 2016 por KG' />
     <tag k='surface' v='asphalt' />
     <tag k='width' v='5.4' />
   </way>
-  <way id='179047712' timestamp='2023-05-05T14:33:04Z' uid='13510663' user='Pegasus21' visible='true' version='7' changeset='135744928'>
+  <way id='179047712' action='modify' timestamp='2023-05-05T14:33:04Z' uid='13510663' user='Pegasus21' visible='true' version='7' changeset='135744928'>
     <nd ref='1893846353' />
     <nd ref='1893818120' />
     <tag k='access' v='private' />
     <tag k='highway' v='service' />
     <tag k='oneway' v='no' />
+    <tag k='service' v='turnaround' />
     <tag k='source' v='Reconocimiento cortográfico de campo 2016 por KG' />
+    <tag k='u_turn' v='yes' />
   </way>
   <way id='179047713' timestamp='2023-09-12T05:50:58Z' uid='17999760' user='PatagonianPlateau' visible='true' version='8' changeset='141144230'>
     <nd ref='1893846376' />
@@ -3183,8 +3209,10 @@
     <tag k='access' v='private' />
     <tag k='highway' v='service' />
     <tag k='oneway' v='no' />
+    <tag k='service' v='turnaround' />
     <tag k='source' v='Reconocimiento cortográfico de campo 2016 por KG' />
     <tag k='surface' v='asphalt' />
+    <tag k='u_turn' v='yes' />
   </way>
   <way id='179048252' timestamp='2023-05-05T14:34:27Z' uid='13510663' user='Pegasus21' visible='true' version='6' changeset='135744975'>
     <nd ref='1893846328' />
@@ -3216,23 +3244,27 @@
     <tag k='oneway' v='yes' />
     <tag k='source' v='Reconocimiento cortográfico de campo 2016 por KG' />
   </way>
-  <way id='179048255' timestamp='2023-05-05T14:34:27Z' uid='13510663' user='Pegasus21' visible='true' version='8' changeset='135744975'>
+  <way id='179048255' action='modify' timestamp='2023-05-05T14:34:27Z' uid='13510663' user='Pegasus21' visible='true' version='8' changeset='135744975'>
     <nd ref='1893846280' />
     <nd ref='1855823998' />
     <tag k='access' v='private' />
     <tag k='highway' v='service' />
     <tag k='oneway' v='no' />
+    <tag k='service' v='turnaround' />
     <tag k='smoothness' v='excellent' />
     <tag k='source' v='Reconocimiento cortográfico de campo 2016 por KG' />
     <tag k='surface' v='asphalt' />
+    <tag k='u_turn' v='yes' />
   </way>
-  <way id='179048256' timestamp='2023-05-05T14:33:04Z' uid='13510663' user='Pegasus21' visible='true' version='6' changeset='135744928'>
+  <way id='179048256' action='modify' timestamp='2023-05-05T14:33:04Z' uid='13510663' user='Pegasus21' visible='true' version='6' changeset='135744928'>
     <nd ref='1893846279' />
     <nd ref='1893853514' />
     <tag k='access' v='private' />
     <tag k='highway' v='service' />
     <tag k='oneway' v='no' />
+    <tag k='service' v='turnaround' />
     <tag k='source' v='Reconocimiento cortográfico de campo 2016 por KG' />
+    <tag k='u_turn' v='yes' />
   </way>
   <way id='179066196' timestamp='2023-05-05T13:40:03Z' uid='13510663' user='Pegasus21' visible='true' version='16' changeset='135742850'>
     <nd ref='1856511958' />
@@ -3613,6 +3645,8 @@
     <nd ref='4073788669' />
     <tag k='access' v='private' />
     <tag k='highway' v='service' />
+    <tag k='lanes' v='2' />
+    <tag k='lanes:forward' v='2' />
     <tag k='oneway' v='yes' />
     <tag k='source' v='Reconocimiento cortográfico de campo 2016 por KG' />
     <tag k='surface' v='asphalt' />
@@ -4823,11 +4857,14 @@
     <tag k='highway' v='service' />
     <tag k='oneway' v='yes' />
   </way>
-  <way id='1032398401' timestamp='2023-05-05T13:40:03Z' uid='13510663' user='Pegasus21' visible='true' version='2' changeset='135742850'>
+  <way id='1032398401' action='modify' timestamp='2023-05-05T13:40:03Z' uid='13510663' user='Pegasus21' visible='true' version='2' changeset='135742850'>
     <nd ref='1893846345' />
     <nd ref='1856522612' />
     <tag k='access' v='private' />
     <tag k='highway' v='service' />
+    <tag k='oneway' v='no' />
+    <tag k='service' v='turnaround' />
+    <tag k='u_turn' v='yes' />
   </way>
   <way id='1032398402' action='modify' timestamp='2023-12-22T17:03:24Z' uid='19030383' user='ErickOchoa' visible='true' version='2' changeset='145413043'>
     <nd ref='2932160638' />
@@ -5075,11 +5112,14 @@
     <nd ref='11184803211' />
     <tag k='highway' v='service' />
   </way>
-  <way id='1275269144' timestamp='2024-04-23T12:16:20Z' uid='10334725' user='Solheimajokull' visible='true' version='1' changeset='150392596'>
+  <way id='1275269144' action='modify' timestamp='2024-04-23T12:16:20Z' uid='10334725' user='Solheimajokull' visible='true' version='1' changeset='150392596'>
     <nd ref='11841249594' />
     <nd ref='11841249593' />
     <tag k='access' v='private' />
     <tag k='highway' v='service' />
+    <tag k='oneway' v='no' />
+    <tag k='service' v='turnaround' />
+    <tag k='u_turn' v='yes' />
   </way>
   <way id='1283096867' timestamp='2024-05-15T04:33:09Z' uid='18319628' user='kevin pilliza' visible='true' version='1' changeset='151339712'>
     <nd ref='11905715645' />

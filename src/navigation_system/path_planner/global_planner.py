@@ -97,10 +97,10 @@ def cost(u, v, data):
 
 def find_osm_file():
     possible_paths = [
-        os.path.join(os.path.dirname(__file__), "maps", "espe_actualizadov2.osm"),
-        os.path.join(os.path.dirname(__file__), "espe_actualizado.osm"),
-        "/home/raynel/autonomous_navigation/src/navigation_system/maps/espe_actualizadov2.osm",
-        "espe_actualizado.osm",
+        os.path.join(os.path.dirname(__file__), "maps", "casa.osm"), #espe_actualizadov2
+        os.path.join(os.path.dirname(__file__), "casa.osm"),
+        "/home/raynel/autonomous_navigation/src/navigation_system/maps/casa.osm",
+        "casa.osm",
     ]
     
     for path in possible_paths:
@@ -220,6 +220,13 @@ class OfflineGlobalPlanner(Node):
         root = tree.getroot()
 
         # Extraer nodos OSM
+        u_turn_nodes = set()
+
+        for n in root.findall("node"):
+            tags = {t.attrib["k"]: t.attrib["v"] for t in n.findall("tag")}
+            if tags.get("u_turn") == "yes":
+                u_turn_nodes.add(n.attrib["id"])
+        
         osm_nodes = {}
         for n in root.findall("node"):
             try:
@@ -265,20 +272,30 @@ class OfflineGlobalPlanner(Node):
                 continue
 
             # Configurar carriles según dirección
-            if oneway == "yes":
-                lane_configs = [("forward", 0), ("forward", 1)]
-            else:
-                lane_configs = [("forward", 0), ("forward", 1), ("backward", 0), ("backward", 1)]
+            lanes = int(tags.get("lanes", 1))
+            lanes_fwd = int(tags.get("lanes:forward", lanes))
+            lanes_bwd = int(tags.get("lanes:backward", 0))
+
+            lane_configs = []
+
+            for i in range(lanes_fwd):
+                lane_configs.append(("forward", i))
+
+            for i in range(lanes_bwd):
+                lane_configs.append(("backward", i))
+
+            road_width = float(tags.get("width", lanes * 3.0))
+            lane_width = road_width / lanes
 
             # Generar cada carril
             for direction, lane_idx in lane_configs:
                 # Calcular offset según dirección y carril
                 if direction == 'forward':
                     sign = 1
-                    lane_offset = (0.75 - lane_idx) * LANE_WIDTH
+                    lane_offset = (0.75 - lane_idx) * lane_width
                 else:  # backward
                     sign = -1
-                    lane_offset = (lane_idx - 0.75) * LANE_WIDTH
+                    lane_offset = (lane_idx - 0.75) * lane_width
                 
                 # Generar puntos del carril
                 lane_points = []
@@ -323,7 +340,7 @@ class OfflineGlobalPlanner(Node):
         # 3. CONECTAR CARRILES DEL MISMO SENTIDO
         lane_change_count = self.connect_lane_changes(G)
         # 4. CONEXIONES PARA GIROS EN U
-        u_turn_count = self.connect_u_turns(G, osm_nodes, way_info)
+        u_turn_count = self.connect_u_turns(G, osm_nodes, way_info, u_turn_nodes)
 
         return G
 
@@ -399,42 +416,36 @@ class OfflineGlobalPlanner(Node):
         
         return lane_change_count
 
-    def connect_u_turns(self, G, osm_nodes, way_info):
+    def connect_u_turns(self, G, osm_nodes, way_info, u_turn_nodes):
         u_turn_count = 0
-        
-        for way_id, info in way_info.items():
-            if info['oneway'] == "no" and len(info['node_refs']) >= 2:
-                start_node = info['node_refs'][0]
-                end_node = info['node_refs'][-1]
-                
-                if start_node in osm_nodes and end_node in osm_nodes:
-                    start_point = osm_nodes[start_node]
-                    end_point = osm_nodes[end_node]
-                    
-                    start_points = []
-                    end_points = []
-                    
-                    for node in G.nodes():
-                        dist_to_start = np.hypot(node[0] - start_point[0], node[1] - start_point[1])
-                        dist_to_end = np.hypot(node[0] - end_point[0], node[1] - end_point[1])
-                        
-                        if dist_to_start < 5:
-                            start_points.append(node)
-                        if dist_to_end < 5:
-                            end_points.append(node)
-                    
-                    for sp in start_points:
-                        for ep in end_points:
-                            dist = np.hypot(sp[0] - ep[0], sp[1] - ep[1])
-                            if dist < 15:
-                                if not G.has_edge(sp, ep):
-                                    G.add_edge(sp, ep, weight=dist, type='u_turn')
-                                    u_turn_count += 1
-                                if not G.has_edge(ep, sp):
-                                    G.add_edge(ep, sp, weight=dist, type='u_turn')
-                                    u_turn_count += 1
-        
+
+        for node_id in u_turn_nodes:
+            if node_id not in osm_nodes:
+                continue
+
+            center = osm_nodes[node_id]
+
+            nearby = []
+            for n in G.nodes():
+                if np.hypot(n[0] - center[0], n[1] - center[1]) < 6.0:
+                    nearby.append(n)
+
+            for i in range(len(nearby)):
+                for j in range(i+1, len(nearby)):
+                    p1 = nearby[i]
+                    p2 = nearby[j]
+
+                    dist = np.hypot(p1[0] - p2[0], p1[1] - p2[1])
+                    if dist < 12.0:
+                        if not G.has_edge(p1, p2):
+                            G.add_edge(p1, p2, weight=dist, type="u_turn")
+                            u_turn_count += 1
+                        if not G.has_edge(p2, p1):
+                            G.add_edge(p2, p1, weight=dist, type="u_turn")
+                            u_turn_count += 1
+
         return u_turn_count
+
 
     # CÁLCULO DE RUTA
     def compute_path(self):
@@ -515,7 +526,7 @@ class OfflineGlobalPlanner(Node):
         direct_distance = np.hypot(goal[0] - start[0], goal[1] - start[1])
         detour_factor = total_distance / direct_distance if direct_distance > 0 else 1
         
-        # Publicar ruta
+        # Publicar rutaf
         self.pub_path.publish(path_msg)
     
     def destroy_node(self):
@@ -525,21 +536,12 @@ class OfflineGlobalPlanner(Node):
 # ======================
 def main():
     rclpy.init()
+    node = OfflineGlobalPlanner()
     
     try:
-        node = OfflineGlobalPlanner()
         rclpy.spin(node)
-    except FileNotFoundError as e:
-        #print(f"\nERROR: {e}")
-        pass
     except KeyboardInterrupt:
-        #print("\nPlanner detenido")
         pass
-    except Exception as e:
-        #print(f"\nError inesperado: {e}")
-        pass
-        import traceback
-        traceback.print_exc()
     finally:
         try:
             node.destroy_node()
