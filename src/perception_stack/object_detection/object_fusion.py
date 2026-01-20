@@ -139,12 +139,6 @@ class ObjectFusionNode(Node):
             10
         )
         
-        self.pub_debug = self.create_publisher(
-            Image,
-            '/objects/debug_image',
-            10
-        )
-        
         # ============ UTILITIES ============
         self.bridge = CvBridge()
         
@@ -544,8 +538,6 @@ class ObjectFusionNode(Node):
             )"""
     
     def destroy_node(self):
-        """Limpieza"""
-        #self.get_logger().info("Apagando nodo de fusión...")
         super().destroy_node()
 
 

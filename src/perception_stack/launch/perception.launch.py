@@ -69,6 +69,18 @@ def generate_launch_description():
             output='screen',
         ),
 
+        
+        # LANE MEMORY
+        Node(
+            package='perception_stack',
+            executable='lane_memory',
+            output='screen',
+        ),
+    ])
+
+
+"""        
+
         # IPM SOLO PARA DEBUG
         Node(
             package='perception_stack',
@@ -83,11 +95,6 @@ def generate_launch_description():
             output='screen',
         ),
 
-
-    ])
-
-
-"""        
         # LANE CENTER TRACKING
         Node(
             package='perception_stack',
@@ -107,6 +114,13 @@ def generate_launch_description():
         Node(
             package='perception_stack',
             executable='tracker_model_ekf',
+            output='screen',
+        ),
+
+        # NODO CORRECCION DE COLOR
+        Node(
+            package='perception_stack',
+            executable='correct_color',
             output='screen',
         ),
     

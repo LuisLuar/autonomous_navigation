@@ -212,7 +212,7 @@ class PerceptionRecorder(Node):
             
             # Subcarpetas organizadas
             (self.current_session_dir / "segmentation").mkdir(exist_ok=True)
-            (self.current_session_dir / "objects").mkdir(exist_ok=True)  # Cambiado
+            (self.current_session_dir / "detections").mkdir(exist_ok=True)  # Cambiado
             (self.current_session_dir / "images").mkdir(exist_ok=True)
             
             if self.save_depth:
@@ -395,8 +395,8 @@ class PerceptionRecorder(Node):
         
         try:
             # Guardar objetos en JSON
-            obj_filename = f"{frame_id}_obj.json"
-            obj_path = self.current_session_dir / "objects" / obj_filename
+            obj_filename = f"{frame_id}_det.json"
+            obj_path = self.current_session_dir / "detections" / obj_filename
             
             objects_data = []
             class_names = []
@@ -790,7 +790,7 @@ class PerceptionRecorder(Node):
             
             # Contar archivos generados
             seg_dir = self.current_session_dir / "segmentation"
-            obj_dir = self.current_session_dir / "objects"  # Cambiado
+            obj_dir = self.current_session_dir / "detections"  # Cambiado
             img_dir = self.current_session_dir / "images"
             depth_dir = self.current_session_dir / "depth" if self.save_depth else None
             depth_vis_dir = self.current_session_dir / "depth_vis" if self.save_depth else None
@@ -813,7 +813,7 @@ class PerceptionRecorder(Node):
                        depth_size_mb + depth_vis_size_mb + csv_size_mb)
             
             # Leer resumen de clases si existe
-            class_summary_path = self.current_session_dir / "object_classes.json"
+            class_summary_path = self.current_session_dir / "detection_classes.json"
             class_stats = ""
             if class_summary_path.exists():
                 try:

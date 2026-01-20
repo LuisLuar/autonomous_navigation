@@ -31,19 +31,26 @@ def generate_launch_description():
             output='screen',    
         ),
 
-        # Lanzar nodo de fusión de velocidades
+        # Lanza nodo de monitor de objetivo alcanzado
         Node(
             package='navigation_system',
-            executable='cmd_vel_fusion',
+            executable='goal_reached',
             output='screen',    
         ),
 
-        # lanza nodeo de extraccion de elementos OSM
+        # Lanza nodo controlador robusto
         Node(
             package='navigation_system',
-            executable='information_osm',
+            executable='robust_controller',
             output='screen',    
-        ),
+        ), 
+
+        # lanzar nodoglobal path map to odom
+        Node(
+            package='navigation_system',
+            executable='global_path_map_to_odom',
+            output='screen',    
+        ),         
         
     ])
 
@@ -90,6 +97,21 @@ def generate_launch_description():
             output='screen',    
         ),
 
+        # Lanzar nodo de fusión de velocidades
+        Node(
+            package='navigation_system',
+            executable='cmd_vel_fusion',
+            output='screen',    
+        ),
+
+        # lanza nodeo de extraccion de elementos OSM
+        Node(
+            package='navigation_system',
+            executable='information_osm',
+            output='screen',    
+        ),    
+
+        
         
 
 """

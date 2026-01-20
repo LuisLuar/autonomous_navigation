@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-CONTROL PREDICTIVO ROBUSTO - VERSIÓN FINAL
-==========================================
+CONTROL PREDICTIVO ROBUSTO - VERSIÓN MEJORADA
+==============================================
 Optimizado para:
 - Carriles irregulares
 - Sombras y cambios de iluminación
 - Control suave y estable
+- Múltiples estrategias de detección
 
 CONVENCIÓN DE SIGNOS:
 - ERROR POSITIVO (+) → Robot debe ALEJARSE del carril → Giro ANTIHORARIO (Z+)
-- ERROR NEGATIVO (-) → Robot debe ACERCARSE al carril → Giro HORARIO (Z-)
+- ERROR NEGATIVO (-) → Robot debe ACERCARSE del carril → Giro HORARIO (Z-)
 """
 
 import rclpy
@@ -33,57 +34,80 @@ class LaneErrorPredictiveRobust(Node):
         self.bridge = CvBridge()
         
         # =================== PARÁMETROS DE HORIZONTES ===================
-        self.declare_parameter('num_horizons', 5)
-        self.declare_parameter('ref_ratio', 0.8)  # Línea de referencia (75% = lado derecho)
+        # Configuración ORIGINAL (EXACTAMENTE como en el código original)
+        self.declare_parameter('num_horizons_1', 5)
+        self.declare_parameter('ref_ratio_1', 0.77)  # IGUAL al original: 0.8
         
-        # Pesos para cada horizonte [cercano → lejano]
-        # Cercano: más importante para reacción inmediata
-        # Lejano: importante para anticipación
-        self.declare_parameter('horizon_weights', [0.001, 0.004, 0.05, 0.006, 0.005])#[0.05, 0.03, 0.015, 0.004, 0.001])
+        # Pesos EXACTAMENTE iguales al original
+        self.declare_parameter('horizon_weights_1', [0.001, 0.002, 0.04, 0.002, 0.001])
         
-        # =================== DETECCIÓN DE CURVAS ===================
+        # Rango vertical EXACTO al original: (0.7 + ratio * 0.2) → entre 70% y 90%
+        self.declare_parameter('y_range_1_start', 0.71)
+        self.declare_parameter('y_range_1_end', 0.77)
+        
+        # Configuración NUEVA (solo lane_mask, prioriza izquierda)
+        self.declare_parameter('num_horizons_2', 5)
+        self.declare_parameter('ref_ratio_2', 0.75)  # Misma ref_ratio que original
+        self.declare_parameter('horizon_weights_2', [0.001, 0.002, 0.04, 0.002, 0.001])
+        
+        # Rango vertical ligeramente diferente para comparación
+        self.declare_parameter('y_range_2_start', 0.75)
+        self.declare_parameter('y_range_2_end', 0.95)
+        
+        # =================== PARÁMETROS COMUNES (iguales al original) ===================
         self.declare_parameter('curve_detection_threshold', 0.15)
         self.declare_parameter('curve_weight_boost', 1.5)
         
-        # =================== ROBUSTEZ A SOMBRAS ===================
-        # Usar múltiples valores de máscara para ser más robusto
-        self.declare_parameter('use_lane_mask', True)      # Valor 2 (carril)
-        self.declare_parameter('use_road_mask', True)      # Valor 1 (carretera)
-        self.declare_parameter('min_confidence_ratio', 0.3)  # Mínimo 30% de puntos buenos
-        
-        # Filtrado de outliers
-        self.declare_parameter('outlier_percentile_low', 5)   # Descartar 10% más bajo
-        self.declare_parameter('outlier_percentile_high', 90)  # Descartar 10% más alto
+        # ROBUSTEZ A SOMBRAS
+        self.declare_parameter('use_lane_mask_1', True)  # Config 1: igual al original
+        self.declare_parameter('use_road_mask_1', True)  # Config 1: igual al original
+        self.declare_parameter('min_confidence_ratio', 0.3)
+        self.declare_parameter('outlier_percentile_low', 5)
+        self.declare_parameter('outlier_percentile_high', 90)
         self.declare_parameter('min_points_per_horizon', 5)
         
-        # =================== FILTRADO TEMPORAL ===================
-        self.declare_parameter('ema_alpha', 0.2)  # Suavizado exponencial
+        # Config 2 específica
+        self.declare_parameter('use_lane_mask_2', True)   # Config 2: solo lane mask
+        self.declare_parameter('use_road_mask_2', False)  # Config 2: NO road mask
+        self.declare_parameter('mask_priority_2', 'leftmost')  # Prioriza puntos izquierda
+        
+        # FILTRADO TEMPORAL
+        self.declare_parameter('ema_alpha', 0.2)
         self.declare_parameter('use_median_filter', True)
         self.declare_parameter('median_window_size', 5)
         
-        # =================== FALLBACK Y VALIDACIÓN ===================
-        self.declare_parameter('fail_count_threshold', 8)  # Más tolerante
+        # FALLBACK Y VALIDACIÓN
+        self.declare_parameter('fail_count_threshold', 8)
         self.declare_parameter('fallback_decay', 0.85)
         self.declare_parameter('min_valid_horizons', 2)
         
-        # =================== PUBLICACIÓN ===================
+        # PUBLICACIÓN
         self.declare_parameter('publish_rate', 20.0)
         self.declare_parameter('show_debug', True)
+        self.declare_parameter('use_config_1', True)  # True: usa Config 1, False: usa Config 2
         
         # =================== ESTADO ===================
         self.mask = None
         self.camera_status = 0
-        self.filtered_error = 0.0
-        self.last_valid_error = 0.0
-        self.fail_count = 0
-        self.is_curve = False
         
-        # Buffer para filtro de mediana
+        # Estados para cada configuración
+        self.filtered_error_1 = 0.0
+        self.filtered_error_2 = 0.0
+        self.last_valid_error_1 = 0.0
+        self.last_valid_error_2 = 0.0
+        self.fail_count_1 = 0
+        self.fail_count_2 = 0
+        self.is_curve_1 = False
+        self.is_curve_2 = False
+        
+        # Buffers para filtro de mediana
         median_size = self.get_parameter('median_window_size').value
-        self.error_buffer = deque(maxlen=median_size)
+        self.error_buffer_1 = deque(maxlen=median_size)
+        self.error_buffer_2 = deque(maxlen=median_size)
         
         # Historial para detección de curvas
-        self.horizon_x_history = deque(maxlen=10)
+        self.horizon_x_history_1 = deque(maxlen=10)
+        self.horizon_x_history_2 = deque(maxlen=10)
         
         # =================== ROS SETUP ===================
         # Suscripciones
@@ -106,9 +130,6 @@ class LaneErrorPredictiveRobust(Node):
             1.0 / self.get_parameter('publish_rate').value,
             self.timer_cb
         )
-        
-        #self.get_logger().info("✅ Lane Error Predictive Robust READY")
-        #self.get_logger().info("📐 CONVENCIÓN: (+) = Alejarse del carril, (-) = Acercarse al carril")
     
     # =================== CALLBACKS ===================
     def cb_camera_status(self, msg: DiagnosticStatus):
@@ -124,45 +145,50 @@ class LaneErrorPredictiveRobust(Node):
                 msg.mask_data, np.uint8
             ).reshape(msg.height, msg.width)
         except Exception as e:
-            #self.get_logger().error(f"Error reshaping mask: {e}")
             self.mask = None
     
-    # =================== EXTRACCIÓN DE PUNTOS ROBUSTA ===================
-    def _extract_horizon_points_robust(self, mask):
+    # =================== EXTRACCIÓN DE PUNTOS ===================
+    def _extract_horizon_points_robust(self, mask, config_num):
         """
-        Extrae puntos en múltiples horizontes con robustez a sombras.
-        
-        ESTRATEGIA:
-        1. Divide la imagen en N horizontes verticales
-        2. En cada horizonte, busca el borde del carril
-        3. Usa TANTO lane mask (2) COMO road mask (1) para robustez
-        4. Filtra outliers usando percentiles
-        5. Valida que haya suficientes puntos
-        
-        Returns:
-            Lista de diccionarios con info de cada horizonte
+        Extrae puntos igual que en el código original para Config 1.
+        Para Config 2, usa lógica simplificada.
+        """
+        if config_num == 1:
+            # CONFIG 1: EXACTAMENTE igual al código original
+            return self._extract_horizon_points_original(mask)
+        else:
+            # CONFIG 2: Nueva lógica simplificada
+            return self._extract_horizon_points_simple(mask, config_num)
+    
+    def _extract_horizon_points_original(self, mask):
+        """
+        EXACTA copia de la función original.
         """
         h, w = mask.shape
-        num_horizons = self.get_parameter('num_horizons').value
+        num_horizons = self.get_parameter('num_horizons_1').value
         
         horizon_data = []
+
+        # OBTENER LOS PARÁMETROS DE RANGO Y
+        y_start = self.get_parameter('y_range_1_start').value
+        y_end = self.get_parameter('y_range_1_end').value
         
         for i in range(num_horizons):
             # Distribución no lineal: más resolución cerca del robot
             # i=0 → bottom (más cercano, más peso)
             # i=N-1 → top (más lejano, menos peso)
             ratio = (num_horizons - i - 1) / num_horizons
-            y_center = int(h * (0.7 + ratio * 0.2))  # (0.4 + ratio * 0.5)) Entre 40% y 90%
+            y_center = int(h * (y_start + ratio * (y_end - y_start)))
             
             # Franja vertical alrededor del horizonte
-            slice_height = h // (num_horizons * 10)#2)
+            slice_height = h // (num_horizons * 15)
             y1 = max(0, y_center - slice_height)
             y2 = min(h, y_center + slice_height)
             
             # SOLO lado derecho (donde está el carril)
             slice_mask = mask[y1:y2, w//2:w]
             
-            # === EXTRACCIÓN ROBUSTA ===
+            # === EXTRACCIÓN ROBUSTA (igual al original) ===
             edge_x, confidence = self._extract_edge_robust(slice_mask, y1, y2)
             
             if edge_x is not None:
@@ -179,19 +205,55 @@ class LaneErrorPredictiveRobust(Node):
         
         return horizon_data
     
+    def _extract_horizon_points_simple(self, mask, config_num):
+        """
+        Nueva lógica para Config 2: solo lane_mask, prioriza izquierda.
+        """
+        h, w = mask.shape
+        num_horizons = self.get_parameter('num_horizons_2').value
+        y_start = self.get_parameter('y_range_2_start').value
+        y_end = self.get_parameter('y_range_2_end').value
+        
+        horizon_data = []
+        
+        for i in range(num_horizons):
+            # Distribución no lineal
+            ratio = (num_horizons - i - 1) / num_horizons
+            y_center = int(h * (y_start + ratio * (y_end - y_start)))
+            
+            # Franja vertical
+            slice_height = h // (num_horizons * 15)
+            y1 = max(0, y_center - slice_height)
+            y2 = min(h, y_center + slice_height)
+            
+            # SOLO lado derecho (igual que original)
+            slice_mask = mask[y1:y2, w//2:w]
+            
+            # Extraer solo lane_mask
+            edge_x, confidence = self._extract_edge_simple(slice_mask, y1, y2)
+            
+            if edge_x is not None:
+                # Ajustar a coordenadas globales
+                global_x = edge_x + w // 2
+                
+                horizon_data.append({
+                    'horizon_idx': i,
+                    'y': y_center,
+                    'x': global_x,
+                    'confidence': confidence,
+                    'slice_bounds': (y1, y2),
+                    'config_num': config_num
+                })
+        
+        return horizon_data
+    
     def _extract_edge_robust(self, slice_mask, y1, y2):
         """
-        Extrae el borde del carril de forma robusta.
-        
-        ESTRATEGIA MEJORADA:
-        1. Compara lane_mask vs road_mask para ver cuál está más a la DERECHA
-        2. Usa la máscara que esté MÁS A LA DERECHA como referencia principal
-        3. Si ambas tienen datos, combina inteligentemente
-        4. Fallback a la otra si la principal falla
+        EXACTA copia de la función original.
         """
         min_points = self.get_parameter('min_points_per_horizon').value
-        use_lane = self.get_parameter('use_lane_mask').value
-        use_road = self.get_parameter('use_road_mask').value
+        use_lane = self.get_parameter('use_lane_mask_1').value
+        use_road = self.get_parameter('use_road_mask_1').value
         
         # Extraer datos de ambas máscaras por separado
         lane_xs, lane_ys = None, None
@@ -218,13 +280,9 @@ class LaneErrorPredictiveRobust(Node):
         if lane_has_enough and road_has_enough:
             # Usamos la que esté MÁS A LA DERECHA
             if lane_rightmost > road_rightmost:
-                # Lane mask está más a la derecha → usar lane
-                #self.get_logger().debug(f"Usando LANE (más a la derecha: {lane_rightmost:.1f} vs {road_rightmost:.1f})")
                 all_ys.extend(lane_ys)
                 all_xs.extend(lane_xs)
             else:
-                # Road mask está más a la derecha → usar road
-                #self.get_logger().debug(f"Usando ROAD (más a la derecha: {road_rightmost:.1f} vs {lane_rightmost:.1f})")
                 all_ys.extend(road_ys)
                 all_xs.extend(road_xs)
         
@@ -232,13 +290,11 @@ class LaneErrorPredictiveRobust(Node):
         elif lane_has_enough:
             all_ys.extend(lane_ys)
             all_xs.extend(lane_xs)
-            #self.get_logger().debug("Usando LANE (única con datos)")
         
         # CASO 3: Solo road tiene datos suficientes
         elif road_has_enough:
             all_ys.extend(road_ys)
             all_xs.extend(road_xs)
-            #self.get_logger().debug("Usando ROAD (única con datos)")
         
         # CASO 4: Ninguna tiene suficientes datos individualmente, pero combinadas sí
         else:
@@ -257,18 +313,14 @@ class LaneErrorPredictiveRobust(Node):
             if len(combined_xs) >= min_points:
                 # Decide cuál usar basado en posición relativa
                 if lane_rightmost > road_rightmost and lane_xs is not None:
-                    # Preferir lane si está más a la derecha
                     all_ys.extend(lane_ys if len(lane_xs) > 0 else combined_ys)
                     all_xs.extend(lane_xs if len(lane_xs) > 0 else combined_xs)
-                    #self.get_logger().debug("Combinado: prefiriendo LANE por posición")
                 elif road_xs is not None:
                     all_ys.extend(road_ys if len(road_xs) > 0 else combined_ys)
                     all_xs.extend(road_xs if len(road_xs) > 0 else combined_xs)
-                    #self.get_logger().debug("Combinado: prefiriendo ROAD")
                 else:
                     all_ys = combined_ys
                     all_xs = combined_xs
-                    #self.get_logger().debug("Combinado: usando ambas")
         
         # Si no hay suficientes puntos, retornar None
         if len(all_xs) < min_points:
@@ -315,23 +367,41 @@ class LaneErrorPredictiveRobust(Node):
         
         return edge_x, confidence
     
-    # =================== DETECCIÓN DE CURVAS ===================
-    def _detect_curve_adaptive(self, horizon_data):
+    def _extract_edge_simple(self, slice_mask, y1, y2):
         """
-        Detecta si estamos en una curva analizando la variación entre horizontes.
+        Extracción simple para Config 2: solo lane_mask, prioriza izquierda.
+        """
+        min_points = self.get_parameter('min_points_per_horizon').value
         
-        MÉTODO:
-        - Compara posiciones X de horizontes cercanos vs lejanos
-        - Si hay mucha diferencia → curva
-        - Si son similares → recta
-        """
+        # Solo lane mask
+        lane_ys, lane_xs = np.where(slice_mask == 2)
+        
+        if len(lane_xs) < min_points:
+            return None, 0.0
+        
+        # Priorizar puntos a la izquierda (percentil bajo)
+        edge_x = int(np.percentile(lane_xs, 15))  # 15% = izquierda
+        
+        # Confianza simple
+        total_pixels = slice_mask.shape[0] * slice_mask.shape[1]
+        point_ratio = len(lane_xs) / total_pixels
+        confidence = min(1.0, point_ratio * 10)
+        
+        return edge_x, confidence
+    
+    # =================== DETECCIÓN DE CURVAS ===================
+    def _detect_curve_adaptive(self, horizon_data, config_num):
+        """EXACTA copia de la función original."""
         if len(horizon_data) < 3:
             return False
         
         x_positions = [h['x'] for h in horizon_data]
         
-        # Guardar historial para análisis temporal
-        self.horizon_x_history.append(x_positions)
+        # Guardar historial
+        if config_num == 1:
+            self.horizon_x_history_1.append(x_positions)
+        else:
+            self.horizon_x_history_2.append(x_positions)
         
         # Calcular variación en X
         x_std = np.std(x_positions)
@@ -350,27 +420,20 @@ class LaneErrorPredictiveRobust(Node):
         return is_curve
     
     # =================== CÁLCULO DE ERROR ===================
-    def _calculate_predictive_error(self, horizon_data, w, is_curve):
+    def _calculate_predictive_error(self, horizon_data, w, is_curve, config_num):
         """
-        Calcula error ponderado considerando múltiples horizontes.
-        
-        LÓGICA DE SIGNOS:
-        - ref_x está a la DERECHA (75% del ancho)
-        - Si el carril detectado está más a la IZQUIERDA que ref_x:
-          → error POSITIVO → robot debe ALEJARSE (girar antihorario)
-        - Si el carril detectado está más a la DERECHA que ref_x:
-          → error NEGATIVO → robot debe ACERCARSE (girar horario)
-        
-        ERROR = (ref_x - detected_x) / normalización
-        
-        Si detected_x < ref_x → error > 0 → alejarse
-        Si detected_x > ref_x → error < 0 → acercarse
+        EXACTA copia de la función original para Config 1.
+        Adaptada para Config 2.
         """
         if not horizon_data:
             return None, []
         
-        ref_x = w * self.get_parameter('ref_ratio').value
-        weights = self.get_parameter('horizon_weights').value
+        if config_num == 1:
+            ref_x = w * self.get_parameter('ref_ratio_1').value
+            weights = self.get_parameter('horizon_weights_1').value
+        else:
+            ref_x = w * self.get_parameter('ref_ratio_2').value
+            weights = self.get_parameter('horizon_weights_2').value
         
         # === AJUSTE ADAPTATIVO EN CURVAS ===
         if is_curve:
@@ -396,7 +459,7 @@ class LaneErrorPredictiveRobust(Node):
         for h_data, weight in zip(horizon_data, weights):
             detected_x = h_data['x']
             
-            # Error normalizado
+            # Error normalizado (IGUAL fórmula para ambas)
             error = (ref_x - detected_x) / (w / 2.0)
             
             # Ponderar por confianza del horizonte
@@ -416,18 +479,21 @@ class LaneErrorPredictiveRobust(Node):
         return float(np.clip(weighted_error, -1.0, 1.0)), errors
     
     # =================== FILTRADO ===================
-    def _apply_filters(self, raw_error):
+    def _apply_filters(self, raw_error, config_num):
         """
-        Aplica filtros temporales para suavizar el error.
-        
-        1. Filtro de mediana móvil (elimina spikes)
-        2. EMA (suavizado exponencial)
+        EXACTA copia de la función original.
         """
         # Filtro de mediana
         if self.get_parameter('use_median_filter').value:
-            self.error_buffer.append(raw_error)
-            if len(self.error_buffer) >= 3:
-                median_error = np.median(list(self.error_buffer))
+            if config_num == 1:
+                self.error_buffer_1.append(raw_error)
+                buffer = self.error_buffer_1
+            else:
+                self.error_buffer_2.append(raw_error)
+                buffer = self.error_buffer_2
+            
+            if len(buffer) >= 3:
+                median_error = np.median(list(buffer))
             else:
                 median_error = raw_error
         else:
@@ -435,55 +501,86 @@ class LaneErrorPredictiveRobust(Node):
         
         # EMA
         alpha = self.get_parameter('ema_alpha').value
-        self.filtered_error = (
-            alpha * median_error + 
-            (1 - alpha) * self.filtered_error
-        )
-        
-        return float(np.clip(self.filtered_error, -1.0, 1.0))
+        if config_num == 1:
+            self.filtered_error_1 = (
+                alpha * median_error + 
+                (1 - alpha) * self.filtered_error_1
+            )
+            return float(np.clip(self.filtered_error_1, -1.0, 1.0))
+        else:
+            self.filtered_error_2 = (
+                alpha * median_error + 
+                (1 - alpha) * self.filtered_error_2
+            )
+            return float(np.clip(self.filtered_error_2, -1.0, 1.0))
     
     # =================== FALLBACK ===================
-    def _get_fallback_error(self):
+    def _get_fallback_error(self, config_num):
         """
-        Lógica de fallback cuando la detección falla temporalmente.
+        EXACTA copia de la función original.
         """
         threshold = self.get_parameter('fail_count_threshold').value
         decay = self.get_parameter('fallback_decay').value
         
-        if self.fail_count < threshold:
-            # Usar último error válido con decaimiento gradual
-            error = self.last_valid_error * decay
+        if config_num == 1:
+            fail_count = self.fail_count_1
+            last_error = self.last_valid_error_1
+        else:
+            fail_count = self.fail_count_2
+            last_error = self.last_valid_error_2
+        
+        if fail_count < threshold:
+            error = last_error * decay
             return error, True
         else:
-            # Demasiados fallos → detener
             return 0.0, False
     
     # =================== VISUALIZACIÓN ===================
-    def _create_debug_image(self, mask, horizon_data, error, valid, is_curve, raw_errors):
+    def _create_debug_image(self, mask, horizon_data_1, horizon_data_2, 
+                           error_1, error_2, valid_1, valid_2, 
+                           is_curve_1, is_curve_2, raw_errors_1, raw_errors_2):
         """
-        Crea imagen de debug con toda la información visual.
+        Crea imagen de debug con ambas configuraciones.
         """
         h, w = mask.shape
         
-        # Crear imagen base (máscara coloreada)
+        # Crear imagen base (IGUAL al original)
         img = np.full((h, w, 3), 225, dtype=np.uint8)
         
-        # Colorear máscara de segmentación
+        # Colorear máscara de segmentación (IGUAL)
         lane_pixels = (mask == 2)
         road_pixels = (mask == 1)
         img[lane_pixels] = [0, 100, 200]  # Naranja oscuro = carril
         img[road_pixels] = [50, 50, 50]   # Gris = carretera
         
-        # === DIBUJAR HORIZONTES ===
+        # Colores para cada configuración
+        color_1 = (0, 255, 255)    # Amarillo - Config 1 (igual al original)
+        color_2 = (255, 0, 255)    # Magenta - Config 2
+        
+        # === LÍNEAS DE REFERENCIA PARA AMBAS CONFIGURACIONES ===
+        ref_x_1 = int(w * self.get_parameter('ref_ratio_1').value)
+        ref_x_2 = int(w * self.get_parameter('ref_ratio_2').value)
+        
+        # Línea de referencia Config 1 (azul como en el original)
+        cv2.line(img, (ref_x_1, 0), (ref_x_1, h), (255, 0, 0), 2)
+        cv2.putText(img, "REF_C1", (ref_x_1 + 5, 20),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        
+        # Línea de referencia Config 2 (magenta)
+        cv2.line(img, (ref_x_2, 0), (ref_x_2, h), color_2, 2)
+        cv2.putText(img, "REF_C2", (ref_x_2 + 5, 45),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_2, 2)
+        
+        # === DIBUJAR HORIZONTES CONFIG 1 (igual al original) ===
         colors = [
-            (0, 255, 255),    # Cian (cercano) - MÁS IMPORTANTE
+            (0, 255, 255),    # Cian (cercano)
             (0, 255, 128),    # Verde-amarillo
             (0, 255, 0),      # Verde
             (128, 255, 0),    # Verde-azul
             (255, 128, 0)     # Azul (lejano)
         ]
         
-        for h_data in horizon_data:
+        for h_data in horizon_data_1:
             idx = h_data['horizon_idx']
             color = colors[min(idx, len(colors)-1)]
             confidence = h_data.get('confidence', 1.0)
@@ -493,77 +590,114 @@ class LaneErrorPredictiveRobust(Node):
             alpha = int(80 * confidence)
             cv2.line(img, (w//2, y), (w, y), (alpha, alpha, alpha), 1)
             
-            # Punto detectado (más grande = más confianza)
+            # Punto detectado (IGUAL al original)
             radius = int(4 + confidence * 4)
             cv2.circle(img, (h_data['x'], y), radius, color, -1)
             cv2.circle(img, (h_data['x'], y), radius+2, (255, 255, 255), 1)
             
             # Label
             text = f"H{idx}"
-            if len(raw_errors) > idx:
-                text += f" ({raw_errors[idx]:+.2f})"
+            if len(raw_errors_1) > idx:
+                text += f" ({raw_errors_1[idx]:+.2f})"
             cv2.putText(img, text, (h_data['x'] + 10, y - 5),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, color, 1)
         
-        # === LÍNEA DE REFERENCIA ===
-        ref_x = int(w * self.get_parameter('ref_ratio').value)
-        cv2.line(img, (ref_x, 0), (ref_x, h), (255, 0, 0), 2)
-        cv2.putText(img, "REF", (ref_x + 5, 20),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        # === DIBUJAR HORIZONTES CONFIG 2 ===
+        for h_data in horizon_data_2:
+            idx = h_data['horizon_idx']
+            y = h_data['y']
+            confidence = h_data.get('confidence', 1.0)
+            
+            # Punto detectado Config 2 (diferente marcador)
+            radius = int(4 + confidence * 4)
+            x, y_pt = h_data['x'], h_data['y']
+            
+            # Dibujar como X
+            cv2.line(img, (x-radius, y_pt-radius), (x+radius, y_pt+radius), color_2, 2)
+            cv2.line(img, (x-radius, y_pt+radius), (x+radius, y_pt-radius), color_2, 2)
+            
+            # Label
+            text = f"C2-H{idx}"
+            if len(raw_errors_2) > idx:
+                text += f" ({raw_errors_2[idx]:+.2f})"
+            cv2.putText(img, text, (x + 10, y_pt - 5),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.35, color_2, 1)
         
-        # === BARRA DE ERROR ===
+        # === BARRA DE ERROR CONFIG 1 (igual al original) ===
         center_x = w // 2
-        bar_x = int(center_x + error * w / 4)
+        bar_x_1 = int(center_x + error_1 * w / 4)
         
         # Centro
         cv2.rectangle(img, (center_x - 2, h-20), (center_x + 2, h), (255,255,255), -1)
         
         # Barra coloreada según magnitud
-        if abs(error) < 0.2:
+        if abs(error_1) < 0.2:
             bar_color = (0, 255, 0)  # Verde: OK
-        elif abs(error) < 0.5:
+        elif abs(error_1) < 0.5:
             bar_color = (0, 200, 255)  # Naranja: Moderado
         else:
             bar_color = (0, 0, 255)  # Rojo: Grande
         
-        cv2.rectangle(img, (bar_x - 5, h-35), (bar_x + 5, h-10), bar_color, -1)
+        cv2.rectangle(img, (bar_x_1 - 5, h-35), (bar_x_1 + 5, h-10), bar_color, -1)
         
         # Flecha indicando dirección de corrección
-        if error > 0.05:  # Alejarse (antihorario)
-            cv2.arrowedLine(img, (bar_x, h-45), (bar_x + 15, h-45), (255, 255, 0), 2)
-            dir_text = "ALEJARSE"
-        elif error < -0.05:  # Acercarse (horario)
-            cv2.arrowedLine(img, (bar_x, h-45), (bar_x - 15, h-45), (255, 255, 0), 2)
-            dir_text = "ACERCARSE"
+        if error_1 > 0.05:  # Alejarse (antihorario)
+            cv2.arrowedLine(img, (bar_x_1, h-45), (bar_x_1 + 15, h-45), (255, 255, 0), 2)
+            dir_text_1 = "ALEJARSE"
+        elif error_1 < -0.05:  # Acercarse (horario)
+            cv2.arrowedLine(img, (bar_x_1, h-45), (bar_x_1 - 15, h-45), (255, 255, 0), 2)
+            dir_text_1 = "ACERCARSE"
         else:
-            dir_text = "OK"
+            dir_text_1 = "OK"
         
-        # === INFORMACIÓN TEXTUAL ===
-        y_text = 30
-        spacing = 30
+        # === INFORMACIÓN TEXTUAL MEJORADA ===
+        y_text = 70  # Aumentado para que no se superponga con REF_C2
+        spacing = 25
         
-        # Error
-        error_color = (0,255,0) if abs(error) < 0.3 else (0,200,255) if abs(error) < 0.6 else (0,0,255)
-        cv2.putText(img, f"Error: {error:+.3f} ({dir_text})", (20, y_text),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, error_color, 2)
+        # Error Config 1
+        error_color_1 = (0,255,0) if abs(error_1) < 0.3 else (0,200,255) if abs(error_1) < 0.6 else (0,0,255)
+        use_config_1 = self.get_parameter('use_config_1').value
+        
+        active_text = " (ACTIVE)" if use_config_1 else ""
+        cv2.putText(img, f"Config 1 [ORIGINAL]: {error_1:+.3f} {dir_text_1}{active_text}", 
+                   (20, y_text), cv2.FONT_HERSHEY_SIMPLEX, 0.6, error_color_1, 2)
         y_text += spacing
         
-        # Estado
-        status_color = (0,255,0) if valid else (0,0,255)
-        cv2.putText(img, f"Valid: {valid} | Points: {len(horizon_data)}", (20, y_text),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2)
+        # Error Config 2
+        error_color_2 = (0,255,0) if abs(error_2) < 0.3 else (0,200,255) if abs(error_2) < 0.6 else (0,0,255)
+        active_text = " (ACTIVE)" if not use_config_1 else ""
+        
+        if error_2 > 0.05:
+            dir_text_2 = "ALEJARSE"
+        elif error_2 < -0.05:
+            dir_text_2 = "ACERCARSE"
+        else:
+            dir_text_2 = "OK"
+            
+        cv2.putText(img, f"Config 2 [NEW]: {error_2:+.3f} {dir_text_2}{active_text}", 
+                   (20, y_text), cv2.FONT_HERSHEY_SIMPLEX, 0.6, error_color_2, 2)
         y_text += spacing
         
-        # Curva
-        curve_color = (255, 200, 0) if is_curve else (100,100,100)
-        cv2.putText(img, f"Curve: {'YES' if is_curve else 'NO'}", (20, y_text),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, curve_color, 2)
+        # Valid status
+        cv2.putText(img, f"Valid: C1={valid_1} | C2={valid_2}", (20, y_text),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 200, 0), 2)
+        y_text += spacing
+        
+        # Curves
+        cv2.putText(img, f"Curve: C1={'YES' if is_curve_1 else 'NO'} | C2={'YES' if is_curve_2 else 'NO'}", 
+                   (20, y_text), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 200, 0), 2)
+        y_text += spacing
+        
+        # Points
+        cv2.putText(img, f"Points: C1={len(horizon_data_1)} | C2={len(horizon_data_2)}", 
+                   (20, y_text), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 255), 2)
         y_text += spacing
         
         # Fallos
-        if self.fail_count > 0:
-            cv2.putText(img, f"Fails: {self.fail_count}", (20, y_text),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,165,255), 2)
+        if self.fail_count_1 > 0 or self.fail_count_2 > 0:
+            cv2.putText(img, f"Fails: C1={self.fail_count_1} | C2={self.fail_count_2}", 
+                       (20, y_text), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,165,255), 2)
+            y_text += spacing
         
         # === LEYENDA ===
         legend_y = h - 60
@@ -587,56 +721,103 @@ class LaneErrorPredictiveRobust(Node):
     # =================== MAIN LOOP ===================
     def timer_cb(self):
         """Loop principal."""
-        
-        # Validaciones
-        self.get_logger
         if self.mask is None or self.camera_status == 2:
             self._publish_invalid()
             return
         
         h, w = self.mask.shape
         
-        # 1. Extraer puntos en horizontes (ROBUSTO)
-        horizon_data = self._extract_horizon_points_robust(self.mask)
-        
-        # 2. Detectar curva
-        self.is_curve = self._detect_curve_adaptive(horizon_data)
-        
-        valid = False
-        error = 0.0
-        raw_errors = []
+        # Procesar Config 1 (ORIGINAL - EXACTAMENTE igual)
+        horizon_data_1 = self._extract_horizon_points_original(self.mask)
+        self.is_curve_1 = self._detect_curve_adaptive(horizon_data_1, 1)
         
         min_horizons = self.get_parameter('min_valid_horizons').value
+        valid_1 = False
+        error_1 = 0.0
+        raw_errors_1 = []
         
-        if len(horizon_data) >= min_horizons:
-            # 3. Calcular error predictivo
-            raw_error, raw_errors = self._calculate_predictive_error(
-                horizon_data, w, self.is_curve
+        if len(horizon_data_1) >= min_horizons:
+            raw_error_1, raw_errors_1 = self._calculate_predictive_error(
+                horizon_data_1, w, self.is_curve_1, 1
             )
             
-            if raw_error is not None:
-                # 4. Aplicar filtros
-                error = self._apply_filters(raw_error)
-                valid = True
-                
-                self.last_valid_error = error
-                self.fail_count = 0
+            if raw_error_1 is not None:
+                error_1 = self._apply_filters(raw_error_1, 1)
+                valid_1 = True
+                self.last_valid_error_1 = error_1
+                self.fail_count_1 = 0
         else:
-            # Fallback
-            self.fail_count += 1
-            error, valid = self._get_fallback_error()
+            self.fail_count_1 += 1
+            error_1, valid_1 = self._get_fallback_error(1)
         
-        # 5. Visualizar
+        # Procesar Config 2 (NUEVA)
+        horizon_data_2 = self._extract_horizon_points_simple(self.mask, 2)
+        self.is_curve_2 = self._detect_curve_adaptive(horizon_data_2, 2)
+        
+        valid_2 = False
+        error_2 = 0.0
+        raw_errors_2 = []
+        
+        if len(horizon_data_2) >= min_horizons:
+            raw_error_2, raw_errors_2 = self._calculate_predictive_error(
+                horizon_data_2, w, self.is_curve_2, 2
+            )
+            
+            if raw_error_2 is not None:
+                error_2 = self._apply_filters(raw_error_2, 2)
+                valid_2 = True
+                self.last_valid_error_2 = error_2
+                self.fail_count_2 = 0
+        else:
+            self.fail_count_2 += 1
+            error_2, valid_2 = self._get_fallback_error(2)
+        
+        # Decidir qué error publicar
+        use_config_1 = self.get_parameter('use_config_1').value
+
+        if valid_1 and valid_2:
+            # Ambas válidas → elegir menor magnitud
+            min_error = min(abs(error_1), abs(error_2))  
+            if min_error == abs(error_1):
+                final_error = error_1
+                final_valid = valid_1
+            else:
+                final_error = error_2
+                final_valid = valid_2
+        elif valid_1:
+            # Solo Config 1 válida
+            final_error = error_1
+            final_valid = valid_1
+        elif valid_2:
+            # Solo Config 2 válida
+            final_error = error_2
+            final_valid = valid_2
+        else:
+            # Ninguna válida
+            final_error = 0.0
+            final_valid = False
+                
+        """if use_config_1:
+            final_error = error_1
+            final_valid = valid_1
+        else:
+            final_error = error_2
+            final_valid = valid_2"""
+        
+        # Crear imagen de debug
         debug_img = self._create_debug_image(
-            self.mask, horizon_data, error, valid, self.is_curve, raw_errors
+            self.mask, horizon_data_1, horizon_data_2,
+            error_1, error_2, valid_1, valid_2,
+            self.is_curve_1, self.is_curve_2,
+            raw_errors_1, raw_errors_2
         )
         
-        # 6. Publicar
-        self._publish_results(error, valid, debug_img)
+        # Publicar
+        self._publish_results(final_error, final_valid, debug_img)
         
-        # 7. Debug window (opcional)
+        # Debug window
         if self.get_parameter('show_debug').value:
-            cv2.imshow("Lane Error Predictive Robust", debug_img)
+            cv2.imshow("Lane Error - 2 Configurations", debug_img)
             cv2.waitKey(1)
     
     # =================== UTILITIES ===================
@@ -648,7 +829,7 @@ class LaneErrorPredictiveRobust(Node):
         try:
             return int(level)
         except:
-            return 2  # Error por defecto
+            return 2
     
     def destroy_node(self):
         """Cleanup."""
@@ -668,7 +849,7 @@ def main():
             node.destroy_node()
             rclpy.shutdown()
         except Exception as e:
-            print(f"Shutdown error: {e}")
+            pass
 
 
 if __name__ == '__main__':

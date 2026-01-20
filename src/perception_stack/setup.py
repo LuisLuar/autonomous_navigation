@@ -46,6 +46,8 @@ setup(
             'lane_modeling = semantic_segmentation.lane_modeling:main',
             'ipm_lane_detection = semantic_segmentation.ipm_lane_detection:main',
             'unified_manual = semantic_segmentation.unified_manual:main',
+            'lane_memory = semantic_segmentation.lane_memory:main',
+            'correct_color = perception_stack.correct_color:main',
         ],
     },
 )

@@ -16,7 +16,7 @@ class DualImagePublisher(Node):
         super().__init__('dual_image_publisher')
         
         # ===== PARÁMETROS HARCODEADOS (ajusta según necesites) =====
-        self.folder_path = "/home/raynel/autonomous_navigation/src/saves/data_logs/ruta36_20260115_155930/perception"
+        self.folder_path = "/home/raynel/autonomous_navigation/src/saves/data_logs/ruta1_20260120_093624/perception"
         self.current_idx = 0
         self.frame_rate = 20.0  # Hz
         self.auto_advance = False  # Avanzar automáticamente?
@@ -33,62 +33,72 @@ class DualImagePublisher(Node):
             print(f"❌ ERROR: Carpeta RGB no existe: {self.rgb_folder}")
             sys.exit(1)
         
-        if not os.path.exists(self.depth_folder):
-            print(f"❌ ERROR: Carpeta Depth no existe: {self.depth_folder}")
-            sys.exit(1)
+        self.has_depth = os.path.exists(self.depth_folder)
         
         # Cargar imágenes RGB
         self.rgb_images = []
         for ext in ['*.jpg', '*.jpeg', '*.png', '*.bmp']:
             self.rgb_images.extend(glob.glob(os.path.join(self.rgb_folder, ext)))
         
-        # Cargar imágenes de profundidad
+        # Cargar imágenes de profundidad (si existen)
         self.depth_images = []
-        for ext in ['*.png', '*.tiff', '*.tif']:  # Las imágenes de profundidad suelen ser PNG
-            self.depth_images.extend(glob.glob(os.path.join(self.depth_folder, ext)))
+        self.num_images = len(self.rgb_images)
         
-        # Ordenar por nombre
-        def extract_number(filename):
-            import re
-            nums = re.findall(r'\d+', os.path.basename(filename))
-            return int(nums[0]) if nums else 0
+        if self.has_depth:
+            for ext in ['*.png', '*.tiff', '*.tif', '*.exr']:  # Agregado .exr para profundidad
+                self.depth_images.extend(glob.glob(os.path.join(self.depth_folder, ext)))
+            
+            # Ordenar por nombre
+            def extract_number(filename):
+                import re
+                nums = re.findall(r'\d+', os.path.basename(filename))
+                return int(nums[0]) if nums else 0
+            
+            self.rgb_images.sort(key=lambda x: extract_number(x))
+            self.depth_images.sort(key=lambda x: extract_number(x))
+            
+            if len(self.depth_images) == 0:
+                print("⚠️  ADVERTENCIA: Carpeta depth existe pero no contiene imágenes válidas")
+                self.has_depth = False
+            else:
+                print(f"✅ Imágenes Depth encontradas: {len(self.depth_images)}")
+                
+                if len(self.rgb_images) != len(self.depth_images):
+                    print(f"⚠️  ADVERTENCIA: Número diferente de imágenes RGB ({len(self.rgb_images)}) vs Depth ({len(self.depth_images)})")
+                    print("  Se ajustará al mínimo común")
+                    self.num_images = min(len(self.rgb_images), len(self.depth_images))
+        else:
+            print("⚠️  ADVERTENCIA: No se encontró carpeta depth")
+            print("  Solo se publicarán imágenes RGB")
         
-        self.rgb_images.sort(key=lambda x: extract_number(x))
-        self.depth_images.sort(key=lambda x: extract_number(x))
-        
-        # Verificar que tenemos el mismo número de imágenes en ambas carpetas
+        # Verificar que tenemos imágenes RGB
         if len(self.rgb_images) == 0:
             print("❌ ERROR: No se encontraron imágenes RGB")
             sys.exit(1)
         
-        if len(self.depth_images) == 0:
-            print("❌ ERROR: No se encontraron imágenes de profundidad")
-            sys.exit(1)
-        
         print(f"📁 Carpeta base: {self.folder_path}")
         print(f"✅ Imágenes RGB encontradas: {len(self.rgb_images)}")
-        print(f"✅ Imágenes Depth encontradas: {len(self.depth_images)}")
-        
-        if len(self.rgb_images) != len(self.depth_images):
-            print(f"⚠️  ADVERTENCIA: Número diferente de imágenes RGB ({len(self.rgb_images)}) vs Depth ({len(self.depth_images)})")
-            print("  Se ajustará al mínimo común")
-            self.num_images = min(len(self.rgb_images), len(self.depth_images))
-        else:
-            self.num_images = len(self.rgb_images)
+        print(f"✅ Modo con profundidad: {'SI' if self.has_depth else 'NO'}")
         
         # Inicializar
         self.bridge = CvBridge()
         
-        # Publicadores para RGB
+        # Publicadores para RGB (SIEMPRE se crean)
         self.rgb_image_pub = self.create_publisher(Image, '/camera/rgb/image_raw', 10)
         self.rgb_info_pub = self.create_publisher(CameraInfo, '/camera/rgb/camera_info', 10)
         
-        # Publicadores para Depth
-        self.depth_image_pub = self.create_publisher(Image, '/camera/depth/image_raw', 10)
-        self.depth_info_pub = self.create_publisher(CameraInfo, '/camera/depth/camera_info', 10)
+        # Publicadores para Depth (solo si hay imágenes de profundidad)
+        self.depth_image_pub = None
+        self.depth_info_pub = None
+        self.pointcloud_pub = None
         
-        # Publicador para Point Cloud (nube de puntos)
-        self.pointcloud_pub = self.create_publisher(PointCloud2, '/camera/depth_registered/points', 10)
+        if self.has_depth:
+            self.depth_image_pub = self.create_publisher(Image, '/camera/depth/image_raw', 10)
+            self.depth_info_pub = self.create_publisher(CameraInfo, '/camera/depth/camera_info', 10)
+            self.pointcloud_pub = self.create_publisher(PointCloud2, '/camera/depth_registered/points', 10)
+            print("✅ Publicadores de profundidad y point cloud creados")
+        else:
+            print("ℹ️  Solo se crearán publicadores para imágenes RGB")
         
         # Camera info para RGB (tus parámetros originales)
         self.rgb_camera_info = CameraInfo()
@@ -101,22 +111,24 @@ class DualImagePublisher(Node):
         self.rgb_camera_info.height = 480
         self.rgb_camera_info.width = 640
         
-        # Camera info para Depth (ajusta según tu cámara de profundidad)
-        self.depth_camera_info = CameraInfo()
-        self.depth_camera_info.header.frame_id = "camera_depth_optical_frame"
-        # Parámetros típicos para cámaras de profundidad
-        fx_d, fy_d, cx_d, cy_d = 525.0, 525.0, 319.5, 239.5
-        self.depth_camera_info.k = [fx_d, 0.0, cx_d, 0.0, fy_d, cy_d, 0.0, 0.0, 1.0]
-        self.depth_camera_info.p = [fx_d, 0.0, cx_d, 0.0, 0.0, fy_d, cy_d, 0.0, 0.0, 0.0, 1.0, 0.0]
-        self.depth_camera_info.d = [0.0, 0.0, 0.0, 0.0, 0.0]
-        self.depth_camera_info.distortion_model = "plumb_bob"
-        self.depth_camera_info.height = 480
-        self.depth_camera_info.width = 640
+        # Camera info para Depth (solo si hay profundidad)
+        self.depth_camera_info = None
+        if self.has_depth:
+            self.depth_camera_info = CameraInfo()
+            self.depth_camera_info.header.frame_id = "camera_depth_optical_frame"
+            # Parámetros típicos para cámaras de profundidad
+            fx_d, fy_d, cx_d, cy_d = 525.0, 525.0, 319.5, 239.5
+            self.depth_camera_info.k = [fx_d, 0.0, cx_d, 0.0, fy_d, cy_d, 0.0, 0.0, 1.0]
+            self.depth_camera_info.p = [fx_d, 0.0, cx_d, 0.0, 0.0, fy_d, cy_d, 0.0, 0.0, 0.0, 1.0, 0.0]
+            self.depth_camera_info.d = [0.0, 0.0, 0.0, 0.0, 0.0]
+            self.depth_camera_info.distortion_model = "plumb_bob"
+            self.depth_camera_info.height = 480
+            self.depth_camera_info.width = 640
         
-        # Parámetros para generación de nube de puntos
-        self.downsample_factor = 2  # Factor de submuestreo para reducir el número de puntos
-        self.min_depth = 0.3  # metros
-        self.max_depth = 10.0  # metros
+        # Parámetros para generación de nube de puntos (solo si hay profundidad)
+        self.downsample_factor = 2 if self.has_depth else 1
+        self.min_depth = 0.3 if self.has_depth else 0.0
+        self.max_depth = 10.0 if self.has_depth else 0.0
         
         # Timer para publicación
         timer_period = 1.0 / self.frame_rate
@@ -134,7 +146,9 @@ class DualImagePublisher(Node):
         print("  ← (flecha izquierda) o 'a': Imagen anterior")
         print("  SPACE: Pausa/continuar auto-avance")
         print("  r: Reiniciar desde imagen 0")
-        print("  p: Activar/desactivar publicación de nube de puntos")
+        if self.has_depth:
+            print("  p: Activar/desactivar publicación de nube de puntos")
+            print("  +/-: Aumentar/disminuir rango de profundidad")
         print("  f/s: Aumentar/disminuir frame rate")
         print("  q o ESC: Salir")
         print("-" * 50)
@@ -145,9 +159,8 @@ class DualImagePublisher(Node):
             self.current_idx = 0
         
         try:
-            # Obtener rutas de las imágenes
+            # Obtener ruta de imagen RGB (SIEMPRE existe)
             rgb_path = self.rgb_images[self.current_idx]
-            depth_path = self.depth_images[self.current_idx]
             
             # Leer imagen RGB
             rgb_img = cv2.imread(rgb_path)
@@ -155,26 +168,10 @@ class DualImagePublisher(Node):
                 self.get_logger().warn(f"No se pudo leer RGB: {rgb_path}")
                 return
             
-            # Leer imagen de profundidad
-            # Las imágenes de profundidad suelen ser PNG de 16-bit (uint16)
-            depth_img = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
-            if depth_img is None:
-                self.get_logger().warn(f"No se pudo leer Depth: {depth_path}")
-                return
-            
-            # Verificar que depth_img es uint16 (16-bit)
-            if depth_img.dtype != np.uint16:
-                print(f"⚠️  Imagen de profundidad no es 16-bit: {depth_path}")
-                # Convertir si es necesario
-                if depth_img.dtype == np.uint8:
-                    depth_img = depth_img.astype(np.uint16) * 256
-                elif depth_img.dtype == np.float32:
-                    depth_img = (depth_img * 1000).astype(np.uint16)  # metros a mm
-            
             # Crear timestamp actual
             current_time = self.get_clock().now().to_msg()
             
-            # PUBLICAR IMAGEN RGB
+            # PUBLICAR IMAGEN RGB (SIEMPRE se publica)
             ros_rgb_img = self.bridge.cv2_to_imgmsg(rgb_img, "bgr8")
             ros_rgb_img.header.stamp = current_time
             ros_rgb_img.header.frame_id = "camera_rgb_optical_frame"
@@ -184,26 +181,46 @@ class DualImagePublisher(Node):
             self.rgb_camera_info.header.stamp = current_time
             self.rgb_info_pub.publish(self.rgb_camera_info)
             
-            # PUBLICAR IMAGEN DE PROFUNDIDAD
-            # Para profundidad usamos encoding '16UC1' (16-bit unsigned, 1 channel)
-            ros_depth_img = self.bridge.cv2_to_imgmsg(depth_img, "16UC1")
-            ros_depth_img.header.stamp = current_time
-            ros_depth_img.header.frame_id = "camera_depth_optical_frame"
-            self.depth_image_pub.publish(ros_depth_img)
-            
-            # Publicar camera info Depth
-            self.depth_camera_info.header.stamp = current_time
-            self.depth_info_pub.publish(self.depth_camera_info)
-            
-            # PUBLICAR NUBE DE PUNTOS
-            # Generar nube de puntos a partir de la imagen de profundidad
-            pointcloud_msg = self.depth_to_pointcloud(depth_img, rgb_img, current_time)
-            if pointcloud_msg is not None:
-                self.pointcloud_pub.publish(pointcloud_msg)
-                print(f"📊 Publicada nube de puntos con {pointcloud_msg.width} puntos", end='\r')
+            # Manejar imagen de profundidad (solo si existe)
+            depth_img = None
+            if self.has_depth and self.current_idx < len(self.depth_images):
+                depth_path = self.depth_images[self.current_idx]
+                
+                # Leer imagen de profundidad
+                depth_img = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
+                if depth_img is not None:
+                    # Verificar que depth_img es uint16 (16-bit)
+                    if depth_img.dtype != np.uint16:
+                        print(f"⚠️  Imagen de profundidad no es 16-bit: {depth_path}")
+                        # Convertir si es necesario
+                        if depth_img.dtype == np.uint8:
+                            depth_img = depth_img.astype(np.uint16) * 256
+                        elif depth_img.dtype == np.float32:
+                            depth_img = (depth_img * 1000).astype(np.uint16)  # metros a mm
+                        elif depth_img.dtype == np.float64:
+                            depth_img = (depth_img * 1000).astype(np.uint16)  # metros a mm
+                    
+                    # PUBLICAR IMAGEN DE PROFUNDIDAD
+                    # Para profundidad usamos encoding '16UC1' (16-bit unsigned, 1 channel)
+                    ros_depth_img = self.bridge.cv2_to_imgmsg(depth_img, "16UC1")
+                    ros_depth_img.header.stamp = current_time
+                    ros_depth_img.header.frame_id = "camera_depth_optical_frame"
+                    self.depth_image_pub.publish(ros_depth_img)
+                    
+                    # Publicar camera info Depth
+                    self.depth_camera_info.header.stamp = current_time
+                    self.depth_info_pub.publish(self.depth_camera_info)
+                    
+                    # PUBLICAR NUBE DE PUNTOS (si hay profundidad)
+                    pointcloud_msg = self.depth_to_pointcloud(depth_img, rgb_img, current_time)
+                    if pointcloud_msg is not None and self.pointcloud_pub:
+                        self.pointcloud_pub.publish(pointcloud_msg)
+                        print(f"📊 Publicada nube de puntos con {pointcloud_msg.width} puntos", end='\r')
+                else:
+                    self.get_logger().warn(f"No se pudo leer Depth: {depth_path}")
             
             # Mostrar en ventana (con información)
-            self.display_images(rgb_img, depth_img, rgb_path, depth_path)
+            self.display_images(rgb_img, depth_img, rgb_path, self.current_idx)
             
             # Manejar teclas (desde la ventana OpenCV)
             key = cv2.waitKey(30) & 0xFF  # 30ms timeout
@@ -220,12 +237,17 @@ class DualImagePublisher(Node):
         
         except Exception as e:
             self.get_logger().error(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
     
     def depth_to_pointcloud(self, depth_img, rgb_img, timestamp):
         """
         Convierte imagen de profundidad a nube de puntos PointCloud2
-        Usa parámetros intrínsecos de la cámara de profundidad
+        Solo se llama si hay imágenes de profundidad
         """
+        if depth_img is None:
+            return None
+            
         try:
             # Obtener dimensiones
             height, width = depth_img.shape
@@ -261,8 +283,6 @@ class DualImagePublisher(Node):
             cy = self.depth_camera_info.k[5]
             
             # Proyectar a coordenadas 3D
-            # Fórmula: X = (u - cx) * Z / fx
-            #           Y = (v - cy) * Z / fy
             x_valid = (u_valid - cx) * z_valid / fx
             y_valid = (v_valid - cy) * z_valid / fy
             
@@ -325,7 +345,7 @@ class DualImagePublisher(Node):
                 else:
                     r, g, b = 255, 255, 255
                 
-                # Pack RGB en float32 (formato estándar en ROS)
+                # Pack RGB en float32
                 rgb_packed = struct.unpack('f', struct.pack('I', 
                     (r << 16) | (g << 8) | b))[0]
                 
@@ -339,35 +359,57 @@ class DualImagePublisher(Node):
             self.get_logger().error(f"Error generando nube de puntos: {e}")
             return None
     
-    def display_images(self, rgb_img, depth_img, rgb_path, depth_path):
+    def display_images(self, rgb_img, depth_img, rgb_path, current_idx):
         """Muestra las imágenes en ventanas separadas o combinadas"""
         # Redimensionar para visualización
         display_rgb = cv2.resize(rgb_img, (640, 480))
-        display_depth = cv2.resize(depth_img, (640, 480))
         
-        # Crear visualización de profundidad en color
-        depth_vis = self.create_depth_visualization(depth_img)
-        depth_vis_resized = cv2.resize(depth_vis, (640, 480))
-        
-        # Obtener nombres de archivo
+        # Obtener nombre de archivo
         rgb_filename = os.path.basename(rgb_path)
-        depth_filename = os.path.basename(depth_path)
         
         # Añadir texto informativo a RGB
-        cv2.putText(display_rgb, f"RGB: {self.current_idx+1}/{self.num_images}", 
+        cv2.putText(display_rgb, f"RGB: {current_idx+1}/{self.num_images}", 
                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         cv2.putText(display_rgb, f"Archivo: {rgb_filename}", 
                    (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1)
         cv2.putText(display_rgb, f"FPS: {self.frame_rate:.1f} | Auto: {'ON' if self.auto_advance else 'OFF'}", 
                    (10, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
-        cv2.putText(display_rgb, "Flechas: navegar | SPACE: auto | p: pointcloud | q: salir", 
-                   (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        cv2.putText(display_rgb, f"Depth: {'HABILITADO' if self.has_depth else 'NO DISPONIBLE'}", 
+                   (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 
+                   (0, 255, 0) if self.has_depth else (0, 0, 255), 1)
+        cv2.putText(display_rgb, "Flechas: navegar | SPACE: auto | q: salir", 
+                   (10, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
         
-        # Añadir texto informativo a Depth
-        cv2.putText(depth_vis_resized, f"DEPTH: {self.current_idx+1}/{self.num_images}", 
-                   (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-        cv2.putText(depth_vis_resized, f"Archivo: {depth_filename}", 
-                   (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1)
+        # Mostrar ventana RGB (siempre)
+        cv2.imshow("RGB Image (Topic: /camera/rgb/image_raw)", display_rgb)
+        
+        # Mostrar ventana de profundidad solo si existe
+        if depth_img is not None and self.has_depth:
+            depth_vis_resized = self.create_depth_display(depth_img, current_idx)
+            cv2.imshow("Depth Image (Topic: /camera/depth/image_raw)", depth_vis_resized)
+        elif self.has_depth:
+            # Crear ventana negra si hay profundidad pero no se pudo cargar la imagen
+            black_img = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(black_img, "Depth no disponible", 
+                       (150, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
+            cv2.imshow("Depth Image (Topic: /camera/depth/image_raw)", black_img)
+    
+    def create_depth_display(self, depth_img, current_idx):
+        """Crea una visualización en color del mapa de profundidad"""
+        # Redimensionar
+        depth_vis_resized = cv2.resize(depth_img, (640, 480))
+        
+        # Crear visualización en color
+        depth_colored = self.create_depth_visualization(depth_img)
+        depth_colored_resized = cv2.resize(depth_colored, (640, 480))
+        
+        # Añadir texto informativo
+        if current_idx < len(self.depth_images):
+            depth_filename = os.path.basename(self.depth_images[current_idx])
+            cv2.putText(depth_colored_resized, f"DEPTH: {current_idx+1}/{len(self.depth_images)}", 
+                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            cv2.putText(depth_colored_resized, f"Archivo: {depth_filename}", 
+                       (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1)
         
         # Calcular estadísticas de profundidad
         depth_valid = depth_img[depth_img > 0]
@@ -378,19 +420,17 @@ class DualImagePublisher(Node):
             min_depth = np.min(depth_meters)
             max_depth = np.max(depth_meters)
             
-            cv2.putText(depth_vis_resized, f"Avg: {avg_depth:.2f}m | Min: {min_depth:.2f}m | Max: {max_depth:.2f}m", 
+            cv2.putText(depth_colored_resized, f"Avg: {avg_depth:.2f}m | Min: {min_depth:.2f}m | Max: {max_depth:.2f}m", 
                        (10, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
-            cv2.putText(depth_vis_resized, f"Puntos validos: {len(depth_valid)}/{depth_img.size}", 
+            cv2.putText(depth_colored_resized, f"Puntos validos: {len(depth_valid)}/{depth_img.size}", 
                        (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
-            cv2.putText(depth_vis_resized, f"Submuestreo: {self.downsample_factor}x", 
+            cv2.putText(depth_colored_resized, f"Submuestreo: {self.downsample_factor}x", 
                        (10, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 255), 1)
         else:
-            cv2.putText(depth_vis_resized, "Sin datos de profundidad", 
+            cv2.putText(depth_colored_resized, "Sin datos de profundidad", 
                        (10, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
         
-        # Mostrar ambas ventanas
-        cv2.imshow("RGB Image (Topic: /camera/rgb/image_raw)", display_rgb)
-        #cv2.imshow("Depth Image (Topic: /camera/depth/image_raw)", depth_vis_resized)
+        return depth_colored_resized
     
     def create_depth_visualization(self, depth_img):
         """Crea una visualización en color del mapa de profundidad"""
@@ -461,7 +501,7 @@ class DualImagePublisher(Node):
             self.timer = self.create_timer(1.0/self.frame_rate, self.timer_callback)
             print(f"🐌 Frame rate reducido a {self.frame_rate:.1f} Hz")
         
-        elif key == ord('p'):  # 'p' - cambiar submuestreo de nube de puntos
+        elif key == ord('p') and self.has_depth:  # 'p' - cambiar submuestreo de nube de puntos
             if self.downsample_factor == 1:
                 self.downsample_factor = 2
             elif self.downsample_factor == 2:
@@ -470,11 +510,11 @@ class DualImagePublisher(Node):
                 self.downsample_factor = 1
             print(f"📊 Submuestreo de nube de puntos: {self.downsample_factor}x")
         
-        elif key == ord('+') or key == ord('='):  # '+' - aumentar rango máximo de profundidad
+        elif key == ord('+') and self.has_depth:  # '+' - aumentar rango máximo de profundidad
             self.max_depth = min(self.max_depth + 1.0, 20.0)
             print(f"📏 Rango máximo de profundidad: {self.max_depth:.1f}m")
         
-        elif key == ord('-'):  # '-' - disminuir rango máximo de profundidad
+        elif key == ord('-') and self.has_depth:  # '-' - disminuir rango máximo de profundidad
             self.max_depth = max(self.max_depth - 1.0, 3.0)
             print(f"📏 Rango máximo de profundidad: {self.max_depth:.1f}m")
     
@@ -493,6 +533,8 @@ def main():
         print("\n🛑 Interrupción por teclado")
     except Exception as e:
         print(f"💥 Error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         cv2.destroyAllWindows()
         rclpy.shutdown()

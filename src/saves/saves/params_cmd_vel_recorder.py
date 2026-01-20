@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32, Bool
+from std_msgs.msg import Float32, Bool, Int32
 from geometry_msgs.msg import Twist
 from std_msgs.msg import String
 import csv
@@ -29,9 +29,16 @@ class ControlRecorder(Node):
         # Variables para almacenar últimos valores
         self.last_timestamp = None
         self.values = {
-            # Lane detection
+            # Lane detection - valores originales
             'omega_lane': None,
             'active_lane': None,
+            
+            # Lane detection - nuevos valores
+            'error_lateral': None,
+            'error_heading': None,
+            'curvature': None,
+            'omega_lane_orientation': None,
+            'controller_mode': None,  # 1:FRAME, 2:TRANSITION, 3:LANE, 0:otros
             
             # Lidar lateral
             'omega_lidar': None,
@@ -61,17 +68,27 @@ class ControlRecorder(Node):
             'timestamp': None
         }
         
-        # Historial para promedios móviles (opcional)
+        # Historial para promedios móviles
         self.history = {key: deque(maxlen=10) for key in [
             'omega_lane', 'omega_lidar', 'alpha_lidar', 
             'alpha_vision', 'alpha_osm_obstacles', 'alpha_osm',
-            'cmd_vel_linear_x', 'cmd_vel_angular_z'
+            'cmd_vel_linear_x', 'cmd_vel_angular_z',
+            'error_lateral', 'error_heading', 'curvature', 'omega_lane_orientation'
         ]}
         
         # Subscripciones a los temas de control
-        # Lane detection
+        # Lane detection - originales
         self.create_subscription(Float32, '/omega/lane', self.lane_cb, 10)
         self.create_subscription(Bool, '/active/lane', self.lane_active_cb, 10)
+        
+        # Lane detection - nuevos valores
+        self.create_subscription(Float32, '/lane/error_lateral', self.e_lat_cb, 10)
+        self.create_subscription(Float32, '/lane/error_heading', self.e_head_cb, 10)
+        self.create_subscription(Float32, '/lane/curvature', self.curvature_cb, 10)
+        self.create_subscription(Float32, '/omega/lane_orientation', self.lane_orientation_cb, 10)
+        
+        # Modo del controlador (SUBSCRIPCIÓN, no publicación)
+        self.create_subscription(Int32, '/lane/controller_mode', self.controller_mode_cb, 10)
 
         # Lidar lateral
         self.create_subscription(Float32, '/omega/lidar', self.lidar_omega_cb, 10)
@@ -103,11 +120,14 @@ class ControlRecorder(Node):
         # Timer para guardar datos periódicamente (cuando tenemos valores)
         self.save_timer = self.create_timer(0.05, self.save_data_timer_cb)  # 20 Hz
         
-        # Encabezado del CSV
+        # Encabezado del CSV actualizado
         self.header = [
             'timestamp',
-            # Lane detection
+            # Lane detection - originales
             'omega_lane', 'active_lane',
+            # Lane detection - nuevos valores
+            'error_lateral', 'error_heading', 'curvature',
+            'omega_lane_orientation', 'controller_mode',
             # Lidar lateral
             'omega_lidar', 'active_lidar_lateral',
             # Lidar frontal
@@ -128,9 +148,40 @@ class ControlRecorder(Node):
             'total_active_sensors'
         ]
 
-        #self.get_logger().info('🎮 ControlRecorder inicializado')
-        #self.get_logger().info('📡 Suscrito a señales de control y percepción')
-        #self.get_logger().info('⏳ Esperando señal de logging...')
+    def controller_mode_cb(self, msg):
+        """Callback para recibir el modo del controlador de lane"""
+        current_time = time.time()
+        self.values['timestamp'] = current_time
+        self.values['controller_mode'] = msg.data
+
+    # Callbacks para los nuevos valores de lane
+    def e_lat_cb(self, msg):
+        """Callback para error lateral"""
+        current_time = time.time()
+        self.values['timestamp'] = current_time
+        self.values['error_lateral'] = msg.data
+        self.history['error_lateral'].append(msg.data)
+
+    def e_head_cb(self, msg):
+        """Callback para error de heading"""
+        current_time = time.time()
+        self.values['timestamp'] = current_time
+        self.values['error_heading'] = msg.data
+        self.history['error_heading'].append(msg.data)
+
+    def curvature_cb(self, msg):
+        """Callback para curvatura"""
+        current_time = time.time()
+        self.values['timestamp'] = current_time
+        self.values['curvature'] = msg.data
+        self.history['curvature'].append(msg.data)
+
+    def lane_orientation_cb(self, msg):
+        """Callback para omega de orientación de lane"""
+        current_time = time.time()
+        self.values['timestamp'] = current_time
+        self.values['omega_lane_orientation'] = msg.data
+        self.history['omega_lane_orientation'].append(msg.data)
 
     def logging_enabled_cb(self, msg):
         """Callback para habilitar/deshabilitar logging"""
@@ -138,29 +189,22 @@ class ControlRecorder(Node):
             self.is_logging_enabled = msg.data
             
             if self.is_logging_enabled:
-                #self.get_logger().info('🚀 Logging HABILITADO - Comenzando grabación de señales de control...')
                 if self.current_log_path:
                     self._start_logging()
-                #else:
-                    #self.get_logger().warning('Ruta de logging no recibida aún')
             else:
-                #self.get_logger().info('🛑 Logging DESHABILITADO - Deteniendo grabación...')
                 self._stop_logging()
 
     def log_path_cb(self, msg):
         """Callback para recibir la ruta de logging"""
         if msg.data != self.current_log_path:
             self.current_log_path = msg.data
-            #self.get_logger().info(f'📁 Ruta de logging recibida: {self.current_log_path}')
             
-            # Si el logging está habilitado pero aún no hemos abierto el archivo
             if self.is_logging_enabled and not self.csv_file:
                 self._start_logging()
 
     def _start_logging(self):
         """Inicia el logging creando el archivo CSV"""
         if not self.current_log_path:
-            #self.get_logger().error('No hay ruta de logging definida')
             return
             
         try:
@@ -185,10 +229,7 @@ class ControlRecorder(Node):
             # Resetear valores
             self._reset_values()
             
-            #self.get_logger().info(f'💾 Archivo creado: {filename}')
-            
         except Exception as e:
-            #self.get_logger().error(f'Error al iniciar logging: {e}')
             self.csv_file = None
             self.csv_writer = None
 
@@ -200,9 +241,7 @@ class ControlRecorder(Node):
         if self.csv_file:
             try:
                 self.csv_file.close()
-                #self.get_logger().info('📂 Archivo CSV cerrado correctamente')
-            except Exception as e:
-                #self.get_logger().error(f'Error al cerrar archivo: {e}')
+            except Exception:
                 pass
         
         self.csv_file = None
@@ -224,8 +263,7 @@ class ControlRecorder(Node):
                 self.csv_file.flush()
                 self.data_buffer.clear()
                 self.last_flush_time = time.time()
-            except Exception as e:
-                #self.get_logger().error(f'Error al escribir en CSV: {e}')
+            except Exception:
                 pass
 
     def _calculate_flags(self):
@@ -268,9 +306,15 @@ class ControlRecorder(Node):
         # Crear fila con todos los valores
         row = [
             self.values['timestamp'],
-            # Lane detection
+            # Lane detection - originales
             self.values['omega_lane'],
             1 if self.values['active_lane'] else 0 if self.values['active_lane'] is not None else None,
+            # Lane detection - nuevos valores
+            self.values['error_lateral'],
+            self.values['error_heading'],
+            self.values['curvature'],
+            self.values['omega_lane_orientation'],
+            self.values['controller_mode'],
             # Lidar lateral
             self.values['omega_lidar'],
             1 if self.values['active_lidar_lateral'] else 0 if self.values['active_lidar_lateral'] is not None else None,
@@ -324,7 +368,7 @@ class ControlRecorder(Node):
             if len(self.data_buffer) >= self.buffer_size:
                 self._flush_buffer()
 
-    # Callbacks para cada tema
+    # Callbacks originales (sin cambios)
     def lane_cb(self, msg):
         current_time = time.time()
         self.values['timestamp'] = current_time

@@ -33,6 +33,7 @@ class LidarLateralBias(Node):
     # =====================================================
     def rplidar_status_cb(self, msg: DiagnosticStatus):
         self.rplidar_status = self.get_message_level(msg)
+        active = True 
         if self.rplidar_status == 2:
             active = False
 

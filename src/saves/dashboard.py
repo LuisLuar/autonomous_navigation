@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 import matplotlib
 matplotlib.use('Agg')  # Para usar matplotlib sin GUI
+import math
 
 class NavigationDashboard:
     def __init__(self, session_path):
@@ -49,6 +50,13 @@ class NavigationDashboard:
         self.video_tail_cut = 300
         self.video_cap = None
         self.video_frame_idx = 0
+
+        self.show_ipm_visualization = False  # Por defecto mostrar segmentación
+        self.show_ipm_bev = False  # Nueva opción para visualización BEV
+
+        # Parámetros de calibración IPM
+        self.camera_params = None
+        self.load_calibration()  # Cargar calibración al inicializar
 
         # Cargar todos los datos disponibles
         self.load_data()
@@ -94,6 +102,43 @@ class NavigationDashboard:
         print("  [F] - Pantalla completa")
         print("  [Q/ESC] - Salir")
     
+    def load_calibration(self):
+        """Carga los parámetros de calibración de la cámara."""
+        calibration_path = "/home/raynel/autonomous_navigation/src/perception_stack/params/calibration.json"
+        
+        try:
+            with open(calibration_path, 'r') as f:
+                calib = json.load(f)
+            
+            self.camera_params = {
+                'height': float(calib['camera_height']),
+                'pitch': math.radians(float(calib['camera_pitch'])),
+                'fx': float(calib['intrinsics']['fx']),
+                'fy': float(calib['intrinsics']['fy']),
+                'cx': float(calib['intrinsics']['cx']),
+                'cy': float(calib['intrinsics']['cy'])
+            }
+            
+            print(" Parámetros de calibración cargados:")
+            print(f"  • Altura: {self.camera_params['height']:.3f} m")
+            print(f"  • Pitch: {math.degrees(self.camera_params['pitch']):.2f}°")
+            print(f"  • Focales: fx={self.camera_params['fx']:.1f}, fy={self.camera_params['fy']:.1f}")
+            print(f"  • Centro: cx={self.camera_params['cx']:.1f}, cy={self.camera_params['cy']:.1f}")
+            
+        except Exception as e:
+            print(f" Error cargando calibración: {e}")
+            print(" Usando parámetros por defecto...")
+            
+            # Valores por defecto (típicos para VGA)
+            self.camera_params = {
+                'height': 0.38,
+                'pitch': math.radians(7.52),
+                'fx': 574.1,
+                'fy': 574.1,
+                'cx': 320.0,
+                'cy': 240.0
+            }
+
     def get_debug_video_frame(self, frame_idx, total_frames):
         """
         Devuelve un frame de video aproximado al frame lógico actual.
@@ -106,18 +151,20 @@ class NavigationDashboard:
         # Clamp defensivo
         frame_idx = max(0, min(frame_idx, total_frames - 1))
 
-        video_idx = int(
-            (frame_idx / max(1, total_frames - 1)) * (self.video_effective_frames - 1)
-        )
+        progress = self.get_frame_progress(frame_idx)
+
+        video_idx = int(progress * (self.video_effective_frames - 1))
+        video_idx = max(0, min(video_idx, self.video_effective_frames - 1))
+
+        self.video_cap.set(cv2.CAP_PROP_POS_FRAMES, video_idx)
+        ret, frame = self.video_cap.read()
+
 
         video_idx = max(0, min(video_idx, self.video_effective_frames - 1))
         self.video_cap.set(cv2.CAP_PROP_POS_FRAMES, video_idx)
         ret, frame = self.video_cap.read()
 
         return frame if ret else None
-
-
-
 
     def load_data(self):
         """Carga todos los datos de la sesión."""
@@ -223,6 +270,38 @@ class NavigationDashboard:
                 print(f"   Control data tiene timestamps")
                 print(f"   Rango de timestamps control: {self.control_data['timestamp'].min():.2f} a {self.control_data['timestamp'].max():.2f}")
         
+        # ================== PROGRESO NORMALIZADO DEL ROBOT ==================
+        self.control_progress = None
+
+        if self.control_data is not None and \
+        'timestamp' in self.control_data.columns and \
+        'cmd_vel_linear_x' in self.control_data.columns:
+
+            timestamps = self.control_data['timestamp'].to_numpy()
+            speeds = self.control_data['cmd_vel_linear_x'].to_numpy()
+
+            # Seguridad
+            speeds = np.nan_to_num(speeds, nan=0.0)
+            speeds = np.clip(speeds, 0.0, 1.0)
+
+            progress = np.zeros(len(speeds))
+            total_progress = 0.0
+
+            for i in range(1, len(speeds)):
+                dt = timestamps[i] - timestamps[i - 1]
+                if dt < 0 or dt > 1.0:
+                    dt = 0.0
+                total_progress += speeds[i] * dt
+                progress[i] = total_progress
+
+            if total_progress > 0:
+                self.control_progress = progress / total_progress
+            else:
+                self.control_progress = progress
+
+            print(" Progreso normalizado del robot calculado")
+
+
         # 7. Cargar metadatos
         self.metadata = {}
         metadata_path = self.session_path / "metadata.txt"
@@ -251,6 +330,18 @@ class NavigationDashboard:
         # 8. Analizar sincronización
         self.analyze_synchronization()
     
+    def get_frame_progress(self, frame_idx):
+        """
+        Devuelve el progreso físico real del robot (0–1)
+        usando control_signals y cantidad de frames.
+        """
+        if self.control_progress is None or self.control_data is None:
+            return frame_idx / max(1, len(self.frames_list) - 1)
+
+        control_idx = self.get_proportional_control_idx(frame_idx)
+        return float(self.control_progress[control_idx])
+
+
     def get_frame_data(self, frame_idx):
         """Obtiene todos los datos para un frame específico usando timestamps."""
         # Asegurar que frame_idx sea entero
@@ -365,6 +456,201 @@ class NavigationDashboard:
             # print(f"   Velocidad: {speed:.3f} m/s")
         
         return data
+
+    def extract_lane_edge_adaptive(self, seg_mask):
+        """
+        Función común para extraer el borde del carril usando algoritmo adaptativo.
+        Retorna: (coeffs, points_meters, horizon_data, angle_info)
+        """
+        if seg_mask is None:
+            return None, np.array([]), [], None
+        
+        h, w = seg_mask.shape
+        
+        # ==================== PARÁMETROS ADAPTATIVOS ====================
+        roi_ratio = 0.45
+        base_ratio = 0.65
+        range_ratio = 0.2
+        
+        # Calcular ROI absoluto
+        roi_start = int(h * roi_ratio)
+        roi_line_y = roi_start
+        
+        # 1. CALCULAR BASE_RATIO adaptativo
+        right_half = seg_mask[roi_start:, w//2:w]
+        lane_rows, _ = np.where(right_half == 2)
+        road_rows, _ = np.where(right_half == 1)
+        
+        min_lane_row = np.min(lane_rows) if len(lane_rows) > 0 else h
+        min_road_row = np.min(road_rows) if len(road_rows) > 0 else h
+        min_row = min(min_lane_row, min_road_row)
+        
+        if min_row < h - roi_start:
+            new_base_ratio = (roi_start + min_row) / h
+            base_ratio = max(roi_ratio + 0.05, min(0.8, new_base_ratio))
+        else:
+            base_ratio = roi_ratio + 0.1
+        
+        # 2. CALCULAR RANGE_RATIO adaptativo
+        problem_row_ratio = 0.9
+        for row in range(roi_start, h, 10):
+            row_slice = seg_mask[row:min(row+10, h), w//2:w]
+            road_pixels = np.sum(row_slice == 1)
+            total_pixels = row_slice.size
+            density = road_pixels / total_pixels if total_pixels > 0 else 0
+            
+            if density > 0.7:
+                problem_row_ratio = row / h
+                break
+        
+        margin = 0.08
+        max_allowed_range = max(0.05, problem_row_ratio - base_ratio - margin)
+        range_ratio = min(0.25, max(0.08, max_allowed_range))
+        
+        # ==================== DETECCIÓN DE PUNTOS ====================
+        num_horizons = 5
+        min_points_per_horizon = 5
+        horizon_data = []
+        
+        for i in range(num_horizons):
+            ratio = i / max(1, num_horizons - 1)
+            y_center = int(h * (base_ratio + ratio * range_ratio))
+            
+            if y_center < roi_start:
+                continue
+            
+            slice_height = int(h * 0.06)
+            y1 = max(roi_start, y_center - slice_height // 2)
+            y2 = min(h, y_center + slice_height // 2)
+            
+            slice_mask = seg_mask[y1:y2, w//2:w]
+            
+            # Extraer borde robusto
+            valid_pixels = (slice_mask == 1) | (slice_mask == 2)
+            ys, xs = np.where(valid_pixels)
+            
+            if len(xs) < min_points_per_horizon:
+                continue
+            
+            # Filtrar outliers
+            x_low = np.percentile(xs, 5)
+            x_high = np.percentile(xs, 95)
+            valid_mask = (xs >= x_low) & (xs <= x_high)
+            filtered_xs = xs[valid_mask]
+            
+            if len(filtered_xs) < min_points_per_horizon:
+                continue
+            
+            # Percentil alto para borde derecho
+            if len(filtered_xs) > 100:
+                percentile = 97
+            elif len(filtered_xs) > 50:
+                percentile = 95
+            else:
+                percentile = 93
+            
+            edge_x = int(np.percentile(filtered_xs, percentile))
+            
+            # Confianza
+            total_pixels = slice_mask.shape[0] * slice_mask.shape[1]
+            density = len(filtered_xs) / total_pixels
+            confidence = min(1.0, density * 12)
+            
+            global_x = edge_x + w // 2
+            
+            horizon_data.append({
+                'horizon_idx': i,
+                'y': y_center,
+                'x': global_x,
+                'confidence': confidence,
+                'slice_bounds': (y1, y2),
+                'distance_ratio': ratio,
+            })
+        
+        # ==================== TRANSFORMACIÓN IPM ====================
+        if self.camera_params is None:
+            self.load_calibration()
+        
+        # Pre-calcular matriz de rotación
+        cp = math.cos(self.camera_params['pitch'])
+        sp = math.sin(self.camera_params['pitch'])
+        R = np.array([
+            [1,  0,   0],
+            [0,  cp,  sp],
+            [0, -sp,  cp]
+        ])
+        
+        points_meters = []
+        valid_horizon_data = []
+        
+        for h_data in horizon_data:
+            u = h_data['x']
+            v = h_data['y']
+            
+            # Transformación de píxeles a coordenadas cámara
+            x = (u - self.camera_params['cx']) / self.camera_params['fx']
+            y = -(v - self.camera_params['cy']) / self.camera_params['fy']
+            ray = np.array([x, y, 1.0])
+            
+            # Rotar según pitch
+            ray_w = R @ ray
+            
+            # Verificar que apunte al suelo
+            if ray_w[1] >= 0:
+                continue
+            
+            # Distancia al suelo
+            t = self.camera_params['height'] / -ray_w[1]
+            X_camera = ray_w[0] * t
+            Z_camera = ray_w[2] * t
+            
+            # Filtrar por distancia (0.5m a 12m)
+            if 0.5 <= Z_camera <= 12.0:
+                points_meters.append((Z_camera, X_camera))
+                valid_horizon_data.append(h_data)
+        
+        points_meters = np.array(points_meters)
+        
+        # ==================== AJUSTE POLINÓMICO Y ÁNGULO ====================
+        coeffs = None
+        angle_info = None
+        
+        if len(points_meters) >= 3:
+            try:
+                Z = points_meters[:, 0]
+                X = points_meters[:, 1]
+                coeffs = np.polyfit(Z, X, 2)
+                
+                # Calcular información del ángulo
+                lookahead_distance = 3.0
+                max_angle_error = 3.0
+                max_angle_range = 170.0
+                
+                a, b, c = coeffs[0], coeffs[1], coeffs[2]
+                slope = 2 * a * lookahead_distance + b
+                lane_angle_rad = -math.atan(slope)
+                lane_angle_deg = math.degrees(lane_angle_rad)
+                
+                # Calcular error de ángulo
+                angle_error = 0.0
+                if abs(lane_angle_deg) > max_angle_error:
+                    angle_error = -lane_angle_deg
+                
+                angle_error_normalized = np.clip(angle_error / max_angle_range, -1.0, 1.0)
+                
+                angle_info = {
+                    'angle_rad': lane_angle_rad,
+                    'angle_deg': lane_angle_deg,
+                    'error': angle_error_normalized,
+                    'lookahead': lookahead_distance,
+                    'max_error': max_angle_error
+                }
+                
+            except Exception as e:
+                print(f" Error ajustando polinomio: {e}")
+                coeffs = None
+        
+        return coeffs, points_meters, valid_horizon_data, angle_info
 
     def get_proportional_control_idx(self, frame_idx):
         """Obtiene índice proporcional en datos de control basado en relación de conteos."""
@@ -498,7 +784,7 @@ class NavigationDashboard:
         return None
     
     def create_detection_overlay(self, image, detections_data, frame_stats=None):
-        """Crea overlay de detecciones con información 3D, tracking y velocidades calculadas."""
+        """Crea overlay de detecciones usando los datos YA GUARDADOS en tiempo real."""
         if image is None or not detections_data:
             return image
         
@@ -510,94 +796,89 @@ class NavigationDashboard:
         if frame_stats and 'control_stats' in frame_stats:
             robot_speed = frame_stats['control_stats'].get('cmd_vel_linear_x', 0.0)
         
-        # Verificar estructura de datos
-        if isinstance(detections_data, dict):
-            if 'objects' in detections_data:  # Nuevo formato fusionado
-                detections_list = detections_data['objects']
-                source_text = f"FUSED 3D"
-                robot_speed_data = detections_data.get('robot_speed', robot_speed)
-                if robot_speed_data > 0:
-                    robot_speed = robot_speed_data
-            elif 'detections' in detections_data:  # Formato antiguo
-                detections_list = detections_data['detections']
-                source_text = f"DETECTIONS"
-            else:
-                detections_list = []
-                source_text = ""
-        elif isinstance(detections_data, list):
-            detections_list = detections_data
-            source_text = ""
+        # Verificar estructura de datos (según tu JSON)
+        if isinstance(detections_data, dict) and 'objects' in detections_data:
+            objects_list = detections_data['objects']
+            source_text = "FUSED 3D"
+            robot_speed_data = detections_data.get('robot_speed', robot_speed)
+            if robot_speed_data > 0:
+                robot_speed = robot_speed_data
         else:
+            # Formato incompatible
+            objects_list = []
+            source_text = ""
+        
+        if not objects_list:
             return image
         
-        if not detections_list:
-            return image
+        # ==================== HISTORIAL DE OBJETOS (para trayectorias) ====================
+        frame_idx = getattr(self, 'current_frame', 0)
         
-        # Contadores y estadísticas
-        type_counts = {
-            'person': 0,
-            'vehicle': 0,
-            'other': 0
-        }
+        # Inicializar historial si no existe
+        if not hasattr(self, 'object_history'):
+            self.object_history = {}  # track_id -> [(frame_idx, center_x, center_y)]
         
-        # Estadísticas de tracking
-        tracking_stats = {
-            'total_objects': 0,
-            'static_objects': 0,
-            'moving_toward': 0,
-            'moving_away': 0,
-            'in_path': 0,
-            'danger_objects': 0  # TTC bajo
-        }
-        
-        # Primera pasada: procesar todos los objetos
+        # ==================== PROCESAR OBJETOS ====================
         processed_objects = []
-        for det in detections_list:
-            if not isinstance(det, dict):
-                continue
-            
-            # Extraer bounding box
-            bbox = det.get('bbox', [])
-            if len(bbox) != 4:
-                # Intentar extraer de campos separados
-                bbox = [
-                    det.get('x1', det.get('bbox_x1', 0)),
-                    det.get('y1', det.get('bbox_y1', 0)),
-                    det.get('x2', det.get('bbox_x2', width)),
-                    det.get('y2', det.get('bbox_y2', height))
-                ]
-            
+        
+        for obj in objects_list:
+            # Extraer bbox directamente (ya está en el formato correcto)
+            bbox = obj.get('bbox', [])
             if len(bbox) != 4:
                 continue
             
+            x1, y1, x2, y2 = map(int, bbox)
+            center_x = (x1 + x2) // 2
+            center_y = (y1 + y2) // 2
+            
+            # ==================== INFORMACIÓN DEL JSON ====================
             # Información básica
-            class_name = det.get('class_name', 'unknown')
-            confidence = det.get('confidence', 0.0)
-            track_id = det.get('track_id', 0)
+            class_name = obj.get('class_name', 'unknown')
+            confidence = float(obj.get('confidence', 0.0))
+            track_id = int(obj.get('track_id', 0))
             
-            # Información 3D y tracking
-            distance = float(det.get('distance', 0.0))
-            lateral_offset = float(det.get('lateral_offset', 0.0))
-            speed = float(det.get('speed', 0.0))  # Velocidad absoluta del objeto
-            velocity_x = float(det.get('velocity_x', 0.0))  # Velocidad en X (hacia/desde robot)
-            velocity_y = float(det.get('velocity_y', 0.0))  # Velocidad lateral
-            relative_speed = float(det.get('relative_speed', 0.0))  # Velocidad relativa YA CALCULADA
-            ground_distance = float(det.get('ground_distance', 0.0))
+            # Posición 3D (del JSON)
+            position_3d = obj.get('position_3d', {})
+            distance = float(position_3d.get('distance', 0.0))
+            lateral_offset = float(position_3d.get('lateral_offset', 0.0))
+            ground_distance = float(position_3d.get('ground_distance', 0.0))
+            distance_valid = bool(position_3d.get('distance_valid', False))
+            distance_source = int(position_3d.get('distance_source', 0))  # 1=depth, 2=IPM, 3=size
             
-            # Estados y flags
-            is_static = bool(det.get('is_static', False))
-            is_moving_toward = bool(det.get('is_moving_toward', False))
-            is_moving_away = bool(det.get('is_moving_away', False))
-            is_in_path = bool(det.get('is_in_path', False))
-            ttc = float(det.get('time_to_collision', 999.0))
+            # Velocidades (del JSON - ¡CUIDADO! Hay un bug en los datos)
+            velocity_data = obj.get('velocity', {})
+            speed = float(velocity_data.get('speed', 0.0))  # ¡Posiblemente incorrecto!
+            velocity_x = float(velocity_data.get('x', 0.0))  # ¡Posiblemente incorrecto!
+            velocity_y = float(velocity_data.get('y', 0.0))  # ¡Posiblemente incorrecto!
+            relative_speed = float(velocity_data.get('relative_speed', 0.0))  # ¡Posiblemente incorrecto!
             
-            # Calidad de track
-            track_age = int(det.get('track_age', 0))
-            quality_score = float(det.get('quality_score', 0.0))
-            distance_valid = bool(det.get('distance_valid', False))
-            distance_source = int(det.get('distance_source', 0))  # 0=none, 1=depth, 2=ipm, 3=size
+            # Estados (del JSON)
+            state_data = obj.get('state', {})
+            is_static = bool(state_data.get('is_static', False))
+            is_moving_toward = bool(state_data.get('is_moving_toward', False))
+            is_moving_away = bool(state_data.get('is_moving_away', False))
+            is_in_path = bool(state_data.get('is_in_path', False))
+            ttc = float(state_data.get('time_to_collision', 999.0))
             
-            # Determinar tipo
+            # Tracking (del JSON)
+            tracking_data = obj.get('tracking', {})
+            track_age = int(tracking_data.get('track_age', 0))
+            quality_score = float(tracking_data.get('quality_score', 0.0))
+            
+            # ==================== CORREGIR DATOS IMPOSIBLES ====================
+            # ¡Las velocidades en tu JSON son imposibles (239 m/s = 860 km/h)!
+            # Esto indica un bug en el cálculo en tiempo real
+            
+            # Si la velocidad es imposible (> 50 m/s), mostrar como error
+            speed_error = False
+            if abs(speed) > 50.0:  # Más de 180 km/h es imposible
+                speed_error = True
+                speed = 0.0  # Resetear a 0
+                velocity_x = 0.0
+                velocity_y = 0.0
+                relative_speed = 0.0
+            
+            # ==================== DETERMINAR COLOR Y TIPO ====================
             class_lower = class_name.lower()
             if 'person' in class_lower or 'pedestrian' in class_lower:
                 obj_type = 'person'
@@ -607,72 +888,68 @@ class NavigationDashboard:
                 base_color = self.colors['car']
             else:
                 obj_type = 'other'
-                base_color = (128, 128, 128)  # Gris
+                base_color = (128, 128, 128)
             
-            # Contar tipos
-            type_counts[obj_type] += 1
-            tracking_stats['total_objects'] += 1
-            
-            # Contar estados
-            if is_static:
-                tracking_stats['static_objects'] += 1
-            if is_moving_toward:
-                tracking_stats['moving_toward'] += 1
-            if is_moving_away:
-                tracking_stats['moving_away'] += 1
-            if is_in_path:
-                tracking_stats['in_path'] += 1
-            if ttc < 5.0:  # Objetos peligrosos (TTC < 5 segundos)
-                tracking_stats['danger_objects'] += 1
-            
-            # CALCULAR VELOCIDAD RELATIVA REAL (si no está ya calculada)
-            # La velocidad relativa ya debería venir calculada en relative_speed,
-            # pero por si acaso verificamos:
-            if relative_speed == 0 and velocity_x != 0:
-                # relative_speed = velocidad_objeto - velocidad_robot (proyectada en dirección al robot)
-                # Si velocity_x ya incluye la compensación, usarla directamente
-                relative_speed = velocity_x
-            
-            # Calcular velocidad de aproximación real
-            # Positive: alejándose, Negative: acercándose
-            approach_speed = relative_speed
-            
-            # Determinar color de caja según estado y peligro
-            if ttc < 2.0:  # CRÍTICO - Rojo parpadeante
-                box_color = (0, 0, 255)  # Rojo sólido
+            # Color de caja según estado
+            if ttc < 2.0:  # Crítico
+                box_color = (0, 0, 255)  # Rojo
                 thickness = 3
-            elif ttc < 5.0:  # PELIGRO - Naranja
+            elif ttc < 5.0:  # Peligro
                 box_color = (0, 165, 255)  # Naranja
                 thickness = 2
-            elif is_in_path:  # En trayectoria - Amarillo
+            elif is_in_path:  # En trayectoria
                 box_color = (0, 255, 255)  # Amarillo
                 thickness = 2
-            elif is_static:  # Estático - Verde
+            elif is_static:  # Estático
                 box_color = (0, 200, 0)  # Verde
                 thickness = 1
-            elif approach_speed < -0.3:  # Acercándose rápido - Rojo
+            elif speed_error:  # Error en velocidad
+                box_color = (255, 0, 255)  # Magenta (indica error)
+                thickness = 2
+            elif relative_speed < -0.3:  # Acercándose rápido
                 box_color = (0, 0, 200)  # Rojo oscuro
                 thickness = 2
-            elif approach_speed > 0.3:  # Alejándose rápido - Azul
-                box_color = (255, 100, 0)  # Azul (BGR)
+            elif relative_speed > 0.3:  # Alejándose rápido
+                box_color = (255, 100, 0)  # Azul
                 thickness = 2
-            else:  # Normal - Color base del tipo
+            else:
                 box_color = base_color
                 thickness = 1
             
-            # Almacenar objeto procesado
+            # ==================== GUARDAR EN HISTORIAL PARA TRAYECTORIAS ====================
+            if track_id > 0:
+                if track_id not in self.object_history:
+                    self.object_history[track_id] = []
+                
+                self.object_history[track_id].append({
+                    'frame_idx': frame_idx,
+                    'center_x': center_x,
+                    'center_y': center_y,
+                    'distance': distance,
+                    'class_name': class_name
+                })
+                
+                # Mantener solo últimos 30 frames
+                if len(self.object_history[track_id]) > 30:
+                    self.object_history[track_id] = self.object_history[track_id][-30:]
+            
+            # ==================== ALMACENAR PARA PROCESAMIENTO ====================
             processed_objects.append({
                 'bbox': bbox,
+                'center_x': center_x,
+                'center_y': center_y,
                 'class_name': class_name,
                 'confidence': confidence,
                 'track_id': track_id,
                 'distance': distance,
                 'lateral_offset': lateral_offset,
+                'ground_distance': ground_distance,
+                'distance_valid': distance_valid,
+                'distance_source': distance_source,
                 'speed': speed,
-                'relative_speed': relative_speed,
-                'approach_speed': approach_speed,
                 'velocity_x': velocity_x,
                 'velocity_y': velocity_y,
+                'relative_speed': relative_speed,
                 'is_static': is_static,
                 'is_moving_toward': is_moving_toward,
                 'is_moving_away': is_moving_away,
@@ -680,241 +957,440 @@ class NavigationDashboard:
                 'ttc': ttc,
                 'track_age': track_age,
                 'quality_score': quality_score,
-                'distance_valid': distance_valid,
-                'distance_source': distance_source,
                 'obj_type': obj_type,
                 'box_color': box_color,
                 'thickness': thickness,
-                'ground_distance': ground_distance
+                'base_color': base_color,
+                'speed_error': speed_error
             })
         
-        # Segunda pasada: dibujar objetos (ordenar por distancia para evitar solapamiento)
-        # Ordenar por distancia (más cercanos primero para que se vean mejor)
+        # ==================== DIBUJAR TRAYECTORIAS ====================
+        for track_id, history in self.object_history.items():
+            if len(history) >= 2:
+                points = [(h['center_x'], h['center_y']) for h in history]
+                
+                # Buscar color para este track
+                track_color = (150, 150, 150)  # Gris por defecto
+                for obj in processed_objects:
+                    if obj['track_id'] == track_id:
+                        track_color = obj['base_color']
+                        break
+                
+                # Dibujar línea suavizada
+                for i in range(len(points) - 1):
+                    alpha = max(0.3, 1.0 - (i / len(points) * 0.7))
+                    line_color = (
+                        int(track_color[0] * alpha),
+                        int(track_color[1] * alpha),
+                        int(track_color[2] * alpha)
+                    )
+                    
+                    cv2.line(overlay, points[i], points[i+1], 
+                            line_color, 1, cv2.LINE_AA)
+        
+        # ==================== DIBUJAR OBJETOS ====================
+        # Ordenar por distancia (más cercanos primero)
         processed_objects.sort(key=lambda x: x['distance'] if x['distance'] > 0 else float('inf'))
         
         for obj in processed_objects:
             x1, y1, x2, y2 = map(int, obj['bbox'])
             
-            # Dibujar bounding box
+            # 1. Bounding box
             cv2.rectangle(overlay, (x1, y1), (x2, y2), obj['box_color'], obj['thickness'])
             
-            # Dibujar esquina de tracking si tiene ID
+            # 2. ID de track (esquina superior izquierda)
             if obj['track_id'] > 0:
-                # Punto de tracking (esquina superior izquierda)
                 cv2.circle(overlay, (x1 + 8, y1 + 8), 6, (255, 255, 255), -1)
                 cv2.putText(overlay, f"#{obj['track_id']}", (x1 + 12, y1 + 12),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1)
-                
-                # Indicador de edad del track (barra vertical)
-                if obj['track_age'] > 0:
-                    age_bar_height = min(20, obj['track_age'] * 2)
-                    cv2.rectangle(overlay, (x1 - 5, y1), 
-                                (x1 - 2, y1 + age_bar_height), 
-                                (200, 200, 0), -1)
             
-            # ETIQUETA PRINCIPAL (arriba del bbox)
-            # Formato: [Tipo] [Conf] | Distancia | V_rel
+            # 3. DISTANCIA GRANDE Y CLARA (esquina inferior derecha)
+            if obj['distance_valid'] and obj['distance'] > 0:
+                # Texto de distancia
+                dist_text = f"{obj['distance']:.1f}m"
+                
+                # Color según distancia
+                if obj['distance'] < 3.0:
+                    dist_color = (0, 0, 255)  # Rojo: muy cerca
+                elif obj['distance'] < 6.0:
+                    dist_color = (0, 165, 255)  # Naranja: cerca
+                elif obj['distance'] < 12.0:
+                    dist_color = (0, 255, 255)  # Amarillo: media
+                else:
+                    dist_color = (0, 255, 0)  # Verde: lejos
+                
+                # Tamaño del texto
+                font_scale = 0.6 if obj['distance'] < 10 else 0.5
+                text_size = cv2.getTextSize(dist_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 2)[0]
+                
+                # Fondo negro para mejor legibilidad
+                cv2.rectangle(overlay, 
+                            (x2 - text_size[0] - 10, y2 - text_size[1] - 10),
+                            (x2 - 5, y2 - 5), (0, 0, 0), -1)
+                
+                # Texto de distancia
+                cv2.putText(overlay, dist_text,
+                        (x2 - text_size[0] - 5, y2 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, font_scale, dist_color, 2)
+            
+            # 4. ETIQUETA SUPERIOR
+            # Símbolo de fuente de distancia
+            source_symbol = ""
+            if obj['distance_source'] == 1:
+                source_symbol = "D"  # Depth
+            elif obj['distance_source'] == 2:
+                source_symbol = "I"  # IPM
+            elif obj['distance_source'] == 3:
+                source_symbol = "N"  # Size
+            
             main_label = f"{obj['class_name']} {obj['confidence']:.2f}"
             
             # Añadir distancia si es válida
             if obj['distance_valid'] and obj['distance'] > 0:
-                # Mostrar fuente de distancia con símbolo
-                source_symbol = ""
-                if obj['distance_source'] == 1:
-                    source_symbol = "📐"  # Depth
-                elif obj['distance_source'] == 2:
-                    source_symbol = "📏"  # IPM
-                elif obj['distance_source'] == 3:
-                    source_symbol = "📏"  # Size estimation
-                
                 main_label += f" | {obj['distance']:.1f}m{source_symbol}"
             
-            # Añadir velocidad relativa SI ES SIGNIFICATIVA (> 0.1 m/s)
-            if abs(obj['relative_speed']) > 0.1:
-                direction_symbol = "←" if obj['relative_speed'] < 0 else "→"
-                speed_value = abs(obj['relative_speed'])
-                main_label += f" | {direction_symbol}{speed_value:.1f}m/s"
+            # Añadir velocidad relativa (si no es error)
+            if not obj['speed_error'] and abs(obj['relative_speed']) > 0.1:
+                direction = "-" if obj['relative_speed'] < 0 else "+"
+                main_label += f" | {direction}{abs(obj['relative_speed']):.1f}m/s"
+            elif obj['speed_error']:
+                main_label += " | VEL_ERROR"
             
-            # Dibujar etiqueta principal
+            # Dibujar etiqueta
             label_size = cv2.getTextSize(main_label, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)[0]
-            
-            # Fondo para etiqueta
             cv2.rectangle(overlay, (x1, y1 - label_size[1] - 5),
                         (x1 + label_size[0], y1), obj['box_color'], -1)
-            
-            # Texto principal
             cv2.putText(overlay, main_label, (x1, y1 - 5),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
             
-            # ETIQUETA SECUNDARIA (debajo del bbox si hay espacio)
+            # 5. INFORMACIÓN ADICIONAL (si hay espacio)
             if y2 + 40 < height:
-                secondary_lines = []
+                info_lines = []
                 
-                # Línea 1: Información de posición y trayectoria
-                pos_info = []
+                # Línea 1: Posición lateral
                 if abs(obj['lateral_offset']) > 0.1:
                     side = "DER" if obj['lateral_offset'] > 0 else "IZQ"
-                    pos_info.append(f"{side}:{abs(obj['lateral_offset']):.1f}m")
+                    info_lines.append(f"{side}:{abs(obj['lateral_offset']):.1f}m")
                 
-                if obj['ground_distance'] > 0 and obj['distance'] > 0:
-                    pos_info.append(f"Total:{obj['ground_distance']:.1f}m")
-                
-                if pos_info:
-                    secondary_lines.append(" ".join(pos_info))
-                
-                # Línea 2: Información de movimiento y estado
-                move_info = []
-                
-                # Velocidad absoluta si es significativa
-                if abs(obj['speed']) > 0.1:
-                    move_info.append(f"V:{obj['speed']:.1f}m/s")
-                
-                # Estados especiales
+                # Línea 2: Estado de movimiento
                 if obj['is_static']:
-                    move_info.append("ESTÁTICO")
+                    info_lines.append("ESTÁTICO")
                 elif obj['is_moving_toward']:
-                    move_info.append("ACERCÁNDOSE")
+                    info_lines.append("ACERCANDOSE")
                 elif obj['is_moving_away']:
-                    move_info.append("ALEJÁNDOSE")
+                    info_lines.append("ALEJANDOSE")
                 
-                # En trayectoria
-                if obj['is_in_path']:
-                    move_info.append("EN TRAYECTORIA")
-                
-                if move_info:
-                    secondary_lines.append(" ".join(move_info))
-                
-                # Línea 3: Tiempo para colisión y calidad
-                safety_info = []
-                if obj['ttc'] < 999.0:
+                # Línea 3: TTC si es relevante
+                if obj['ttc'] < 10.0:
                     if obj['ttc'] < 2.0:
-                        safety_info.append(f"⚠️TTC:{obj['ttc']:.1f}s")
+                        info_lines.append(f"TTC:{obj['ttc']:.1f}s")
                     elif obj['ttc'] < 5.0:
-                        safety_info.append(f"TTC:{obj['ttc']:.1f}s")
+                        info_lines.append(f"TTC:{obj['ttc']:.1f}s")
                 
-                # Calidad de track
-                if obj['track_age'] > 10:
-                    safety_info.append(f"Track:{obj['track_age']}")
-                
-                if obj['quality_score'] > 0:
-                    safety_info.append(f"Q:{obj['quality_score']:.1f}")
-                
-                if safety_info:
-                    secondary_lines.append(" ".join(safety_info))
-                
-                # Dibujar líneas secundarias
-                line_height = 15
-                for i, line in enumerate(secondary_lines):
+                # Dibujar líneas
+                line_height = 14
+                for i, line in enumerate(info_lines[:3]):  # Máximo 3 líneas
                     line_y = y2 + 10 + (i * line_height)
                     if line_y + 10 < height:
-                        # Fondo semi-transparente para mejor legibilidad
+                        # Fondo semi-transparente
                         text_size = cv2.getTextSize(line, cv2.FONT_HERSHEY_SIMPLEX, 0.35, 1)[0]
                         overlay_copy = overlay.copy()
                         cv2.rectangle(overlay_copy, (x1, line_y - text_size[1] - 2),
                                     (x1 + text_size[0], line_y + 2), (0, 0, 0), -1)
-                        # Mezclar con transparencia
                         overlay = cv2.addWeighted(overlay_copy, 0.6, overlay, 0.4, 0)
                         
                         cv2.putText(overlay, line, (x1, line_y),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 200), 1)
-            
-            # LÍNEA DE POSICIÓN 3D (opcional, solo si distancia válida)
-            if obj['distance_valid'] and obj['distance'] > 0 and obj['lateral_offset'] != 0:
-                center_x = (x1 + x2) // 2
-                center_y = y2
-                
-                # Calcular posición lateral proyectada
-                # Asumiendo FOV de ~60 grados y ancho de imagen
-                fov_rad = 1.047  # 60 grados en radianes
-                focal_px = width / (2 * np.tan(fov_rad / 2))
-                
-                lateral_px = int((obj['lateral_offset'] / obj['distance']) * focal_px)
-                projected_x = center_x + lateral_px
-                
-                # Dibujar línea de posición 3D
-                line_color = (255, 200, 0) if obj['is_in_path'] else (200, 200, 200)
-                cv2.line(overlay, (center_x, center_y), (projected_x, center_y), 
-                        line_color, 1, cv2.LINE_AA)
-                cv2.circle(overlay, (projected_x, center_y), 3, line_color, -1)
-                
-                # Flecha de dirección del movimiento lateral
-                if abs(obj['velocity_y']) > 0.1:
-                    arrow_length = int(obj['velocity_y'] * 20)  # Escalar para visualización
-                    arrow_end = projected_x + arrow_length
-                    arrow_color = (0, 255, 0) if obj['velocity_y'] > 0 else (0, 0, 255)
-                    cv2.arrowedLine(overlay, (projected_x, center_y - 10),
-                                (arrow_end, center_y - 10), arrow_color, 1, tipLength=0.3)
         
-        # PANEL DE RESUMEN (esquina superior derecha)
+        # ==================== PANEL DE RESUMEN ====================
         summary_x = width - 220
         summary_y = 30
         
         # Fondo del panel
-        panel_height = 130
         cv2.rectangle(overlay, (summary_x - 10, summary_y - 25),
-                    (width - 10, summary_y + panel_height), (0, 0, 0, 128), -1)
+                    (width - 10, summary_y + 120), (0, 0, 0, 128), -1)
         overlay_copy = overlay.copy()
         cv2.rectangle(overlay_copy, (summary_x - 10, summary_y - 25),
-                    (width - 10, summary_y + panel_height), (0, 0, 0), -1)
+                    (width - 10, summary_y + 120), (0, 0, 0), -1)
         overlay = cv2.addWeighted(overlay_copy, 0.5, overlay, 0.5, 0)
         
-        # Título del panel
-        panel_title = "ESTADÍSTICAS DETECCIÓN"
-        if source_text:
-            panel_title += f" ({source_text})"
-        
-        cv2.putText(overlay, panel_title, (summary_x, summary_y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        # Título
+        cv2.putText(overlay, f"ESTADISTICAS ({source_text})", 
+                (summary_x, summary_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         summary_y += 20
         
-        # Velocidad del robot
-        if robot_speed != 0:
-            robot_color = (0, 255, 0) if robot_speed > 0 else (255, 100, 0)
-            cv2.putText(overlay, f"Robot: {robot_speed:.2f} m/s", 
-                    (summary_x, summary_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, robot_color, 1)
-            summary_y += 18
-        
         # Contadores por tipo
+        type_counts = {'person': 0, 'vehicle': 0, 'other': 0}
+        for obj in processed_objects:
+            type_counts[obj['obj_type']] += 1
+        
         if type_counts['person'] > 0:
-            cv2.putText(overlay, f"👤 Personas: {type_counts['person']}", 
+            cv2.putText(overlay, f" Personas: {type_counts['person']}", 
                     (summary_x, summary_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, 
                     self.colors['person'], 1)
             summary_y += 16
         
         if type_counts['vehicle'] > 0:
-            cv2.putText(overlay, f"🚗 Vehículos: {type_counts['vehicle']}", 
+            cv2.putText(overlay, f" Vehiculos: {type_counts['vehicle']}", 
                     (summary_x, summary_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, 
                     self.colors['car'], 1)
             summary_y += 16
         
-        if type_counts['other'] > 0:
-            cv2.putText(overlay, f"📦 Otros: {type_counts['other']}", 
+        # Contar objetos peligrosos
+        """danger_count = sum(1 for obj in processed_objects if obj['ttc'] < 5.0)
+        if danger_count > 0:
+            cv2.putText(overlay, f" Peligrosos: {danger_count}", 
                     (summary_x, summary_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, 
-                    (200, 200, 200), 1)
-            summary_y += 16
-        
-        # Estadísticas de tracking
-        if tracking_stats['static_objects'] > 0:
-            cv2.putText(overlay, f"🛑 Estáticos: {tracking_stats['static_objects']}", 
-                    (summary_x, summary_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, 
-                    (0, 200, 0), 1)
-            summary_y += 16
-        
-        if tracking_stats['in_path'] > 0:
-            warning_color = (0, 200, 255)  # Naranja
-            cv2.putText(overlay, f"⚠️ En trayectoria: {tracking_stats['in_path']}", 
-                    (summary_x, summary_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, 
-                    warning_color, 1)
-            summary_y += 16
-        
-        if tracking_stats['danger_objects'] > 0:
-            danger_color = (0, 0, 255)  # Rojo
-            cv2.putText(overlay, f"🚨 Peligro (TTC<5s): {tracking_stats['danger_objects']}", 
-                    (summary_x, summary_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, 
-                    danger_color, 1)
+                    (0, 0, 255), 1)"""
         
         return overlay
     
+    def create_lane_edge_ipm_visualization(self, seg_mask, frame_data, original_image=None):
+        """Crea visualización del algoritmo IPM para detección de borde del carril."""
+        if seg_mask is None:
+            # Crear imagen vacía si no hay datos
+            empty_img = np.zeros((400, 600, 3), dtype=np.uint8)
+            cv2.putText(empty_img, "No segmentation data", (50, 200),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            return empty_img
+        
+        h, w = seg_mask.shape
+        
+        # Crear imagen de debug CON LA IMAGEN ORIGINAL COMO FONDO
+        if original_image is not None:
+            # Redimensionar la imagen original para que coincida con la máscara de segmentación
+            if original_image.shape[:2] != (h, w):
+                original_resized = cv2.resize(original_image, (w, h))
+            else:
+                original_resized = original_image
+            
+            # Usar la imagen original como fondo
+            img = original_resized.copy()
+            
+            # Convertir a BGR si es necesario
+            if len(img.shape) == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        else:
+            # Si no hay imagen original, usar fondo negro (comportamiento original)
+            img = np.full((h, w, 3), 0, dtype=np.uint8)
+        
+        # Colorear máscara de segmentación
+        lane_pixels = (seg_mask == 2)
+        road_pixels = (seg_mask == 1)
+        img[lane_pixels] = [0, 100, 200]  # Azul para lane
+        img[road_pixels] = [50, 50, 50]   # Gris para road
+        
+        # Usar la función común para extraer el borde
+        coeffs, points_meters, horizon_data, angle_info = self.extract_lane_edge_adaptive(seg_mask)
+        
+        # ==================== PARÁMETROS ADAPTATIVOS (para visualización) ====================
+        roi_ratio = 0.45
+        base_ratio = 0.65
+        range_ratio = 0.2
+        
+        # Calcular parámetros para visualización
+        roi_start = int(h * roi_ratio)
+        right_half = seg_mask[roi_start:, w//2:w]
+        
+        lane_rows, _ = np.where(right_half == 2)
+        road_rows, _ = np.where(right_half == 1)
+        
+        min_lane_row = np.min(lane_rows) if len(lane_rows) > 0 else h
+        min_road_row = np.min(road_rows) if len(road_rows) > 0 else h
+        min_row = min(min_lane_row, min_road_row)
+        
+        if min_row < h - roi_start:
+            new_base_ratio = (roi_start + min_row) / h
+            base_ratio = max(roi_ratio + 0.05, min(0.8, new_base_ratio))
+        else:
+            base_ratio = roi_ratio + 0.1
+        
+        base_line_y = int(h * base_ratio)
+        top_line_y = int(h * (base_ratio + range_ratio))
+        
+        # ==================== DIBUJAR ROI Y LÍNEAS ====================
+        roi_line_y = roi_start
+        cv2.line(img, (0, roi_line_y), (w, roi_line_y), 
+                (0, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(img, f"ROI", (10, roi_line_y - 5),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        
+        # LÍNEA DE BASE (calculada adaptativamente)
+        cv2.line(img, (0, base_line_y), (w, base_line_y),
+                (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(img, f"Base", (w - 60, base_line_y - 5),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 255), 1)
+        
+        # LÍNEA DE TOPE (calculada adaptativamente)
+        if top_line_y < h:
+            cv2.line(img, (0, top_line_y), (w, top_line_y),
+                    (255, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(img, f"Top", (w - 50, top_line_y - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
+        
+        # ==================== DIBUJAR PUNTOS DETECTADOS ====================
+        colors = [(0, 255, 255), (0, 255, 128), (0, 255, 0), 
+                (128, 255, 0), (255, 128, 0)]
+        
+        for i, h_data in enumerate(horizon_data):
+            color = colors[min(i, len(colors)-1)]
+            confidence = h_data.get('confidence', 1.0)
+            y1, y2 = h_data.get('slice_bounds', (0, 0))
+            
+            # Dibujar franja de búsqueda (solo contorno)
+            cv2.rectangle(img, (w//2, y1), (w, y2), 
+                        (color[0]//3, color[1]//3, color[2]//3), 1)
+            
+            # Punto detectado
+            radius = int(4 + confidence * 4)
+            cv2.circle(img, (h_data['x'], h_data['y']), radius, color, -1)
+            cv2.circle(img, (h_data['x'], h_data['y']), radius+2, (255, 255, 255), 1)
+            
+            # Label
+            text = f"H{i}"
+            cv2.putText(img, text, (h_data['x'] + 10, h_data['y'] - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, color, 1)
+            
+            # Mostrar distancias en metros
+            if i < len(points_meters):
+                Z, X = points_meters[i]
+                dist_text = f"Z={Z:.1f}m, X={X:.2f}m"
+                cv2.putText(img, dist_text, (w - 200, h_data['y']),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        
+        # ==================== INFORMACIÓN TEXTUAL ====================
+        info_y = 30
+        spacing = 22
+        
+        # Título
+        cv2.putText(img, "ADAPTIVE LANE DETECTION", (20, info_y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        info_y += spacing
+        
+        # Parámetros adaptativos
+        param_text = f"Base: {base_ratio:.3f}  Range: {range_ratio:.3f}  ROI: {roi_ratio:.2f}"
+        cv2.putText(img, param_text, (20, info_y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        info_y += spacing
+        
+        # Puntos válidos
+        points_text = f"Points: {len(points_meters)}/{len(horizon_data)}"
+        point_color = (0, 255, 0) if len(points_meters) >= 3 else (0, 0, 255)
+        cv2.putText(img, points_text, (20, info_y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, point_color, 1)
+        info_y += spacing
+        
+        # ==================== INFORMACIÓN DE CALIBRACIÓN ====================
+        if self.camera_params:
+            pitch_deg = math.degrees(self.camera_params['pitch'])
+            calib_text = f"Calib: Pitch={pitch_deg:.1f}, H={self.camera_params['height']:.3f}m"
+            cv2.putText(img, calib_text, (20, info_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 100), 1)
+            info_y += spacing
+        
+        # ==================== CÁLCULO DE ÁNGULO Y ERROR ====================
+        if coeffs is not None and angle_info is not None:
+            # Coeficientes
+            coeff_text = f"Poly: {coeffs[0]:.4f}z*z + {coeffs[1]:.4f}z + {coeffs[2]:.4f}"
+            cv2.putText(img, coeff_text, (20, info_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 0), 1)
+            info_y += spacing
+            
+            # Ángulo
+            angle_text = f"Angle: {angle_info['angle_deg']:+.1f} @ {angle_info['lookahead']}m"
+            angle_color = (0, 255, 0) if abs(angle_info['angle_deg']) < angle_info['max_error'] else (0, 165, 255)
+            cv2.putText(img, angle_text, (20, info_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, angle_color, 1)
+            info_y += spacing
+            
+            # Error de ángulo
+            angle_error_text = f"Angle Error: {angle_info['error']:+.3f}"
+            cv2.putText(img, angle_error_text, (20, info_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 0), 1)
+            info_y += spacing
+            
+            # Indicador de dirección
+            if abs(angle_info['angle_deg']) > angle_info['max_error']:
+                if angle_info['angle_deg'] > 0:
+                    direction_text = "CORRECT LEFT"
+                    direction_color = (0, 165, 255)
+                else:
+                    direction_text = "CORRECT RIGHT"
+                    direction_color = (0, 100, 255)
+            else:
+                direction_text = "STRAIGHT"
+                direction_color = (0, 255, 0)
+            
+            cv2.putText(img, direction_text, (20, info_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, direction_color, 2)
+            info_y += spacing
+            
+            # ==================== FLECHA DE DIRECCIÓN ====================
+            center_x = w // 2
+            bottom_y = h - 20
+            line_length = 100
+            
+            end_x = center_x - int(line_length * math.sin(angle_info['angle_rad']))
+            end_y = bottom_y - int(line_length * math.cos(angle_info['angle_rad']))
+            
+            cv2.arrowedLine(img, (center_x, bottom_y), (end_x, end_y),
+                        (0, 255, 0), 3, cv2.LINE_AA, tipLength=0.3)
+            
+            arrow_text = f"{abs(angle_info['angle_deg']):.1f}"
+            text_size = cv2.getTextSize(arrow_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+            cv2.putText(img, arrow_text, (end_x - text_size[0]//2, end_y - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        
+        # ==================== PANEL LATERAL CON ESTADÍSTICAS ====================
+        panel_width = 250
+        panel_x = w - panel_width - 10
+        panel_y = 20
+        panel_height = 140
+        
+        # Fondo del panel
+        cv2.rectangle(img, (panel_x, panel_y), (panel_x + panel_width, panel_y + panel_height),
+                    (40, 40, 40), -1)
+        cv2.rectangle(img, (panel_x, panel_y), (panel_x + panel_width, panel_y + panel_height),
+                    (100, 100, 100), 1)
+        
+        # Título del panel
+        cv2.putText(img, "IPM DETECTION STATS", (panel_x + 10, panel_y + 20),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        # Calcular estadísticas de la máscara
+        total_pixels = h * w
+        lane_pixel_count = np.sum(seg_mask == 2)
+        road_pixel_count = np.sum(seg_mask == 1)
+        
+        lane_percent = (lane_pixel_count / total_pixels) * 100
+        road_percent = (road_pixel_count / total_pixels) * 100
+        
+        # Mostrar estadísticas
+        stats_y = panel_y + 40
+        cv2.putText(img, f"Lane mask: {lane_pixel_count} px", 
+                (panel_x + 10, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+        stats_y += 18
+        
+        cv2.putText(img, f"Lane area: {lane_percent:.1f}%", 
+                (panel_x + 10, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+        stats_y += 18
+        
+        cv2.putText(img, f"Road mask: {road_pixel_count} px", 
+                (panel_x + 10, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
+        stats_y += 18
+        
+        cv2.putText(img, f"Road area: {road_percent:.1f}%", 
+                (panel_x + 10, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
+        stats_y += 18
+        
+        # Información de control si está disponible
+        if frame_data and 'control_stats' in frame_data:
+            speed = frame_data['control_stats'].get('cmd_vel_linear_x', 0.0)
+            cv2.putText(img, f"Robot speed: {speed:.2f} m/s", 
+                    (panel_x + 10, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 100), 1)
+        
+        return img
+
     def create_segmentation_overlay(self, image, seg_mask):
         """Crea overlay de segmentación."""
         if image is None or seg_mask is None:
@@ -959,7 +1435,7 @@ class NavigationDashboard:
         
         return overlay
     
-    def create_lane_error_visualization(self, seg_mask, frame_stats):
+    def create_lane_error_visualization(self, seg_mask, frame_stats, original_image=None):
         """Crea visualización del error de carril usando algoritmo predictivo robusto."""
         if seg_mask is None:
             # Crear imagen vacía si no hay datos
@@ -970,21 +1446,49 @@ class NavigationDashboard:
         
         h, w = seg_mask.shape
         
-        # Crear imagen de debug
-        debug_img = np.full((h, w, 3), 0, dtype=np.uint8)
+        # Crear imagen de debug CON LA IMAGEN ORIGINAL COMO FONDO
+        if original_image is not None:
+            # Redimensionar la imagen original para que coincida con la máscara de segmentación
+            if original_image.shape[:2] != (h, w):
+                original_resized = cv2.resize(original_image, (w, h))
+            else:
+                original_resized = original_image
+            
+            # Usar la imagen original como fondo
+            debug_img = original_resized.copy()
+            
+            # Convertir a BGR si es necesario
+            if len(debug_img.shape) == 2:
+                debug_img = cv2.cvtColor(debug_img, cv2.COLOR_GRAY2BGR)
+        else:
+            # Si no hay imagen original, usar fondo negro (comportamiento original)
+            debug_img = np.full((h, w, 3), 0, dtype=np.uint8)
         
-        # Colorear máscara de segmentación
+        # Colorear máscara de segmentación SEMI-TRANSPARENTE sobre el fondo
         lane_pixels = (seg_mask == 2)
         road_pixels = (seg_mask == 1)
-        debug_img[lane_pixels] = [0, 100, 200]  # Azul-naranja para carriles
-        debug_img[road_pixels] = [50, 50, 50]   # Gris para carretera
+        
+        # Crear máscaras de color semi-transparentes
+        lane_overlay = np.zeros_like(debug_img, dtype=np.uint8)
+        road_overlay = np.zeros_like(debug_img, dtype=np.uint8)
+        
+        # Aplicar colores con transparencia
+        alpha_lane = 0.95  # 30% de transparencia para carriles
+        alpha_road = 0.7 # 20% de transparencia para carretera
+        
+        lane_overlay[lane_pixels] = [0, 100, 200]  # Azul-naranja para carriles
+        road_overlay[road_pixels] = self.colors['drivable']   # Gris para carretera
+        
+        # Aplicar overlay con transparencia
+        debug_img = cv2.addWeighted(lane_overlay, alpha_lane, debug_img, 1, 0)
+        debug_img = cv2.addWeighted(road_overlay, alpha_road, debug_img, 1, 0)
         
         # ==================== ALGORITMO PREDICTIVO ROBUSTO ====================
         
         # PARÁMETROS (igual que en tiempo real)
         num_horizons = 5
         ref_ratio = 0.8  # Línea de referencia (80% = lado derecho)
-        horizon_weights = [0.001, 0.004, 0.05, 0.004, 0.001]  # pesos [cercano → lejano]
+        horizon_weights = [0.001, 0.004, 0.05, 0.006, 0.005]  # pesos [cercano → lejano]
         min_points_per_horizon = 5
         outlier_percentile_low = 5
         outlier_percentile_high = 90
@@ -1000,7 +1504,7 @@ class NavigationDashboard:
             y_center = int(h * (0.7 + ratio * 0.2))  # Entre 40% y 90%
             
             # Franja vertical alrededor del horizonte
-            slice_height = h // (num_horizons * 10)
+            slice_height = h // (num_horizons * 15)
             y1 = max(0, y_center - slice_height)
             y2 = min(h, y_center + slice_height)
             
@@ -1209,10 +1713,10 @@ class NavigationDashboard:
             
             # Texto de error con interpretación
             if weighted_error > 0.05:
-                direction = "← ALEJARSE (Giro ANTIHORARIO)"
+                direction = "ALEJARSE (Giro ANTIHORARIO)"
                 dir_color = self.colors['warning']
             elif weighted_error < -0.05:
-                direction = "ACERCARSE → (Giro HORARIO)"
+                direction = "ACERCARSE (Giro HORARIO)"
                 dir_color = self.colors['warning']
             else:
                 direction = "OK (Recto)"
@@ -1232,7 +1736,7 @@ class NavigationDashboard:
                 normalized_variation = x_range / w
                 
                 is_curve = normalized_variation > 0.15
-                curve_text = f"Curva: {'SÍ' if is_curve else 'NO'} (var: {normalized_variation:.2f})"
+                curve_text = f"Curva: {'SI' if is_curve else 'NO'} (var: {normalized_variation:.2f})"
                 curve_color = (255, 200, 0) if is_curve else (100, 100, 100)
                 
                 cv2.putText(debug_img, curve_text, 
@@ -1511,6 +2015,193 @@ class NavigationDashboard:
         )
 
         return stats_panel
+
+
+    def create_ipm_bev_visualization(self, seg_mask, frame_data):
+        """Crea visualización BEV IDÉNTICA al LaneDebugNode en tiempo real."""
+        if seg_mask is None:
+            empty_img = np.zeros((400, 600, 3), dtype=np.uint8)
+            cv2.putText(empty_img, "No segmentation data", (50, 200),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            return empty_img
+        
+        # ==================== CRÍTICO: CALCULAR EL BEV EXACTO COMO EL NODO IPM ====================
+        # Los parámetros DEBEN ser idénticos al nodo IPM
+        scale = 40.0  # px/m (MISMO QUE LaneDebugNode)
+        max_distance = 12.0  # m
+        bev_w = 400  # Ancho (MISMO)   
+        bev_h = int(max_distance * scale)  # Alto (MISMO)
+        
+        # Crear BEV en ESCALA DE GRISES (igual que el nodo IPM)
+        bev = np.zeros((bev_h, bev_w), dtype=np.uint8)
+        
+        if self.camera_params is None:
+            self.load_calibration()
+        
+        h, w = seg_mask.shape
+        roi_start = int(h * 0.45)  # ROI 45% (MISMO que en nodo IPM)
+        
+        # ¡¡¡ESTOS SON LOS PARÁMETROS EXACTOS DEL NODO IPM!!!
+        pitch = self.camera_params['pitch']
+        h_cam = self.camera_params['height']
+        fx = self.camera_params['fx']
+        fy = self.camera_params['fy']
+        cx = self.camera_params['cx']
+        cy = self.camera_params['cy']
+        
+        # IMPORTANTE: El nodo IPM usa esta matriz EXACTA
+        cp = math.cos(pitch)
+        sp = math.sin(pitch)
+        R = np.array([
+            [1,  0,   0],
+            [0,  cp,  sp],  # sp sin signo negativo
+            [0, -sp,  cp]   # -sp aquí
+        ])
+        v0 = roi_start
+        # Procesar EXACTAMENTE igual que el nodo IPM
+        for v in range(v0, h, 2):  # CADA 2 PÍXELES VERTICAL
+            for u in range(0, w, 2):      # CADA 2 PÍXELES HORIZONTAL
+                cls = seg_mask[v, u]
+                if cls == 0:
+                    continue
+                
+                # Transformación IDÉNTICA al nodo IPM
+                x = (u - cx) / fx
+                y = -(v - cy) / fy  # Y NEGATIVO (¡IMPORTANTE!)
+                ray = np.array([x, y, 1.0])
+                
+                # Rotación
+                ray_w = R @ ray
+                
+                # Condición: rayo debe apuntar hacia el suelo (Y negativo)
+                if ray_w[1] >= 0:
+                    continue
+                
+                # Distancia al suelo
+                t = h_cam / -ray_w[1]
+                X = ray_w[0] * t      # Lateral
+                Z = ray_w[2] * t      # Adelante
+                
+                # Filtrar por distancia
+                if Z <= 0 or Z > max_distance:
+                    continue
+                
+                # Mapear a BEV (FÓRMULA ESTÁNDAR DEL SISTEMA)
+                bx = int(bev_w / 2 + X * scale)
+                by = int(bev_h - Z * scale)
+                
+                if 0 <= bx < bev_w and 0 <= by < bev_h:
+                    # ¡VALORES DE GRIS IDÉNTICOS AL NODO IPM!
+                    if cls == 2:      # Lane/carril
+                        cv2.circle(bev, (bx, by), 3, int(255 if cls==2 else 180), -1)   # Blanco
+                    elif cls == 1:    # Road/área transitable
+                        bev[by, bx] = 180    # Gris medio
+                    else:             # Otros
+                        bev[by, bx] = 100    # Gris oscuro
+        
+        # ==================== AHORA AGREGAR LAS LÍNEAS COMO LaneDebugNode ====================
+        # Convertir a color
+        kernel = np.ones((3,3), np.uint8)
+        bev = cv2.morphologyEx(bev, cv2.MORPH_CLOSE, kernel)
+        bev_color = cv2.cvtColor(bev, cv2.COLOR_GRAY2BGR)
+
+
+        
+        # Extraer información del borde (si existe)
+        coeffs, points_meters, _, _ = self.extract_lane_edge_adaptive(seg_mask)
+        
+        # ==================== DIBUJAR LÍNEA DEL BORDE (si existe) ====================
+        if coeffs is not None:
+            # Crear path del borde (igual que en tiempo real)
+            edge_path_points = []
+            max_z = min(8.0, max_distance)
+            
+            for z in np.arange(0.5, max_z, 0.1):
+                x_edge = np.polyval(coeffs, z)
+                
+                # FÓRMULA DE LaneDebugNode: px = W/2 - y * scale, py = H - x * scale
+                # Donde y = -x_edge (porque Y positivo es izquierda)
+                # Y x = z (adelante)
+                px = int(bev_w / 2 + x_edge * scale)  # y negativo porque x_edge es lateral derecho
+                py = int(bev_h - z * scale)
+                
+                if 0 <= px < bev_w and 0 <= py < bev_h:
+                    edge_path_points.append((px, py))
+            
+            # Dibujar línea del borde (AMARILLO, igual que LaneDebugNode)
+            if len(edge_path_points) > 1:
+                pts_array = np.array(edge_path_points, dtype=np.int32)
+                cv2.polylines(bev_color, [pts_array], False, (0, 255, 255), 3)
+                
+                # Etiqueta "RIGHT" (igual que LaneDebugNode)
+                if edge_path_points:
+                    cv2.putText(bev_color, "RIGHT", 
+                            (edge_path_points[0][0] + 5, edge_path_points[0][1]),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+            
+            # También dibujar puntos de ajuste
+            for i, (Z, X) in enumerate(points_meters):
+                px = int(bev_w / 2 - (-X) * scale)  # y negativo
+                py = int(bev_h - Z * scale)
+                
+                if 0 <= px < bev_w and 0 <= py < bev_h:
+                    cv2.circle(bev_color, (px, py), 4, (255, 0, 0), -1)  # Azul
+        
+        # ==================== ELEMENTOS VISUALES DE LaneDebugNode ====================
+        # Eje central (robot) - línea verde
+        cv2.line(bev_color, (bev_w//2, bev_h), (bev_w//2, 0), (0, 255, 0), 1)
+        
+        # Marcas métricas (cada metro)
+        max_dist = int(bev_h / scale)
+        for z in range(1, int(max_distance) + 1):
+            y = int(bev_h - z * scale)
+            if y > 0:
+                cv2.line(bev_color, (0, y), (bev_w, y), (50, 50, 50), 1)
+                if z % 2 == 0:
+                    cv2.putText(bev_color, f"{z}m", (5, y-5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
+        
+        # Robot (coche) en la parte inferior
+        cv2.rectangle(bev_color, (bev_w//2-15, bev_h-10), (bev_w//2+15, bev_h), (0, 255, 255), -1)
+        
+        # ==================== INFORMACIÓN DEL SISTEMA ====================
+        cv2.putText(bev_color, f"BEV: {bev_w}x{bev_h} | Scale: {scale} px/m", 
+                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        
+        # Información de calibración
+        if self.camera_params:
+            pitch_deg = math.degrees(self.camera_params['pitch'])
+            calib_text = f"Calib: Pitch={pitch_deg:.1f}°, H={self.camera_params['height']:.3f}m"
+            cv2.putText(bev_color, calib_text, (10, 60),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 100), 1)
+        
+        # Información del polinomio
+        if coeffs is not None:
+            coeff_text = f"Poly: {coeffs[0]:.4f}z² + {coeffs[1]:.4f}z + {coeffs[2]:.4f}"
+            cv2.putText(bev_color, coeff_text, (10, 85),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 0), 1)
+        
+        # Leyenda (igual que LaneDebugNode)
+        legend_y = bev_h - 80
+        legend_items = [
+            ("RIGHT", (0, 255, 255), "Borde de la calzada"),
+            ("DET_POINTS", (255, 0, 0), "Puntos detección"),
+            ("LANE", (255, 255, 255), "Carril (255)"),
+            ("ROAD", (180, 180, 180), "Área transitable (180)"),
+        ]
+        
+        for label, color, desc in legend_items:
+            # Dibujar muestra de color
+            if label in ["LANE", "ROAD"]:
+                cv2.putText(bev_color, f"{label}: {desc}", (10, legend_y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+            else:
+                cv2.rectangle(bev_color, (10, legend_y-10), (25, legend_y+5), color, -1)
+                cv2.putText(bev_color, f"{label}: {desc}", (30, legend_y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+            legend_y += 20
+        
+        return bev_color
 
 
     def create_velocity_graph(self, width, height, column_name, title, base_color, current_value=None):
@@ -1803,7 +2494,19 @@ class NavigationDashboard:
         
         # ==================== 3. SEGMENTACION (COL1, ROW2) ====================
         if self.show_segmentation and 'image' in frame_data and 'segmentation' in frame_data:
-            seg_img = self.create_segmentation_overlay(frame_data['image'].copy(), frame_data['segmentation'])
+            if self.show_ipm_visualization:
+                # Mostrar visualización IPM
+                seg_img = self.create_lane_edge_ipm_visualization(
+                    frame_data['segmentation'], 
+                    frame_data,
+                    frame_data.get('image')
+                )
+                title_text = "LANE EDGE IPM DETECTION"
+            else:
+                # Mostrar segmentación normal
+                seg_img = self.create_segmentation_overlay(frame_data['image'].copy(), frame_data['segmentation'])
+                title_text = "SEGMENTACION"
+            
             if seg_img is not None:
                 seg_resized = cv2.resize(seg_img, (component_width, component_height))
                 
@@ -1818,7 +2521,7 @@ class NavigationDashboard:
                     if 'drivable_percent' in stats:
                         stats_text = f" | Area: {stats['drivable_percent']:.1f}%"
                 
-                status_text = "SEGMENTACION" if self.show_segmentation else "SEGMENTACION (DESACTIVADA)"
+                status_text = title_text if self.show_segmentation else f"{title_text} (DESACTIVADA)"
                 cv2.putText(title_bg, f"{status_text}{stats_text}", 
                         (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
                 
@@ -1847,7 +2550,8 @@ class NavigationDashboard:
         if 'segmentation' in frame_data:
             lane_img = self.create_lane_error_visualization(
                 frame_data['segmentation'], 
-                frame_data.get('perception_stats', {})
+                frame_data.get('perception_stats', {}),
+                frame_data.get('image') 
             )
             if lane_img is not None:
                 lane_resized = cv2.resize(lane_img, (component_width, component_height))
@@ -1876,23 +2580,81 @@ class NavigationDashboard:
         
         # ==================== 5. TRAYECTORIA (COL3, ROW1) ====================
         # Ajustar tamaño de la columna derecha
+         # Definir posiciones para la columna derecha ANTES de usarlas
         traj_width = min(600, col3_width)
         traj_height = 450
+        traj_x = col3_x + (col3_width - traj_width) // 2
         
-        if self.show_trajectory:
+        # Asegurar que row1_y esté definida para esta sección
+        if self.show_ipm_bev and 'segmentation' in frame_data:
+            # Mostrar visualización BEV
+            bev_img = self.create_ipm_bev_visualization(frame_data['segmentation'], frame_data)
+            if bev_img is not None:
+                bev_resized = cv2.resize(bev_img, (traj_width, traj_height))
+                
+                # Verificar que las dimensiones sean válidas
+                if (row1_y >= 0 and row1_y + bev_resized.shape[0] <= dashboard.shape[0] and
+                    traj_x >= 0 and traj_x + bev_resized.shape[1] <= dashboard.shape[1]):
+                    
+                    dashboard[row1_y:row1_y+bev_resized.shape[0], traj_x:traj_x+bev_resized.shape[1]] = bev_resized
+                    
+                    # Título para BEV - VERIFICAR QUE EL SLICE NO SEA VACÍO
+                    if row1_y - title_height >= 0 and row1_y - title_height < row1_y:
+                        title_bg = np.zeros((title_height, traj_width, 3), dtype=np.uint8)
+                        title_bg[:] = (40, 40, 40)
+                        cv2.putText(title_bg, "IPM BIRD'S EYE VIEW", 
+                                (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                        
+                        # Solo asignar si el slice es válido
+                        if title_bg.shape[0] > 0 and title_bg.shape[1] > 0:
+                            dashboard[row1_y-title_height:row1_y, traj_x:traj_x+traj_width] = title_bg
+                    else:
+                        # Si el cálculo da negativo o cero, ajustar
+                        adjusted_title_y = max(0, row1_y - title_height)
+                        if adjusted_title_y < row1_y:
+                            title_bg = np.zeros((row1_y - adjusted_title_y, traj_width, 3), dtype=np.uint8)
+                            title_bg[:] = (40, 40, 40)
+                            cv2.putText(title_bg, "IPM BIRD'S EYE VIEW", 
+                                    (10, title_bg.shape[0] - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                            dashboard[adjusted_title_y:row1_y, traj_x:traj_x+traj_width] = title_bg
+        
+        elif self.show_trajectory:
+            # Mostrar trayectoria normal
             trajectory_img = self.create_trajectory_plot(frame_data) 
             if trajectory_img is not None:
                 traj_resized = cv2.resize(trajectory_img, (traj_width, traj_height))
-                # Centrar horizontalmente en la columna 3
-                traj_x = col3_x + (col3_width - traj_width) // 2
-                dashboard[row1_y:row1_y+traj_resized.shape[0], traj_x:traj_x+traj_resized.shape[1]] = traj_resized
+                
+                # Verificar que las dimensiones sean válidas
+                if (row1_y >= 0 and row1_y + traj_resized.shape[0] <= dashboard.shape[0] and
+                    traj_x >= 0 and traj_x + traj_resized.shape[1] <= dashboard.shape[1]):
+                    
+                    dashboard[row1_y:row1_y+traj_resized.shape[0], traj_x:traj_x+traj_resized.shape[1]] = traj_resized
+                    
+                    # Título para trayectoria - CON VERIFICACIÓN
+                    if row1_y - title_height >= 0 and row1_y - title_height < row1_y:
+                        title_bg = np.zeros((title_height, traj_width, 3), dtype=np.uint8)
+                        title_bg[:] = (40, 40, 40)
+                        cv2.putText(title_bg, "TRAYECTORIA", 
+                                (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                        
+                        if title_bg.shape[0] > 0 and title_bg.shape[1] > 0:
+                            dashboard[row1_y-title_height:row1_y, traj_x:traj_x+traj_width] = title_bg
+        
         else:
-            # Placeholder para trayectoria
+            # Placeholder
             placeholder = np.zeros((traj_height, traj_width, 3), dtype=np.uint8)
-            cv2.putText(placeholder, "TRAYECTORIA DESACTIVADA", (130, 225),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-            traj_x = col3_x + (col3_width - traj_width) // 2
-            dashboard[row1_y:row1_y+placeholder.shape[0], traj_x:traj_x+placeholder.shape[1]] = placeholder
+            if self.show_ipm_bev:
+                cv2.putText(placeholder, "BEV NO DISPONIBLE", (130, 225),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            else:
+                cv2.putText(placeholder, "TRAYECTORIA DESACTIVADA", (130, 225),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            
+            # Verificar dimensiones
+            if (row1_y >= 0 and row1_y + placeholder.shape[0] <= dashboard.shape[0] and
+                traj_x >= 0 and traj_x + placeholder.shape[1] <= dashboard.shape[1]):
+                
+                dashboard[row1_y:row1_y+placeholder.shape[0], traj_x:traj_x+placeholder.shape[1]] = placeholder
         
         # ==================== 6. ESTADÍSTICAS (COL3, ROW2) ====================
         stats_panel = self.create_stats_panel(frame_data)
@@ -1995,7 +2757,14 @@ class NavigationDashboard:
             elif key == 83:  # Flecha derecha - Frame siguiente
                 self.current_frame = min(len(self.frames_list) - 1, self.current_frame + 1)
                 print(f" Frame: {self.current_frame + 1}/{len(self.frames_list)}")
-            
+            elif key == ord('4'):  # 4 - Toggle visualización IPM
+                self.show_ipm_visualization = not self.show_ipm_visualization
+                print(f" Visualización IPM: {'ACTIVADA' if self.show_ipm_visualization else 'DESACTIVADA'}")
+
+            elif key == ord('5'):  # 5 - Toggle visualización BEV
+                self.show_ipm_bev = not self.show_ipm_bev
+                print(f" Visualización BEV: {'ACTIVADA' if self.show_ipm_bev else 'DESACTIVADA'}")
+
             # Avanzar automáticamente si no está en pausa
             if not self.paused:
                 # Acumular velocidad fraccionaria

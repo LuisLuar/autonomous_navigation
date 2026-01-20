@@ -8,7 +8,9 @@ import numpy as np
 import math
 import time
 from collections import deque
-
+from nav_msgs.msg import Odometry
+from collections import deque
+import statistics
 
 class VelocityController(Node):
 
@@ -40,23 +42,30 @@ class VelocityController(Node):
 
         self.create_subscription(Bool, '/manual', self.manual_cb, 10)
 
+        self.create_subscription(
+            Odometry, '/odometry/local', self.odom_cb, 10
+        )
+
         # ================= PUBLISHER =================
         self.pub_cmd = self.create_publisher(Twist, '/cmd_vel', 10)
 
 
         # ================= PARAMETERS =================
         self.declare_parameter('max_linear_speed', 1.0)
-        self.declare_parameter('max_angular_speed', 0.50)
+        self.declare_parameter('max_angular_speed', 0.20)
 
         self.declare_parameter('max_linear_accel', 0.01)
         self.declare_parameter('max_angular_accel', 0.35)
 
-        self.declare_parameter('Kp_lane', 0.4) #0.35
+        self.declare_parameter('Kp_lane', 0.5) #0.35
         self.declare_parameter('Kd_lane', 0.0012)
-        self.declare_parameter('Kp_lane_orientation', 0.04) #0.35
+        self.declare_parameter('Kp_lane_orientation', 0.045) #0.35
         self.declare_parameter('Kp_planner', 0.01)
         self.declare_parameter('Kp_lidar_lateral', 0.1)
         self.declare_parameter('control_rate', 20.0)
+
+        self.declare_parameter('curvature_gain', 10.0) #5
+
 
         self.declare_parameter('max_wait_time',2)
 
@@ -70,6 +79,12 @@ class VelocityController(Node):
         rate = self.get_parameter('control_rate').value
         self.create_timer(1.0 / rate, self.control_loop)
         self.pp_active = False
+
+        # ===== ORIENTACION =====
+        self.yaw = 0.0
+        self.psi_ref = None      # referencia interna
+        self.last_yaw_time = None
+
 
         # ====== INICIALIZACION COMPLETA ======
         self.emergency = False
@@ -99,11 +114,30 @@ class VelocityController(Node):
         self.e_lane_dot = 0.0
         self.deriv_filter = 0.7
 
+        self.linear_velocity = 0.0
+        self.angular_velocity = 0.0
+
         self.manual = False
         self.e_history = deque(maxlen=200)  # ~10s a 20Hz
 
+        # Crear buffer para 100 números
+        self.angular_trend = deque(maxlen=250) #5s a 20Hz
+
         #self.get_logger().info("Velocity Controller READY (with emergency stop)")
 
+
+    # =============== ODOMETRÍA ====================    
+    def odom_cb(self, msg: Odometry):
+        self.linear_velocity = msg.twist.twist.linear.x
+        self.angular_velocity = msg.twist.twist.angular.z
+        # Aquí puedes usar las velocidades lineales y angulares según sea necesario
+        # Por ejemplo, podrías almacenarlas en variables de estado si es necesario
+        q = msg.pose.pose.orientation
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y*q.y + q.z*q.z)
+        self.yaw = math.atan2(siny_cosp, cosy_cosp)
+        self.angular_trend.append(self.yaw)
+        pass
     # =====================================================
     def emergency_cb(self, msg):
         if msg.data and not self.emergency:
@@ -197,6 +231,24 @@ class VelocityController(Node):
             self.pub_cmd.publish(cmd)
             return
         
+        # ===== inicializar referencia =====
+        # Convertir a lista para cálculos
+        angular = list(self.angular_trend)
+        if len(angular) == 0:
+            prom_angular = 0.0
+        else:
+            prom_angular = sum(angular) / len(angular)
+        # 1. Media/Promedio
+              
+        # 3. Desviación estándar
+        dev_angular = statistics.stdev(angular) if len(angular) > 1 else 0
+        #self.get_logger().info(f"Angular Velocity Trend - Mean: {prom_angular:.4f}, Std Dev: {dev_angular:.4f}")
+        error_angular = prom_angular - self.yaw 
+
+        if dev_angular == 0.0:
+            dev_angular = 100000000000.0
+        
+        
         # ================= Linear Velocity =================
         v_max = self.get_parameter('max_linear_speed').value
         v_des = v_max 
@@ -215,7 +267,7 @@ class VelocityController(Node):
         """if not self.active_lidar_front and not self.active_vision:
             v_des *= 0.5"""
         
-        if self.active_lidar_front and self.alpha_lidar == 0.0:
+        """if self.active_lidar_front and self.alpha_lidar == 0.0:
             self.v_cmd = 0.0
             self.w_cmd = 0.0
 
@@ -223,7 +275,7 @@ class VelocityController(Node):
             self.pub_cmd.publish(cmd)
             return
         elif self.active_lidar_front:
-            v_des *= self.alpha_lidar
+            v_des *= self.alpha_lidar"""
 
         """if self.active_vision and self.alpha_vision == 0.0:
             self.v_cmd = 0.0
@@ -260,14 +312,10 @@ class VelocityController(Node):
                 return
         else:
             self.safety_time = 0
-        
-        # ================= ACCELERATION LIMIT LINEAR =================
-        a_v = self.get_parameter('max_linear_accel').value
-        self.v_cmd += np.clip(v_des - self.v_cmd, -a_v * dt, a_v * dt)
 
         # ================= Angular Velocity =================
         w_max = self.get_parameter('max_angular_speed').value
-        v = max(abs(self.v_cmd), 0.1)
+        v = max(abs(self.linear_velocity), 0.1)
 
         # --- Derivada ---
         e = self.omega_lane
@@ -300,13 +348,7 @@ class VelocityController(Node):
                 #self.get_logger().info(
                 #    f"v={self.v_cmd:.2f} m/s | RMS(e)={rms:.3f}"
                 #)
-
-        
-        """w_droidcam_lane = 0.0
-        if self.active_droidcam_lane:
-            Kp_droidcam_lane = self.get_parameter('Kp_droidcam_lane').value
-            w_droidcam_lane = Kp_droidcam_lane * self.omega_droidcam_lane"""
-        
+      
         w_lidar_lateral = 0.0
         if self.active_lidar_lateral:
             Kp_lidar = self.get_parameter('Kp_lidar_lateral').value
@@ -314,15 +356,21 @@ class VelocityController(Node):
         
         w_des = 0.0
         if not condition:
-            w_des = w_lane + w_lidar_lateral #+ w_droidcam_lane
+            w_des = w_lane #+ w_lidar_lateral #+ error_angular * (1/dev_angular) * 0.01
             w_des = np.clip(w_des, -w_max, w_max)
-            self.w_cmd = w_des
+            self.w_cmd = w_des        
 
-        #self.get_logger().info(f"v={self.v_cmd:.2f} m/s | RMS(e)={self.w_cmd:.3f}")
+        # ==================== FINAL VELOCITY COMMAND =================
+        beta = self.get_parameter('curvature_gain').value
+        if(self.linear_velocity > 0.6):
+            v_des = v_des / (1 + beta*abs(self.w_cmd))
+            
+
+        # ================= ACCELERATION LIMIT LINEAR =================
+        a_v = self.get_parameter('max_linear_accel').value
+        self.v_cmd += np.clip(v_des - self.v_cmd, -a_v * dt, a_v * dt)
+
         
-        # ================= ACCELERATION LIMIT ANGULAR =================
-        #a_w = self.get_parameter('max_angular_accel').value
-        #self.w_cmd+= np.clip(w_des - self.w_cmd, -a_w * dt, a_w * dt)
 
 
         # ================= PUBLISH =================
@@ -335,7 +383,6 @@ class VelocityController(Node):
         if len(self.e_history) == 0:
             return 0.0
         return math.sqrt(np.mean(np.square(self.e_history)))
-
 
     def destroy_node(self):
         super().destroy_node()

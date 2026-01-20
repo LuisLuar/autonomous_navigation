@@ -41,6 +41,9 @@ setup(
             'brain_controller = local_planner.brain_controller:main',
             'information_osm = path_planner.information_osm:main',
             'osm_limiter = local_planner.osm_limiter:main',
+            'robust_controller = local_planner.robust_controller:main',
+            'global_path_map_to_odom = path_planner.global_path_map_to_odom:main',
+            'goal_reached = path_planner.goal_reached:main',
         ],
     },
 )

@@ -126,10 +126,8 @@ def generate_launch_description():
                 ])
             ]),
             launch_arguments={}.items()
-        ),  
-    ])
+        ), 
 
-"""
         # Lanza la visualización en RVIZ2
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -140,7 +138,20 @@ def generate_launch_description():
                 ])
             ]),
             launch_arguments={}.items()
-        ),
+        ), 
+
+        
+        
+        
+    ])
+
+"""
+        
+
+        
+
+        
+        
     
         
         

@@ -15,7 +15,7 @@ class MapWidget(QWidget):
     def __init__(self, ros_node=None, offline_tiles_path=None, leaflet_path=None):
         super().__init__()
         self.ros_node = ros_node
-        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/casa_ext" #OpenStreetMap GoogleImagenes
+        self.offline_tiles_path = offline_tiles_path or "/home/raynel/Documents/offline_title/GoogleImagenes" #OpenStreetMap GoogleImagenes
         
         # Ruta a los recursos de Leaflet offline
         if leaflet_path:

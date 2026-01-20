@@ -97,10 +97,10 @@ def cost(u, v, data):
 
 def find_osm_file():
     possible_paths = [
-        os.path.join(os.path.dirname(__file__), "maps", "casa.osm"), #espe_actualizadov2
-        os.path.join(os.path.dirname(__file__), "casa.osm"),
-        "/home/raynel/autonomous_navigation/src/navigation_system/maps/casa.osm",
-        "casa.osm",
+        os.path.join(os.path.dirname(__file__), "maps", "espe_actualizadov2.osm"), #espe_actualizadov2
+        os.path.join(os.path.dirname(__file__), "espe_actualizadov2.osm"),
+        "/home/raynel/autonomous_navigation/src/navigation_system/maps/espe_actualizadov2.osm",
+        "espe_actualizadov2.osm",
     ]
     
     for path in possible_paths:
