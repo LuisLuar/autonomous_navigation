@@ -26,7 +26,6 @@ class ROSBridge(Node):
     def __init__(self, parent_node=None):
         """
         Inicializa el puente ROS2 para la interfaz gráfica.
-        
         Args:
             parent_node: Nodo padre si se está utilizando un nodo existente
         """
@@ -106,7 +105,6 @@ class ROSBridge(Node):
             "EPSG:32717", "EPSG:4326", always_xy=True
         )
 
-
         # Bandera para indicar si recibimos al menos un mensaje
         self.any_msg_received = False
 
@@ -163,21 +161,19 @@ class ROSBridge(Node):
         self.create_subscription(DiagnosticStatus, '/status/gpu_usage', self.cb_gpu_usage_status, 10)
         self.create_subscription(DiagnosticStatus, '/status/disk_temperature', self.cb_disk_temp_status, 10)
         self.create_subscription(DiagnosticStatus, '/status/uptime', self.cb_uptime_status, 10)
-        
 
         # Señal del gps
         self.create_subscription(NavSatFix, '/gps/filtered', self.cb_gps_fix,10)
         self.create_subscription(String, '/gps/raw', self.cb_gps_raw,10)
         self.create_subscription(String, '/gps/info', self.cb_gps_info,10)
-        
 
         #Camara
         #self.create_subscription(Image, '/camera/rgb/image_raw', self.cb_camera_rgb, 1)
         #self.create_subscription(Image, '/camera/depth/image_raw', self.cb_camera_depth, 1) 
 
         # Redes neuronales
-        self.create_subscription(Image, '/segmentation/overlay', self.cb_camera_segmentation, 1)
-        self.create_subscription(Image, '/detection/annotated_image', self.cb_camera_detection, 1) #/detection/annotated_image
+        self.create_subscription(Image, '/camera/rgb/image_raw', self.cb_camera_segmentation, 1)
+        self.create_subscription(Image, '/camera/rgb/left', self.cb_camera_detection, 1) #/detection/annotated_image
 
         # Path global
         self.create_subscription(Path, '/global_path', self.cb_planned_path, 10)

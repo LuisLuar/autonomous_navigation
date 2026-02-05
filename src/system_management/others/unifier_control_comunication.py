@@ -102,7 +102,7 @@ class UnifierNode(Node):
         }
 
         # Timer: 20 Hz
-        self.timer = self.create_timer(0.05, self.control_loop)
+        self.timer = self.create_timer(0.1, self.control_loop)
 
         # Service router
         self.reset_service = self.create_service(SetBool, 'robot_control_reset', self.reset_router_cb)
@@ -116,8 +116,8 @@ class UnifierNode(Node):
             return None
         
         # Si el offset es 0, no hacer nada
-        if abs(self.imu_yaw_offset) < 0.0001:  # ~0.0057 grados
-            return imu_msg
+        #if abs(self.imu_yaw_offset) < 0.0001:  # ~0.0057 grados
+            #return imu_msg
         
         # Crear una copia del mensaje para no modificar el original
         calibrated_msg = Imu()
@@ -127,6 +127,12 @@ class UnifierNode(Node):
         calibrated_msg.orientation_covariance = imu_msg.orientation_covariance
         calibrated_msg.angular_velocity_covariance = imu_msg.angular_velocity_covariance
         calibrated_msg.linear_acceleration_covariance = imu_msg.linear_acceleration_covariance
+
+        angular_velocity = calibrated_msg.angular_velocity.z
+        if abs(calibrated_msg.angular_velocity.z) < 0.03:
+            calibrated_msg.angular_velocity.z = 0.0
+
+        #self.get_logger().info(f"Corregido: {calibrated_msg.angular_velocity.z} // Original: {angular_velocity}")
         
         # Extraer la orientación actual como cuaternión
         q_original = imu_msg.orientation
@@ -155,8 +161,6 @@ class UnifierNode(Node):
             calibrated_msg.orientation.w = q_calibrated_list[3]
             
         except Exception as e:
-            self.get_logger().warn(f'Error applying IMU yaw calibration: {e}')
-            # En caso de error, mantener la orientación original
             calibrated_msg.orientation = imu_msg.orientation
         
         return calibrated_msg
@@ -409,7 +413,7 @@ class UnifierNode(Node):
                 self.last_warn_time = 0
 
             if now - self.last_warn_time > 2000:  # 2000 ms
-                #self.get_logger().warn("⚠️ NO hay datos frescos de microros ni serial — sistema en silencio.")
+                #self.get_logger().warn(" NO hay datos frescos de microros ni serial — sistema en silencio.")
                 self.last_warn_time = now
 
         # Log source changes

@@ -22,7 +22,7 @@ class WebcamPublisher(Node):
         self.fps = 30  # Frames por segundo
         
         # Iniciar captura de video
-        self.cap = cv2.VideoCapture(self.camera_index)
+        self.cap = cv2.VideoCapture("http://192.168.100.164:8080/video" )#cv2.VideoCapture(self.camera_index)
         
         if not self.cap.isOpened():
             #self.get_logger().error(f"No se pudo abrir la cámara con índice {self.camera_index}")
@@ -92,7 +92,6 @@ class WebcamPublisher(Node):
         # Liberar recursos
         if hasattr(self, 'cap'):
             self.cap.release()
-        #cv2.destroyAllWindows()
         super().destroy_node()
 
 def main(args=None):

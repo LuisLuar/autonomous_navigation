@@ -33,8 +33,19 @@ class LaneControllerStep6(Node):
 
         self.create_subscription(Bool, '/active/planner', self.planner_active_cb, 10)
         self.create_subscription(Bool, '/goal_reached', self.goal_reached_cb, 10)
+
+        self.create_subscription(Float32, '/alpha/vision', self.vision_alpha_cb, 10)
+        self.create_subscription(Bool, '/active/vision', self.vision_active_cb, 10)
+
+        self.create_subscription(Bool, '/lane_topology/calibration_ready', self.topology_cb, 10)
+
         self.planner_active = False
         self.goal_reached = False
+
+        self.topology = False
+
+        self.alpha_vision = None
+        self.active_vision = None
 
         # ===================== PUB ======================
         self.pub_cmd = self.create_publisher(Twist, '/cmd_vel', 10)
@@ -55,8 +66,8 @@ class LaneControllerStep6(Node):
         # LANE (control geométrico)
         self.declare_parameter('lookahead', 2.0)
 
-        self.declare_parameter('k_lat', 0.1) #Qué tan rápido vuelves al carril cuando estás desplazado
-        self.declare_parameter('k_head', 0.08) #Qué tan agresivo alineas el robot con la dirección del carril
+        self.declare_parameter('k_lat', 0.8) #Qué tan rápido vuelves al carril cuando estás desplazado
+        self.declare_parameter('k_head', 0.1) #Qué tan agresivo alineas el robot con la dirección del carril
         self.declare_parameter('k_curv', 0.1) #Anticipación de curva
         self.declare_parameter('beta', 2.0) #Cuánto reduces velocidad lineal en curva
 
@@ -91,9 +102,16 @@ class LaneControllerStep6(Node):
         self.manual = False
 
         self.last_time = time.time()
-        self.create_timer(0.05, self.control_loop)
+        self.create_timer(0.1, self.control_loop)
 
         self.get_logger().info('LaneController Step6 FINAL READY')
+    
+    # ============ CONTROL DE VISION =====================
+    def vision_alpha_cb(self, msg):
+        self.alpha_vision = msg.data
+
+    def vision_active_cb(self, msg):
+        self.active_vision = msg.data
 
     # ================= CALLBACKS =================
     def lane_cb(self, msg): self.omega_lane = msg.data
@@ -113,6 +131,8 @@ class LaneControllerStep6(Node):
 
     def planner_active_cb(self, msg): self.planner_active = msg.data
     def goal_reached_cb(self, msg): self.goal_reached = msg.data
+
+    def topology_cb(self, msg): self.topology = msg.data
     
     def publish_mode(self):
         msg = Int32()
@@ -137,7 +157,17 @@ class LaneControllerStep6(Node):
         """if self.goal_reached or not self.planner_active:
             self.reset_controller()
             self.publish_zero()
-            return """
+            return"""
+        
+        
+
+        
+
+        # ---------- GOAL REACHED ----------
+        if not self.topology:
+            self.reset_controller()
+            self.publish_zero()
+            return
 
         # ---------- MANUAL ----------
         if self.manual:
@@ -150,7 +180,7 @@ class LaneControllerStep6(Node):
             return
 
         # ---------- BASE MODE (OBLIGATORIO) ----------
-        base_time = self.get_parameter('base_time').value
+        """base_time = self.get_parameter('base_time').value
         if (now - self.start_time) < base_time:
             #self.get_logger().info(f"⏳ BASE MODE ACTIVE: {now - self.start_time:.1f}s")
             self.mode = 'BASE'
@@ -164,7 +194,7 @@ class LaneControllerStep6(Node):
             v, w = self.frame_control(dt)
 
             # VALIDACIÓN REAL
-            """if (
+            if (
                 self.active_lane and
                 self.e_lat is not None and
                 abs(self.e_lat) < 0.5 and
@@ -190,12 +220,18 @@ class LaneControllerStep6(Node):
                 self.mode = 'BASE'
                 self.alpha = 0.0
 
-            if self.alpha >= 1.0:
-                self.mode = 'LANE'
+            #if self.alpha >= 1.0:
+#                self.mode = 'LANE'
 
         else:  # LANE
-            v, w = self.lane_control(dt)"""
+            v, w = self.lane_control(dt)
 
+            # SEGURIDAD
+            if abs(w) >= self.get_parameter('w_max').value:
+                self.mode = 'BASE'
+                self.alpha = 0.0"""
+
+        v, w = self.lane_control(dt)
         self.publish_cmd(v, w)
         self.publish_mode()
 
@@ -246,6 +282,7 @@ class LaneControllerStep6(Node):
 
         # Velocidad de referencia (NO la medida)
         v_ref = max(self.v_cmd, 0.05)
+        
 
         # --- Términos del control ---
         w_heading = k_head * v_ref * self.e_head / L
@@ -265,6 +302,10 @@ class LaneControllerStep6(Node):
 
         # Velocidad lineal adaptativa a curvatura
         v_max = self.get_parameter('v_max').value
+
+        """if self.active_vision:
+            v_max = v_max*self.alpha_vision"""
+
         beta  = self.get_parameter('beta').value
         v_des = v_max / (1 + beta * abs(self.curvature))
 

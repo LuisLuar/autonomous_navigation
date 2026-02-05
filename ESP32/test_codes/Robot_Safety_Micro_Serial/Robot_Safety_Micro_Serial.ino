@@ -11,17 +11,17 @@
 
 
 //______DEFINICION DE GPIO________________________________-
-#define GPIO_CURRENT_M_LEFT 34    // Entrada analógica de la ESP32 (32, 33, 34, 35, 36 o 39)
-#define GPIO_CURRENT_M_RIGHT 35
-#define GPIO_VOLTAJE_12V 33
-#define GPIO_VOLTAJE_5V 32
+//#define GPIO_CURRENT_M_LEFT 34    // Entrada analógica de la ESP32 (32, 33, 34, 35, 36 o 39)
+//#define GPIO_CURRENT_M_RIGHT 35
+#define GPIO_VOLTAJE_12V 32
+//#define GPIO_VOLTAJE_5V 32
 
-#define GPIO_RELE_M_LEFT 14
-#define GPIO_RELE_M_RIGHT 17
-#define GPIO_RELE_STOP 23
-#define GPIO_RELE_LEFT 25
-#define GPIO_RELE_RIGHT 26
-#define GPIO_RELE_SAFETY 27
+//#define GPIO_RELE_M_LEFT 14
+#define GPIO_RELE_M_RIGHT 33
+/*#define GPIO_RELE_STOP 34
+#define GPIO_RELE_LEFT 19//36
+#define GPIO_RELE_RIGHT 18//39
+#define GPIO_RELE_SAFETY 35*/
 //___________________________________________
 
 
@@ -77,16 +77,16 @@ void setup() {
     while (1) {delay(1000);}
   }
 
-  offset_Mleft = calibrateSensorCurrent(GPIO_CURRENT_M_LEFT);
-  offset_Mright = calibrateSensorCurrent(GPIO_CURRENT_M_RIGHT);
+  //offset_Mleft = calibrateSensorCurrent(GPIO_CURRENT_M_LEFT);
+  //offset_Mright = calibrateSensorCurrent(GPIO_CURRENT_M_RIGHT);
 
   //___________RELES___________________
-  pinMode(GPIO_RELE_M_LEFT, OUTPUT);
+  //pinMode(GPIO_RELE_M_LEFT, OUTPUT);
   pinMode(GPIO_RELE_M_RIGHT, OUTPUT);
-  pinMode(GPIO_RELE_STOP, OUTPUT);
+  /*pinMode(GPIO_RELE_STOP, OUTPUT);
   pinMode(GPIO_RELE_LEFT, OUTPUT);
   pinMode(GPIO_RELE_RIGHT, OUTPUT);
-  pinMode(GPIO_RELE_SAFETY, OUTPUT);
+  pinMode(GPIO_RELE_SAFETY, OUTPUT);*/
 
 
   // Opcional: espera Serial (solo si necesitas debugging tempranero)
@@ -145,24 +145,24 @@ void ControlLoop(void *parameter) {
   lastTime_serial = millis();
 
   while (1) {
-    float left = readCurrent(GPIO_CURRENT_M_LEFT, offset_Mleft);
-    float right = readCurrent(GPIO_CURRENT_M_RIGHT, offset_Mright);
+    //float left = readCurrent(GPIO_CURRENT_M_LEFT, offset_Mleft);
+    //float right = readCurrent(GPIO_CURRENT_M_RIGHT, offset_Mright);
     float v12 = readVoltage(GPIO_VOLTAJE_12V, 0.05, anterior_12v);
-    float v5  = readVoltage(GPIO_VOLTAJE_5V, 0.5, anterior_5v);
+    //float v5  = readVoltage(GPIO_VOLTAJE_5V, 0.5, anterior_5v);
 
     // Protegemos la escritura
     if (xSemaphoreTake(sensor_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-      current_Mleft = left;
-      current_Mright = right;
+      //current_Mleft = left;
+      //current_Mright = right;
       voltage_12V = v12;
-      voltage_5V = v5;
+      //voltage_5V = v5;
       xSemaphoreGive(sensor_mutex);
     } 
     vTaskDelay(pdMS_TO_TICKS(500)); // espera 500 ms (no bloquear otros hilos)
 
     if (millis() - lastTime_serial > sampleTime_serial) {
       lastTime_serial = millis();
-      enviarDatos(left, right, v12, v5);
+      enviarDatos(0, 0, v12, 0);
       recibirDatos();
     }
 

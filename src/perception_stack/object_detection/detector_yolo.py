@@ -16,7 +16,7 @@ class YoloDetectorNode(Node):
         super().__init__('yolo_detector')
 
         # ------------ Config Modelo -------------
-        self.model_path = "/home/raynel/autonomous_navigation/src/perception_stack/object_detection/models/yolo11m.pt"
+        self.model_path = "/home/raynel/autonomous_navigation/src/perception_stack/object_detection/models/yolo11s.pt"
         
         self.conf_thres = float(os.getenv("YOLO_CONF", 0.25))
         self.iou_thres = float(os.getenv("YOLO_IOU", 0.45))

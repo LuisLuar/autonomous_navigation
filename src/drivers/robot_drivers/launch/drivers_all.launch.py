@@ -7,32 +7,8 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-        # Lanzar RPLidar A1
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('rplidar_ros'),
-                    'launch',
-                    'rplidar_a1_launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ),
-
-
-        # Lanzar nodo cámara con reconexión
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('robot_drivers'),
-                    'launch',
-                    'asus_xtion.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ),
         
-        
+         
         # Lanzar nodo GPS
         Node(
             package='robot_drivers',
@@ -56,12 +32,42 @@ def generate_launch_description():
             output='screen',
             name='webrtc_streamer'
         ),  
-        
+
+                                
     ])
 
 """
+        
+        
+        # Lanzar nodo cámara con reconexión
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('robot_drivers'),
+                    'launch',
+                    'asus_xtion.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
 
-         # Lanzar nodo DroidCam
+        #Lanzar nodo Camara Izquierda
+        Node(
+            package='robot_drivers',
+            executable='camera_left',
+            output='screen',
+        ),
+
+        #Lanzar nodo Camara Derecha
+        Node(
+            package='robot_drivers',
+            executable='camera_right',
+            output='screen',
+        ),  
+        
+
+
+        # Lanzar nodo DroidCam
         Node(
             package='robot_drivers',
             executable='droidcam_camera',
@@ -74,11 +80,19 @@ def generate_launch_description():
             executable='webcam_tester',
             output='screen',
             name='webcam_tester'
+        ), 
+
+        # Lanzar RPLidar A1
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('rplidar_ros'),
+                    'launch',
+                    'rplidar_a1_launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
         ),
 
-        
-
-        
-
-        
+             
 """

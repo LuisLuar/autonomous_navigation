@@ -22,19 +22,19 @@ class Esp32DynamicSupervisor(Node):
 
         # Cache para detectar cambios en estados
         self.last_node_states = {
-            #'Robot_Safety': {'online': False, 'topics_found': 0, 'level': 2},
+            'Robot_Safety': {'online': False, 'topics_found': 0, 'level': 2},
             'Robot_Control': {'online': False, 'topics_found': 0, 'level': 2}
         }
 
         # Timestamps de última actividad por nodo
         self.last_activity_time = {
-            #'Robot_Safety': None,
+            'Robot_Safety': None,
             'Robot_Control': None
         }
 
         # Contadores de mensajes recibidos por topic
         self.message_counters = {
-            #'Robot_Safety': 0,
+            'Robot_Safety': 0,
             'Robot_Control': 0
         }
 
@@ -43,11 +43,11 @@ class Esp32DynamicSupervisor(Node):
 
         # Nodos y tópicos esperados por cada ESP32
         self.expected_nodes = {
-            """'Robot_Safety': [
+            'Robot_Safety': [
                 '/battery_array',
                 '/motors_array', 
                 '/rele_control'
-            ],"""
+            ],
             'Robot_Control': [
                 '/odom/unfiltered',
                 '/imu/unfiltered',
@@ -68,10 +68,10 @@ class Esp32DynamicSupervisor(Node):
         """Configura suscriptores específicos para monitorear actividad de topics críticos"""
         # Topics críticos que indican actividad real, con sus tipos de mensaje
         critical_topics = {
-            """'Robot_Safety': [
+            'Robot_Safety': [
                 ('/battery_array', Float32MultiArray),
                 ('/motors_array', Float32MultiArray)
-            ],"""
+            ],
             'Robot_Control': [
                 ('/odom/unfiltered', Odometry),
                 ('/imu/unfiltered', Imu),

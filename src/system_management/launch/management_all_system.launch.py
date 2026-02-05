@@ -103,19 +103,6 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
         
-
-        # Lanza los nodos de GUI y rele combiner
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('system_management'),
-                    'launch',
-                    'others.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ),   
-
         # Lanzar nodo para guardar datos
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -128,31 +115,27 @@ def generate_launch_description():
             launch_arguments={}.items()
         ), 
 
-        # Lanza la visualización en RVIZ2
+        # Lanza los nodos de GUI y rele combiner
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
                 PathJoinSubstitution([
-                    FindPackageShare('robot_description'),
+                    FindPackageShare('system_management'),
                     'launch',
-                    'rviz2.launch.py'
+                    'others.launch.py'
                 ])
             ]),
             launch_arguments={}.items()
-        ), 
-
-        
+        ),      
         
         
     ])
 
-"""
+"""      
+         
         
 
         
 
-        
-        
-    
-        
-        
+
+                  
 """

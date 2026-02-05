@@ -32,7 +32,7 @@ class LaneDebugNode(Node):
         self.create_subscription(Path, '/lane/tracked_path', self.left_cb, 1)
         #self.create_subscription(Path, '/lane/right_tracked', self.right_cb, 1)
 
-        #self.get_logger().info("🚦 Lane Debug Node READY (Scale: 40.0 px/m)")
+        #self.get_logger().info(" Lane Debug Node READY (Scale: 40.0 px/m)")
 
     def bev_cb(self, msg):
         self.bev = self.bridge.imgmsg_to_cv2(msg, 'mono8')

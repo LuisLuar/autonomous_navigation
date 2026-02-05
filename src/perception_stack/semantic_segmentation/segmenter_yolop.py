@@ -24,7 +24,7 @@ class YOLOPv2SegmenterNode(Node):
         self.input_h = 640
         self.input_w = 640
 
-        self.lane_thresh = 0.6
+        self.lane_thresh = 0.5
         self.road_thresh = 0.4
 
         self.bridge = CvBridge()

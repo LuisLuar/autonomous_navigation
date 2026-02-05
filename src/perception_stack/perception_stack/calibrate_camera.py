@@ -16,7 +16,7 @@ class CameraCalibrationNode(Node):
         
         # ===== PARÁMETROS =====
         self.declare_parameter("camera_height", 0.38)  # m
-        self.declare_parameter("save_path", "/home/raynel/autonomous_navigation/calibration.json")
+        self.declare_parameter("save_path", "/home/raynel/autonomous_navigation/src/perception_stack/params/calibration_left.json")
         
         self.h = self.get_parameter("camera_height").value
         self.save_path = self.get_parameter("save_path").value
@@ -34,7 +34,7 @@ class CameraCalibrationNode(Node):
         self.bridge = CvBridge()
         self.create_subscription(
             Image,
-            "/camera/rgb/image_raw",
+            "/camera/rgb/left",
             self.image_callback,
             10
         )

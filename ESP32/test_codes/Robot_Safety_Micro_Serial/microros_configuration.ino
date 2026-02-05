@@ -60,12 +60,12 @@ bool both_comms_failed() {
 // Reinicio agresivo para casos críticos ambas comunicaciones perdidads
 void aggressive_recovery() {
   // Parar motores por seguridad absoluta
-  digitalWrite(GPIO_RELE_M_LEFT, LOW);
+  //digitalWrite(GPIO_RELE_M_LEFT, LOW);
   digitalWrite(GPIO_RELE_M_RIGHT, LOW);
-  digitalWrite(GPIO_RELE_STOP, LOW);
+  /*digitalWrite(GPIO_RELE_STOP, LOW);
   digitalWrite(GPIO_RELE_LEFT, LOW);
   digitalWrite(GPIO_RELE_RIGHT, LOW);
-  digitalWrite(GPIO_RELE_SAFETY, LOW);
+  digitalWrite(GPIO_RELE_SAFETY, LOW);*/
 
   // Intentar reconexión rápida primero
   for (int i = 0; i < 3; i++) {
@@ -98,12 +98,12 @@ void error_loop() {
     // SOLO DETENER MOTORES SI AMBAS COMUNICACIONES FALLAN
     if (both_comms_failed()) {
       //Serial.println("🚨 CRÍTICO: Ambas comunicaciones perdidas - deteniendo motores");
-      digitalWrite(GPIO_RELE_M_LEFT, LOW);
+      //digitalWrite(GPIO_RELE_M_LEFT, LOW);
       digitalWrite(GPIO_RELE_M_RIGHT, LOW);
-      digitalWrite(GPIO_RELE_STOP, LOW);
+      /*digitalWrite(GPIO_RELE_STOP, LOW);
       digitalWrite(GPIO_RELE_LEFT, LOW);
       digitalWrite(GPIO_RELE_RIGHT, LOW);
-      digitalWrite(GPIO_RELE_SAFETY, LOW);
+      digitalWrite(GPIO_RELE_SAFETY, LOW);*/
 
       // INICIAR RECUPERACIÓN AGRESIVA
       aggressive_recovery();
@@ -285,12 +285,12 @@ void Rele_callback(const void *msg_in)  {
     //Serial.println(data & (1 << 5) ? HIGH : LOW);
     //Serial.println("");*/
 
-  digitalWrite(GPIO_RELE_M_LEFT,   data & (1 << 0) ? HIGH : LOW);
+  //digitalWrite(GPIO_RELE_M_LEFT,   data & (1 << 0) ? HIGH : LOW);
   digitalWrite(GPIO_RELE_M_RIGHT,  data & (1 << 1) ? HIGH : LOW);
-  digitalWrite(GPIO_RELE_STOP,     data & (1 << 2) ? HIGH : LOW);
+  /*digitalWrite(GPIO_RELE_STOP,     data & (1 << 2) ? HIGH : LOW);
   digitalWrite(GPIO_RELE_LEFT,     data & (1 << 3) ? HIGH : LOW);
   digitalWrite(GPIO_RELE_RIGHT,    data & (1 << 4) ? HIGH : LOW);
-  digitalWrite(GPIO_RELE_SAFETY,   data & (1 << 5) ? HIGH : LOW);
+  digitalWrite(GPIO_RELE_SAFETY,   data & (1 << 5) ? HIGH : LOW);*/
 }
 //_________________________________________________
 

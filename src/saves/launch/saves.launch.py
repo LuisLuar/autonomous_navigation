@@ -38,6 +38,18 @@ def generate_launch_description():
             executable='perception_recorder',
             output='screen',
         ),
+
+        Node(
+            package='saves',
+            executable='perception_recorder_left',
+            output='screen',
+        ),
+
+        Node(
+            package='saves',
+            executable='perception_recorder_right',
+            output='screen',
+        ),
         
         Node(
             package='saves',

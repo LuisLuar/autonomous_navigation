@@ -16,21 +16,17 @@ class DualImagePublisher(Node):
         super().__init__('dual_image_publisher')
         
         # ===== PARÁMETROS HARCODEADOS (ajusta según necesites) =====
-        self.folder_path = "/home/raynel/autonomous_navigation/src/saves/data_logs/ruta1_20260120_093624/perception"
+        self.folder_path = "/home/raynel/autonomous_navigation/src/saves/data_logs/ruta11_20260127_122730/perception_right"
         self.current_idx = 0
         self.frame_rate = 20.0  # Hz
         self.auto_advance = False  # Avanzar automáticamente?
         
-        print("\n" + "="*70)
-        print("📸 PUBLICADOR DUAL DE IMÁGENES (RGB + PROFUNDIDAD + POINT CLOUD)")
-        print("="*70)
         
         # Verificar estructura de carpetas
         self.rgb_folder = os.path.join(self.folder_path, "images")
         self.depth_folder = os.path.join(self.folder_path, "depth")
         
         if not os.path.exists(self.rgb_folder):
-            print(f"❌ ERROR: Carpeta RGB no existe: {self.rgb_folder}")
             sys.exit(1)
         
         self.has_depth = os.path.exists(self.depth_folder)
@@ -58,33 +54,22 @@ class DualImagePublisher(Node):
             self.depth_images.sort(key=lambda x: extract_number(x))
             
             if len(self.depth_images) == 0:
-                print("⚠️  ADVERTENCIA: Carpeta depth existe pero no contiene imágenes válidas")
                 self.has_depth = False
-            else:
-                print(f"✅ Imágenes Depth encontradas: {len(self.depth_images)}")
+
                 
                 if len(self.rgb_images) != len(self.depth_images):
-                    print(f"⚠️  ADVERTENCIA: Número diferente de imágenes RGB ({len(self.rgb_images)}) vs Depth ({len(self.depth_images)})")
-                    print("  Se ajustará al mínimo común")
                     self.num_images = min(len(self.rgb_images), len(self.depth_images))
-        else:
-            print("⚠️  ADVERTENCIA: No se encontró carpeta depth")
-            print("  Solo se publicarán imágenes RGB")
         
         # Verificar que tenemos imágenes RGB
         if len(self.rgb_images) == 0:
-            print("❌ ERROR: No se encontraron imágenes RGB")
             sys.exit(1)
         
-        print(f"📁 Carpeta base: {self.folder_path}")
-        print(f"✅ Imágenes RGB encontradas: {len(self.rgb_images)}")
-        print(f"✅ Modo con profundidad: {'SI' if self.has_depth else 'NO'}")
         
         # Inicializar
         self.bridge = CvBridge()
         
         # Publicadores para RGB (SIEMPRE se crean)
-        self.rgb_image_pub = self.create_publisher(Image, '/camera/rgb/image_raw', 10)
+        self.rgb_image_pub = self.create_publisher(Image, '/camera/rgb/right', 10)
         self.rgb_info_pub = self.create_publisher(CameraInfo, '/camera/rgb/camera_info', 10)
         
         # Publicadores para Depth (solo si hay imágenes de profundidad)
@@ -96,9 +81,6 @@ class DualImagePublisher(Node):
             self.depth_image_pub = self.create_publisher(Image, '/camera/depth/image_raw', 10)
             self.depth_info_pub = self.create_publisher(CameraInfo, '/camera/depth/camera_info', 10)
             self.pointcloud_pub = self.create_publisher(PointCloud2, '/camera/depth_registered/points', 10)
-            print("✅ Publicadores de profundidad y point cloud creados")
-        else:
-            print("ℹ️  Solo se crearán publicadores para imágenes RGB")
         
         # Camera info para RGB (tus parámetros originales)
         self.rgb_camera_info = CameraInfo()
@@ -136,9 +118,6 @@ class DualImagePublisher(Node):
         
         # Mostrar controles
         self.print_controls()
-        
-        print(f"🚀 Listo! Publicando imagen {self.current_idx+1}/{self.num_images}")
-        print("="*70 + "\n")
     
     def print_controls(self):
         print("\n🎮 CONTROLES (presiona en la ventana de imagen):")
@@ -384,7 +363,7 @@ class DualImagePublisher(Node):
         cv2.imshow("RGB Image (Topic: /camera/rgb/image_raw)", display_rgb)
         
         # Mostrar ventana de profundidad solo si existe
-        if depth_img is not None and self.has_depth:
+        """if depth_img is not None and self.has_depth:
             depth_vis_resized = self.create_depth_display(depth_img, current_idx)
             cv2.imshow("Depth Image (Topic: /camera/depth/image_raw)", depth_vis_resized)
         elif self.has_depth:
@@ -392,7 +371,7 @@ class DualImagePublisher(Node):
             black_img = np.zeros((480, 640, 3), dtype=np.uint8)
             cv2.putText(black_img, "Depth no disponible", 
                        (150, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
-            cv2.imshow("Depth Image (Topic: /camera/depth/image_raw)", black_img)
+            cv2.imshow("Depth Image (Topic: /camera/depth/image_raw)", black_img)"""
     
     def create_depth_display(self, depth_img, current_idx):
         """Crea una visualización en color del mapa de profundidad"""

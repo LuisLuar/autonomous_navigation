@@ -1180,60 +1180,153 @@ class NavigationDashboard:
         img[lane_pixels] = [0, 100, 200]  # Azul para lane
         img[road_pixels] = [50, 50, 50]   # Gris para road
         
-        # Usar la función común para extraer el borde
-        coeffs, points_meters, horizon_data, angle_info = self.extract_lane_edge_adaptive(seg_mask)
+        # Usar la función común para extraer el borde (método adaptativo - lane+road)
+        coeffs_adaptive, points_meters_adaptive, horizon_data_adaptive, angle_info_adaptive = self.extract_lane_edge_adaptive(seg_mask)
         
-        # ==================== PARÁMETROS ADAPTATIVOS (para visualización) ====================
-        roi_ratio = 0.45
-        base_ratio = 0.65
-        range_ratio = 0.2
+        # ==================== CONFIGURACIÓN ADAPTATIVA (LANE+ROAD) ====================
+        # Parámetros ADAPTATIVOS (lane+road)
+        roi_ratio_adaptive = 0.45
+        base_ratio_adaptive = 0.65
+        range_ratio_adaptive = 0.2
         
-        # Calcular parámetros para visualización
-        roi_start = int(h * roi_ratio)
-        right_half = seg_mask[roi_start:, w//2:w]
+        # Calcular parámetros para visualización ADAPTATIVA
+        roi_start_adaptive = int(h * roi_ratio_adaptive)
+        right_half_adaptive = seg_mask[roi_start_adaptive:, w//2:w]
         
-        lane_rows, _ = np.where(right_half == 2)
-        road_rows, _ = np.where(right_half == 1)
+        lane_rows_adaptive, _ = np.where(right_half_adaptive == 2)
+        road_rows_adaptive, _ = np.where(right_half_adaptive == 1)
         
-        min_lane_row = np.min(lane_rows) if len(lane_rows) > 0 else h
-        min_road_row = np.min(road_rows) if len(road_rows) > 0 else h
-        min_row = min(min_lane_row, min_road_row)
+        min_lane_row_adaptive = np.min(lane_rows_adaptive) if len(lane_rows_adaptive) > 0 else h
+        min_road_row_adaptive = np.min(road_rows_adaptive) if len(road_rows_adaptive) > 0 else h
+        min_row_adaptive = min(min_lane_row_adaptive, min_road_row_adaptive)
         
-        if min_row < h - roi_start:
-            new_base_ratio = (roi_start + min_row) / h
-            base_ratio = max(roi_ratio + 0.05, min(0.8, new_base_ratio))
+        if min_row_adaptive < h - roi_start_adaptive:
+            new_base_ratio_adaptive = (roi_start_adaptive + min_row_adaptive) / h
+            base_ratio_adaptive = max(roi_ratio_adaptive + 0.05, min(0.8, new_base_ratio_adaptive))
         else:
-            base_ratio = roi_ratio + 0.1
+            base_ratio_adaptive = roi_ratio_adaptive + 0.1
         
-        base_line_y = int(h * base_ratio)
-        top_line_y = int(h * (base_ratio + range_ratio))
+        base_line_y_adaptive = int(h * base_ratio_adaptive)
+        top_line_y_adaptive = int(h * (base_ratio_adaptive + range_ratio_adaptive))
         
-        # ==================== DIBUJAR ROI Y LÍNEAS ====================
-        roi_line_y = roi_start
-        cv2.line(img, (0, roi_line_y), (w, roi_line_y), 
+        # ==================== CONFIGURACIÓN LANE-ONLY ====================
+        # Parámetros LANE-ONLY (solo lane mask)
+        roi_ratio_laneonly = 0.6
+        base_ratio_laneonly = 0.7
+        range_ratio_laneonly = 0.2
+        
+        # Calcular parámetros para visualización LANE-ONLY
+        roi_start_laneonly = int(h * roi_ratio_laneonly)
+        
+        # Extraer puntos LANE-ONLY (similar al código de referencia)
+        horizon_data_laneonly = []
+        points_meters_laneonly = []
+        
+        for i in range(5):  # 5 horizontes como en el código de referencia
+            ratio = i / 4.0  # 0 a 1
+            
+            # Usar base_ratio_laneonly y range_ratio_laneonly
+            y_center = int(h * (base_ratio_laneonly + ratio * range_ratio_laneonly))
+            
+            # Verificar límites
+            if y_center < roi_start_laneonly or y_center >= h - 10:
+                continue
+            
+            slice_h = max(6, int(h * 0.02))  # 2% de altura
+            y1 = max(roi_start_laneonly, y_center - slice_h // 2)
+            y2 = min(h - 10, y_center + slice_h // 2)
+            
+            # Solo lane mask
+            slice_mask = seg_mask[y1:y2, w//2:w]
+            ys, xs = np.where(slice_mask == 2)
+            
+            if len(xs) < 3:
+                continue
+            
+            # Borde MÁS A LA IZQUIERDA dentro de la mitad derecha
+            edge_x_local = int(np.median(xs))
+            edge_x = edge_x_local + w // 2
+            
+            # Transformar a metros
+            point_3d = self._pixel_to_meters(edge_x, y_center)
+            if point_3d is not None:
+                X, Z = point_3d
+                if 0.5 <= Z <= 12.0:
+                    points_meters_laneonly.append((Z, X))
+                    horizon_data_laneonly.append({
+                        'x': edge_x,
+                        'y': y_center,
+                        'confidence': min(1.0, len(xs) / (slice_mask.shape[0] * slice_mask.shape[1]) * 10)
+                    })
+        
+        points_meters_laneonly = np.array(points_meters_laneonly)
+        
+        # Ajustar polinomio para lane-only
+        coeffs_laneonly = None
+        angle_info_laneonly = None
+        
+        if len(points_meters_laneonly) >= 3:
+            try:
+                Z = points_meters_laneonly[:, 0]
+                X = points_meters_laneonly[:, 1]
+                coeffs_laneonly = np.polyfit(Z, X, 2)
+                
+                # Calcular información del ángulo para lane-only
+                lookahead_distance = 3.0
+                max_angle_error = 3.0
+                max_angle_range = 170.0
+                
+                a, b, c = coeffs_laneonly[0], coeffs_laneonly[1], coeffs_laneonly[2]
+                slope = 2 * a * lookahead_distance + b
+                lane_angle_rad = -math.atan(slope)
+                lane_angle_deg = math.degrees(lane_angle_rad)
+                
+                # Calcular error de ángulo
+                angle_error = 0.0
+                if abs(lane_angle_deg) > max_angle_error:
+                    angle_error = -lane_angle_deg
+                
+                angle_error_normalized = np.clip(angle_error / max_angle_range, -1.0, 1.0)
+                
+                angle_info_laneonly = {
+                    'angle_rad': lane_angle_rad,
+                    'angle_deg': lane_angle_deg,
+                    'error': angle_error_normalized,
+                    'lookahead': lookahead_distance,
+                    'max_error': max_angle_error
+                }
+                
+            except Exception as e:
+                coeffs_laneonly = None
+        
+        # ==================== DIBUJAR ROI Y LÍNEAS PARA AMBAS CONFIGURACIONES ====================
+        
+        # ROI ADAPTATIVA (línea amarilla)
+        roi_line_y_adaptive = roi_start_adaptive
+        cv2.line(img, (0, roi_line_y_adaptive), (w, roi_line_y_adaptive), 
                 (0, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(img, f"ROI", (10, roi_line_y - 5),
+        cv2.putText(img, f"ROI-ADAPT", (10, roi_line_y_adaptive - 5),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
         
-        # LÍNEA DE BASE (calculada adaptativamente)
-        cv2.line(img, (0, base_line_y), (w, base_line_y),
+        # ROI LANE-ONLY (línea magenta)
+        roi_line_y_laneonly = roi_start_laneonly
+        cv2.line(img, (0, roi_line_y_laneonly), (w, roi_line_y_laneonly), 
+                (255, 0, 255), 2, cv2.LINE_AA)
+        cv2.putText(img, f"ROI-LANE", (10, roi_line_y_laneonly - 5),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
+        
+        # LÍNEA DE BASE ADAPTATIVA (calculada adaptativamente)
+        cv2.line(img, (0, base_line_y_adaptive), (w, base_line_y_adaptive),
                 (255, 0, 255), 1, cv2.LINE_AA)
-        cv2.putText(img, f"Base", (w - 60, base_line_y - 5),
+        cv2.putText(img, f"Base-Adapt", (w - 80, base_line_y_adaptive - 5),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 255), 1)
         
-        # LÍNEA DE TOPE (calculada adaptativamente)
-        if top_line_y < h:
-            cv2.line(img, (0, top_line_y), (w, top_line_y),
-                    (255, 255, 0), 1, cv2.LINE_AA)
-            cv2.putText(img, f"Top", (w - 50, top_line_y - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
-        
-        # ==================== DIBUJAR PUNTOS DETECTADOS ====================
-        colors = [(0, 255, 255), (0, 255, 128), (0, 255, 0), 
+        # ==================== DIBUJAR PUNTOS DETECTADOS ADAPTATIVOS ====================
+        colors_adaptive = [(0, 255, 255), (0, 255, 128), (0, 255, 0), 
                 (128, 255, 0), (255, 128, 0)]
         
-        for i, h_data in enumerate(horizon_data):
-            color = colors[min(i, len(colors)-1)]
+        for i, h_data in enumerate(horizon_data_adaptive):
+            color = colors_adaptive[min(i, len(colors_adaptive)-1)]
             confidence = h_data.get('confidence', 1.0)
             y1, y2 = h_data.get('slice_bounds', (0, 0))
             
@@ -1252,91 +1345,129 @@ class NavigationDashboard:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.35, color, 1)
             
             # Mostrar distancias en metros
-            if i < len(points_meters):
-                Z, X = points_meters[i]
+            if i < len(points_meters_adaptive):
+                Z, X = points_meters_adaptive[i]
                 dist_text = f"Z={Z:.1f}m, X={X:.2f}m"
                 cv2.putText(img, dist_text, (w - 200, h_data['y']),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
         
-        # ==================== INFORMACIÓN TEXTUAL ====================
+        # ==================== DIBUJAR PUNTOS LANE-ONLY ====================
+        for i, h_data in enumerate(horizon_data_laneonly):
+            y = h_data['y']
+            confidence = h_data.get('confidence', 1.0)
+            x, y_pt = h_data['x'], h_data['y']
+            
+            # Punto detectado Lane-Only (diferente marcador - X magenta)
+            radius = int(4 + confidence * 4)
+            
+            # Dibujar como X
+            cv2.line(img, (x-radius, y_pt-radius), (x+radius, y_pt+radius), (255, 0, 255), 2)
+            cv2.line(img, (x-radius, y_pt+radius), (x+radius, y_pt-radius), (255, 0, 255), 2)
+            
+            # Label
+            text = f"L{i}"
+            cv2.putText(img, text, (x + 10, y_pt - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 0, 255), 1)
+        
+        # ==================== INFORMACIÓN TEXTUAL (IGUAL AL CÓDIGO DE REFERENCIA) ====================
         info_y = 30
         spacing = 22
         
         # Título
-        cv2.putText(img, "ADAPTIVE LANE DETECTION", (20, info_y),
+        cv2.putText(img, "ADAPTIVE LANE DETECTION - DUAL PARAMS", (20, info_y),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         info_y += spacing
         
-        # Parámetros adaptativos
-        param_text = f"Base: {base_ratio:.3f}  Range: {range_ratio:.3f}  ROI: {roi_ratio:.2f}"
-        cv2.putText(img, param_text, (20, info_y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        # Parámetros ADAPTATIVOS (lane+road)
+        adaptive_text = f"ADAPTIVE: Base={base_ratio_adaptive:.3f} Range={range_ratio_adaptive:.3f}"
+        cv2.putText(img, adaptive_text, (20, info_y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)  # Amarillo
         info_y += spacing
         
-        # Puntos válidos
-        points_text = f"Points: {len(points_meters)}/{len(horizon_data)}"
-        point_color = (0, 255, 0) if len(points_meters) >= 3 else (0, 0, 255)
-        cv2.putText(img, points_text, (20, info_y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, point_color, 1)
+        # Parámetros LANE-ONLY
+        laneonly_text = f"LANE-ONLY: Base={base_ratio_laneonly:.3f} Range={range_ratio_laneonly:.3f}"
+        cv2.putText(img, laneonly_text, (20, info_y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)  # Magenta
         info_y += spacing
         
-        # ==================== INFORMACIÓN DE CALIBRACIÓN ====================
-        if self.camera_params:
-            pitch_deg = math.degrees(self.camera_params['pitch'])
-            calib_text = f"Calib: Pitch={pitch_deg:.1f}, H={self.camera_params['height']:.3f}m"
-            cv2.putText(img, calib_text, (20, info_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 100), 1)
-            info_y += spacing
+        # ROI adaptativo
+        roi_adaptive_text = f"ROI-ADAPT: {roi_ratio_adaptive:.3f}"
+        cv2.putText(img, roi_adaptive_text, (20, info_y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        info_y += spacing
         
-        # ==================== CÁLCULO DE ÁNGULO Y ERROR ====================
-        if coeffs is not None and angle_info is not None:
-            # Coeficientes
-            coeff_text = f"Poly: {coeffs[0]:.4f}z*z + {coeffs[1]:.4f}z + {coeffs[2]:.4f}"
-            cv2.putText(img, coeff_text, (20, info_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 0), 1)
+        # ROI lane-only
+        roi_laneonly_text = f"ROI-LANE: {roi_ratio_laneonly:.3f}"
+        cv2.putText(img, roi_laneonly_text, (20, info_y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
+        info_y += spacing
+        
+        # ==================== MOSTRAR ÁNGULOS Y ERRORES PARA AMBAS CONFIGURACIONES ====================
+        
+        # Ángulo ADAPTATIVO
+        if angle_info_adaptive is not None:
+            angle_deg_adaptive = angle_info_adaptive['angle_deg']
+            angle_error_adaptive = angle_info_adaptive['error']
+            
+            angle_text_adaptive = f"Angle-Adapt: {angle_deg_adaptive:+.1f}° @ {angle_info_adaptive['lookahead']}m"
+            angle_color_adaptive = (0, 255, 0) if abs(angle_deg_adaptive) < angle_info_adaptive['max_error'] else (0, 165, 255)
+            cv2.putText(img, angle_text_adaptive, (20, info_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, angle_color_adaptive, 1)
             info_y += spacing
             
-            # Ángulo
-            angle_text = f"Angle: {angle_info['angle_deg']:+.1f} @ {angle_info['lookahead']}m"
-            angle_color = (0, 255, 0) if abs(angle_info['angle_deg']) < angle_info['max_error'] else (0, 165, 255)
-            cv2.putText(img, angle_text, (20, info_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, angle_color, 1)
-            info_y += spacing
-            
-            # Error de ángulo
-            angle_error_text = f"Angle Error: {angle_info['error']:+.3f}"
-            cv2.putText(img, angle_error_text, (20, info_y),
+            # Error de ángulo ADAPTATIVO
+            angle_error_text_adaptive = f"Error-Adapt: {angle_error_adaptive:+.3f}"
+            cv2.putText(img, angle_error_text_adaptive, (20, info_y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 0), 1)
             info_y += spacing
+        
+        # Ángulo LANE-ONLY
+        if angle_info_laneonly is not None:
+            angle_deg_laneonly = angle_info_laneonly['angle_deg']
+            angle_error_laneonly = angle_info_laneonly['error']
             
-            # Indicador de dirección
-            if abs(angle_info['angle_deg']) > angle_info['max_error']:
-                if angle_info['angle_deg'] > 0:
+            angle_text_laneonly = f"Angle-Lane: {angle_deg_laneonly:+.1f}° @ {angle_info_laneonly['lookahead']}m"
+            angle_color_laneonly = (0, 255, 0) if abs(angle_deg_laneonly) < angle_info_laneonly['max_error'] else (0, 165, 255)
+            cv2.putText(img, angle_text_laneonly, (20, info_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, angle_color_laneonly, 1)
+            info_y += spacing
+            
+            # Error de ángulo LANE-ONLY
+            angle_error_text_laneonly = f"Error-Lane: {angle_error_laneonly:+.3f}"
+            cv2.putText(img, angle_error_text_laneonly, (20, info_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 0), 1)
+            info_y += spacing
+        
+        # ==================== INDICADOR DE DIRECCIÓN (USAR ADAPTATIVO COMO DEFAULT) ====================
+        direction_text = "STRAIGHT"
+        direction_color = (0, 255, 0)
+        
+        if angle_info_adaptive is not None:
+            if abs(angle_info_adaptive['angle_deg']) > angle_info_adaptive['max_error']:
+                if angle_info_adaptive['angle_deg'] > 0:
                     direction_text = "CORRECT LEFT"
                     direction_color = (0, 165, 255)
                 else:
                     direction_text = "CORRECT RIGHT"
                     direction_color = (0, 100, 255)
-            else:
-                direction_text = "STRAIGHT"
-                direction_color = (0, 255, 0)
-            
-            cv2.putText(img, direction_text, (20, info_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, direction_color, 2)
-            info_y += spacing
-            
-            # ==================== FLECHA DE DIRECCIÓN ====================
+        
+        cv2.putText(img, direction_text, (20, info_y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, direction_color, 2)
+        info_y += spacing
+        
+        # ==================== FLECHA DE DIRECCIÓN ====================
+        if angle_info_adaptive is not None:
             center_x = w // 2
             bottom_y = h - 20
             line_length = 100
             
-            end_x = center_x - int(line_length * math.sin(angle_info['angle_rad']))
-            end_y = bottom_y - int(line_length * math.cos(angle_info['angle_rad']))
+            end_x = center_x - int(line_length * math.sin(angle_info_adaptive['angle_rad']))
+            end_y = bottom_y - int(line_length * math.cos(angle_info_adaptive['angle_rad']))
             
             cv2.arrowedLine(img, (center_x, bottom_y), (end_x, end_y),
                         (0, 255, 0), 3, cv2.LINE_AA, tipLength=0.3)
             
-            arrow_text = f"{abs(angle_info['angle_deg']):.1f}"
+            arrow_text = f"{abs(angle_info_adaptive['angle_deg']):.1f}°"
             text_size = cv2.getTextSize(arrow_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
             cv2.putText(img, arrow_text, (end_x - text_size[0]//2, end_y - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
@@ -1390,6 +1521,41 @@ class NavigationDashboard:
                     (panel_x + 10, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 100), 1)
         
         return img
+    
+    # ==================== FUNCIÓN AUXILIAR PARA TRANSFORMACIÓN PÍXELES A METROS ====================
+    def _pixel_to_meters(self, u, v):
+        """Transforma un punto (u, v) de píxeles a coordenadas métricas."""
+        if self.camera_params is None:
+            return None
+        
+        # Rayo en coordenadas cámara
+        x = (u - self.camera_params['cx']) / self.camera_params['fx']
+        y = -(v - self.camera_params['cy']) / self.camera_params['fy']
+        ray = np.array([x, y, 1.0])
+        
+        # Matriz de rotación para pitch
+        cp = math.cos(self.camera_params['pitch'])
+        sp = math.sin(self.camera_params['pitch'])
+        
+        R = np.array([
+            [1,  0,   0],
+            [0,  cp,  sp],
+            [0, -sp,  cp]
+        ])
+        
+        # Rotar según pitch
+        ray_w = R @ ray
+        
+        # Condición: rayo debe apuntar hacia el suelo
+        if ray_w[1] >= 0:
+            return None
+        
+        # Distancia al suelo
+        t = self.camera_params['height'] / -ray_w[1]
+        X_camera = ray_w[0] * t
+        Z_camera = ray_w[2] * t
+        
+        return X_camera, Z_camera
 
     def create_segmentation_overlay(self, image, seg_mask):
         """Crea overlay de segmentación."""
@@ -1436,7 +1602,7 @@ class NavigationDashboard:
         return overlay
     
     def create_lane_error_visualization(self, seg_mask, frame_stats, original_image=None):
-        """Crea visualización del error de carril usando algoritmo predictivo robusto."""
+        """Crea visualización del error de carril usando algoritmo predictivo robusto con 2 configuraciones."""
         if seg_mask is None:
             # Crear imagen vacía si no hay datos
             empty_img = np.zeros((400, 600, 3), dtype=np.uint8)
@@ -1473,8 +1639,8 @@ class NavigationDashboard:
         road_overlay = np.zeros_like(debug_img, dtype=np.uint8)
         
         # Aplicar colores con transparencia
-        alpha_lane = 0.95  # 30% de transparencia para carriles
-        alpha_road = 0.7 # 20% de transparencia para carretera
+        alpha_lane = 0.95  # 5% de transparencia para carriles
+        alpha_road = 0.7   # 30% de transparencia para carretera
         
         lane_overlay[lane_pixels] = [0, 100, 200]  # Azul-naranja para carriles
         road_overlay[road_pixels] = self.colors['drivable']   # Gris para carretera
@@ -1483,47 +1649,39 @@ class NavigationDashboard:
         debug_img = cv2.addWeighted(lane_overlay, alpha_lane, debug_img, 1, 0)
         debug_img = cv2.addWeighted(road_overlay, alpha_road, debug_img, 1, 0)
         
-        # ==================== ALGORITMO PREDICTIVO ROBUSTO ====================
+        # ==================== CONFIGURACIÓN 1 (ORIGINAL) ====================
+        num_horizons_1 = 5
+        ref_ratio_1 = 0.77  # 77% del ancho
+        horizon_weights_1 = [0.001, 0.002, 0.04, 0.002, 0.001]
+        y_range_1_start = 0.71
+        y_range_1_end = 0.77
         
-        # PARÁMETROS (igual que en tiempo real)
-        num_horizons = 5
-        ref_ratio = 0.8  # Línea de referencia (80% = lado derecho)
-        horizon_weights = [0.001, 0.004, 0.05, 0.006, 0.005]  # pesos [cercano → lejano]
-        min_points_per_horizon = 5
-        outlier_percentile_low = 5
-        outlier_percentile_high = 90
+        horizon_data_1 = []
+        horizon_errors_1 = []
         
-        horizon_data = []
-        horizon_errors = []
-        
-        for i in range(num_horizons):
-            # Distribución no lineal: más resolución cerca del robot
-            # i=0 → bottom (más cercano, más peso)
-            # i=N-1 → top (más lejano, menos peso)
-            ratio = (num_horizons - i - 1) / num_horizons
-            y_center = int(h * (0.7 + ratio * 0.2))  # Entre 40% y 90%
+        # Extraer puntos para Config 1 (igual al original)
+        for i in range(num_horizons_1):
+            ratio = (num_horizons_1 - i - 1) / num_horizons_1
+            y_center = int(h * (y_range_1_start + ratio * (y_range_1_end - y_range_1_start)))
             
-            # Franja vertical alrededor del horizonte
-            slice_height = h // (num_horizons * 15)
+            slice_height = h // (num_horizons_1 * 15)
             y1 = max(0, y_center - slice_height)
             y2 = min(h, y_center + slice_height)
             
-            # SOLO lado derecho (donde está el carril)
+            # SOLO lado derecho
             slice_mask = seg_mask[y1:y2, w//2:w]
             
-            # EXTRACCIÓN ROBUSTA: usar tanto lane_mask (2) como road_mask (1)
+            # EXTRACCIÓN ROBUSTA
             lane_ys, lane_xs = np.where(slice_mask == 2)
             road_ys, road_xs = np.where(slice_mask == 1)
             
-            # Estrategia inteligente: ¿cuál está más a la derecha?
             all_xs = []
             all_ys = []
             
-            lane_has_enough = lane_xs is not None and len(lane_xs) >= min_points_per_horizon
-            road_has_enough = road_xs is not None and len(road_xs) >= min_points_per_horizon
+            lane_has_enough = lane_xs is not None and len(lane_xs) >= 5
+            road_has_enough = road_xs is not None and len(road_xs) >= 5
             
             if lane_has_enough and road_has_enough:
-                # Usamos la que esté MÁS A LA DERECHA
                 lane_rightmost = np.percentile(lane_xs, 85) if len(lane_xs) > 0 else -1
                 road_rightmost = np.percentile(road_xs, 85) if len(road_xs) > 0 else -1
                 
@@ -1540,7 +1698,6 @@ class NavigationDashboard:
                 all_xs.extend(road_xs)
                 all_ys.extend(road_ys)
             else:
-                # Combinar ambas aunque sean escasas
                 if lane_xs is not None:
                     all_xs.extend(lane_xs)
                     all_ys.extend(lane_ys)
@@ -1548,29 +1705,25 @@ class NavigationDashboard:
                     all_xs.extend(road_xs)
                     all_ys.extend(road_ys)
             
-            # Si no hay suficientes puntos, continuar
-            if len(all_xs) < min_points_per_horizon:
+            if len(all_xs) < 5:
                 continue
             
             all_xs = np.array(all_xs)
             all_ys = np.array(all_ys)
             
-            # FILTRADO DE OUTLIERS
-            x_low = np.percentile(all_xs, outlier_percentile_low)
-            x_high = np.percentile(all_xs, outlier_percentile_high)
+            # Filtrar outliers
+            x_low = np.percentile(all_xs, 5)
+            x_high = np.percentile(all_xs, 90)
             
-            # Filtrar puntos dentro del rango
             valid_mask = (all_xs >= x_low) & (all_xs <= x_high)
             filtered_xs = all_xs[valid_mask]
             filtered_ys = all_ys[valid_mask]
             
-            if len(filtered_xs) < min_points_per_horizon:
+            if len(filtered_xs) < 5:
                 continue
             
             # El "borde" es el percentil alto (lado derecho)
             edge_x = int(np.percentile(filtered_xs, 85))
-            
-            # Ajustar a coordenadas globales
             global_x = edge_x + w // 2
             
             # Calcular confianza
@@ -1578,7 +1731,19 @@ class NavigationDashboard:
             point_ratio = len(filtered_xs) / total_pixels
             confidence = min(1.0, point_ratio * 10)
             
-            horizon_data.append({
+            # Bonus por acuerdo
+            agreement_bonus = 0.0
+            if lane_xs is not None and road_xs is not None:
+                if len(lane_xs) > 0 and len(road_xs) > 0:
+                    lane_median = np.median(lane_xs)
+                    road_median = np.median(road_xs)
+                    diff = abs(lane_median - road_median)
+                    if diff < 20:
+                        agreement_bonus = 0.2
+            
+            confidence = min(1.0, point_ratio * 10 + agreement_bonus)
+            
+            horizon_data_1.append({
                 'horizon_idx': i,
                 'y': y_center,
                 'x': global_x,
@@ -1586,28 +1751,72 @@ class NavigationDashboard:
                 'slice_bounds': (y1, y2)
             })
         
-        # ==================== CÁLCULO DEL ERROR ====================
+        # ==================== CONFIGURACIÓN 2 (NUEVA) ====================
+        num_horizons_2 = 5
+        ref_ratio_2 = 0.75  # 75% del ancho
+        horizon_weights_2 = [0.001, 0.002, 0.04, 0.002, 0.001]
+        y_range_2_start = 0.75
+        y_range_2_end = 0.95
         
-        # LÍNEA DE REFERENCIA (¡IMPORTANTE!)
-        # La referencia está a la DERECHA (80% del ancho)
-        # CONVENCIÓN DE SIGNOS:
-        # - Error POSITIVO (+) → Robot debe ALEJARSE del carril
-        # - Error NEGATIVO (-) → Robot debe ACERCARSE al carril
+        horizon_data_2 = []
+        horizon_errors_2 = []
         
-        ref_x = int(w * ref_ratio)
-        weighted_error = 0.0
-        total_weight = 0.0
+        # Extraer puntos para Config 2 (solo lane_mask, prioriza izquierda)
+        for i in range(num_horizons_2):
+            ratio = (num_horizons_2 - i - 1) / num_horizons_2
+            y_center = int(h * (y_range_2_start + ratio * (y_range_2_end - y_range_2_start)))
+            
+            slice_height = h // (num_horizons_2 * 15)
+            y1 = max(0, y_center - slice_height)
+            y2 = min(h, y_center + slice_height)
+            
+            # SOLO lado derecho
+            slice_mask = seg_mask[y1:y2, w//2:w]
+            
+            # Solo lane_mask
+            lane_ys, lane_xs = np.where(slice_mask == 2)
+            
+            if len(lane_xs) < 5:
+                continue
+            
+            # Priorizar puntos a la izquierda (percentil bajo)
+            edge_x = int(np.percentile(lane_xs, 15))  # 15% = izquierda
+            global_x = edge_x + w // 2
+            
+            # Confianza simple
+            total_pixels = slice_mask.shape[0] * slice_mask.shape[1]
+            point_ratio = len(lane_xs) / total_pixels
+            confidence = min(1.0, point_ratio * 10)
+            
+            horizon_data_2.append({
+                'horizon_idx': i,
+                'y': y_center,
+                'x': global_x,
+                'confidence': confidence,
+                'slice_bounds': (y1, y2),
+                'config_num': 2
+            })
         
-        if horizon_data:
-            # DETECTAR SI ES CURVA
+        # ==================== CÁLCULO DE ERRORES ====================
+        # Función para calcular error
+        def calculate_error(horizon_data, ref_ratio, horizon_weights, w):
+            if not horizon_data:
+                return 0.0, []
+            
+            ref_x = int(w * ref_ratio)
+            errors = []
+            weighted_error = 0.0
+            total_weight = 0.0
+            
+            # Detectar curva
             is_curve = False
             if len(horizon_data) >= 3:
                 x_positions = [h['x'] for h in horizon_data]
                 x_range = np.max(x_positions) - np.min(x_positions)
                 normalized_variation = x_range / w
-                is_curve = normalized_variation > 0.15  # umbral
+                is_curve = normalized_variation > 0.15
             
-            # AJUSTE EN CURVAS
+            # Ajuste en curvas
             if is_curve:
                 curve_weight_boost = 1.5
                 adjusted_weights = []
@@ -1618,24 +1827,17 @@ class NavigationDashboard:
                     else:  # Horizontes lejanos
                         adjusted_weights.append(w_orig / curve_weight_boost)
                 
-                # Normalizar para que sumen 1
                 total = sum(adjusted_weights)
                 weights = [w / total for w in adjusted_weights]
             else:
                 weights = horizon_weights[:len(horizon_data)]
             
-            # CÁLCULO DE ERROR PONDERADO
+            # Calcular error ponderado
             for h_data, weight in zip(horizon_data, weights):
                 detected_x = h_data['x']
-                
-                # ¡¡¡FÓRMULA IMPORTANTE!!!
-                # Error = (ref_x - detected_x) / (w/2.0)
-                # Si detected_x < ref_x → error > 0 → alejarse
-                # Si detected_x > ref_x → error < 0 → acercarse
                 error = (ref_x - detected_x) / (w / 2.0)
-                horizon_errors.append(error)
+                errors.append(error)
                 
-                # Ponderar por confianza y peso
                 effective_weight = weight * h_data['confidence']
                 weighted_error += error * effective_weight
                 total_weight += effective_weight
@@ -1645,124 +1847,195 @@ class NavigationDashboard:
                 weighted_error = np.clip(weighted_error, -1.0, 1.0)
             else:
                 weighted_error = 0.0
+            
+            return weighted_error, errors
+        
+        # Calcular errores para ambas configuraciones
+        error_1, horizon_errors_1 = calculate_error(horizon_data_1, ref_ratio_1, horizon_weights_1, w)
+        error_2, horizon_errors_2 = calculate_error(horizon_data_2, ref_ratio_2, horizon_weights_2, w)
+        
+        # Detectar curvas para ambas configuraciones
+        is_curve_1 = False
+        if len(horizon_data_1) >= 3:
+            x_positions = [h['x'] for h in horizon_data_1]
+            x_range = np.max(x_positions) - np.min(x_positions)
+            normalized_variation = x_range / w
+            is_curve_1 = normalized_variation > 0.15
+        
+        is_curve_2 = False
+        if len(horizon_data_2) >= 3:
+            x_positions = [h['x'] for h in horizon_data_2]
+            x_range = np.max(x_positions) - np.min(x_positions)
+            normalized_variation = x_range / w
+            is_curve_2 = normalized_variation > 0.15
         
         # ==================== VISUALIZACIÓN ====================
         
-        # Dibujar horizontes y puntos
-        colors = [(0, 255, 255), (0, 255, 128), (0, 255, 0), (128, 255, 0), (255, 128, 0)]
+        # Colores para Config 1 (igual al original)
+        colors_config_1 = [
+            (0, 255, 255),    # Cian (cercano)
+            (0, 255, 128),    # Verde-amarillo
+            (0, 255, 0),      # Verde
+            (128, 255, 0),    # Verde-azul
+            (255, 128, 0)     # Azul (lejano)
+        ]
         
-        for i, point in enumerate(horizon_data):
-            color = colors[min(i, len(colors)-1)]
-            y = point['y']
-            x = point['x']
+        # Color para Config 2
+        color_config_2 = (255, 0, 255)  # Magenta
+        
+        # === DIBUJAR HORIZONTES CONFIG 1 ===
+        for h_data in horizon_data_1:
+            idx = h_data['horizon_idx']
+            color = colors_config_1[min(idx, len(colors_config_1)-1)]
+            confidence = h_data.get('confidence', 1.0)
+            y = h_data['y']
+            x = h_data['x']
             
             # Línea horizontal del horizonte
-            cv2.line(debug_img, (w//2, y), (w, y), (100, 100, 100), 1)
+            alpha = int(80 * confidence)
+            cv2.line(debug_img, (w//2, y), (w, y), (alpha, alpha, alpha), 1)
             
-            # Punto central detectado
-            cv2.circle(debug_img, (x, y), 8, color, -1)
-            cv2.circle(debug_img, (x, y), 10, (255, 255, 255), 2)
+            # Punto detectado
+            radius = int(4 + confidence * 4)
+            cv2.circle(debug_img, (x, y), radius, color, -1)
+            cv2.circle(debug_img, (x, y), radius+2, (255, 255, 255), 1)
             
-            # Etiqueta con error
-            if i < len(horizon_errors):
-                cv2.putText(debug_img, f"H{i}: {horizon_errors[i]:+.2f}", (x + 10, y - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            # Label
+            text = f"H{idx}"
+            if len(horizon_errors_1) > idx:
+                text += f" ({horizon_errors_1[idx]:+.2f})"
+            cv2.putText(debug_img, text, (x + 10, y - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, color, 1)
         
-        # ==================== LÍNEA DE REFERENCIA ====================
-        ref_x = w // 2 + int((w // 2) * 0.6)  # 80% desde el centro (equivale a 80% total)
-        cv2.line(debug_img, (ref_x, 0), (ref_x, h), (255, 0, 0), 3)
-        cv2.putText(debug_img, "REF (80%)", (ref_x + 10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+        # === DIBUJAR HORIZONTES CONFIG 2 ===
+        for h_data in horizon_data_2:
+            idx = h_data['horizon_idx']
+            y = h_data['y']
+            confidence = h_data.get('confidence', 1.0)
+            x, y_pt = h_data['x'], h_data['y']
+            
+            # Punto detectado Config 2 (diferente marcador)
+            radius = int(4 + confidence * 4)
+            
+            # Dibujar como X
+            cv2.line(debug_img, (x-radius, y_pt-radius), (x+radius, y_pt+radius), color_config_2, 2)
+            cv2.line(debug_img, (x-radius, y_pt+radius), (x+radius, y_pt-radius), color_config_2, 2)
+            
+            # Label
+            text = f"C2-H{idx}"
+            if len(horizon_errors_2) > idx:
+                text += f" ({horizon_errors_2[idx]:+.2f})"
+            cv2.putText(debug_img, text, (x + 10, y_pt - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, color_config_2, 1)
         
-        # ==================== BARRA DE ERROR ====================
+        # === LÍNEAS DE REFERENCIA PARA AMBAS CONFIGURACIONES ===
+        ref_x_1 = int(w * ref_ratio_1)
+        ref_x_2 = int(w * ref_ratio_2)
         
-        # Calcular error promedio si hay puntos
-        if horizon_data:
-            # Error ya calculado como weighted_error
-            
-            # Barra de error visual
-            bar_width = 300
-            bar_height = 40
-            bar_y = 50
-            
-            # Dibujar barra base
-            cv2.rectangle(debug_img, (50, bar_y), (50 + bar_width, bar_y + bar_height), 
-                        (100, 100, 100), -1)
-            
-            # Centro de la barra (error = 0)
-            center_x = 50 + bar_width // 2
-            cv2.line(debug_img, (center_x, bar_y), (center_x, bar_y + bar_height), 
-                    (255, 255, 255), 2)
-            
-            # Posición del error
-            # Mapear error de [-1, 1] a posición en barra
-            error_pos = int(center_x + (weighted_error * bar_width / 2))
-            error_pos = np.clip(error_pos, 50, 50 + bar_width)
-            
-            # Color según magnitud del error
-            if abs(weighted_error) < 0.2:
-                bar_color = (0, 255, 0)  # Verde: OK
-            elif abs(weighted_error) < 0.5:
-                bar_color = (0, 200, 255)  # Naranja: Moderado
-            else:
-                bar_color = (0, 0, 255)  # Rojo: Grande
-            
-            # Indicador de error
-            cv2.rectangle(debug_img, (error_pos - 5, bar_y + 5), 
-                        (error_pos + 5, bar_y + bar_height - 5), bar_color, -1)
-            
-            # Texto de error con interpretación
-            if weighted_error > 0.05:
-                direction = "ALEJARSE (Giro ANTIHORARIO)"
-                dir_color = self.colors['warning']
-            elif weighted_error < -0.05:
-                direction = "ACERCARSE (Giro HORARIO)"
-                dir_color = self.colors['warning']
-            else:
-                direction = "OK (Recto)"
-                dir_color = (0, 255, 0)
-            
-            cv2.putText(debug_img, f"Error: {weighted_error:+.3f}", 
-                    (50, bar_y + bar_height + 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, dir_color, 2)
-            cv2.putText(debug_img, direction, 
-                    (50, bar_y + bar_height + 60), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, dir_color, 1)
-            
-            # Mostrar si es curva
-            if horizon_data and len(horizon_data) >= 3:
-                x_positions = [h['x'] for h in horizon_data]
-                x_range = np.max(x_positions) - np.min(x_positions)
-                normalized_variation = x_range / w
-                
-                is_curve = normalized_variation > 0.15
-                curve_text = f"Curva: {'SI' if is_curve else 'NO'} (var: {normalized_variation:.2f})"
-                curve_color = (255, 200, 0) if is_curve else (100, 100, 100)
-                
-                cv2.putText(debug_img, curve_text, 
-                        (50, bar_y + bar_height + 90), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, curve_color, 1)
+        # Línea de referencia Config 1 (azul)
+        cv2.line(debug_img, (ref_x_1, 0), (ref_x_1, h), (255, 0, 0), 2)
+        cv2.putText(debug_img, f"REF_C1 ({int(ref_ratio_1*100)}%)", (ref_x_1 + 5, 20),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         
-        # ==================== LEYENDA ====================
-        legend_y = h - 20
-        cv2.putText(debug_img, "CONVENCION: (+) Alejarse / (-) Acercarse", 
-                (10, legend_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        # Línea de referencia Config 2 (magenta)
+        cv2.line(debug_img, (ref_x_2, 0), (ref_x_2, h), color_config_2, 2)
+        cv2.putText(debug_img, f"REF_C2 ({int(ref_ratio_2*100)}%)", (ref_x_2 + 5, 45),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_config_2, 2)
+        
+        # === INFORMACIÓN TEXTUAL ===
+        y_text = 70
+        spacing = 25
+        
+        # Error Config 1
+        error_color_1 = (0, 255, 0) if abs(error_1) < 0.3 else (0, 200, 255) if abs(error_1) < 0.6 else (0, 0, 255)
+        
+        if error_1 > 0.05:
+            dir_text_1 = "ALEJARSE"
+        elif error_1 < -0.05:
+            dir_text_1 = "ACERCARSE"
+        else:
+            dir_text_1 = "OK"
+        
+        cv2.putText(debug_img, f"Config 1 [ORIGINAL]: {error_1:+.3f} {dir_text_1}", 
+                (20, y_text), cv2.FONT_HERSHEY_SIMPLEX, 0.6, error_color_1, 2)
+        y_text += spacing
+        
+        # Error Config 2
+        error_color_2 = (0, 255, 0) if abs(error_2) < 0.3 else (0, 200, 255) if abs(error_2) < 0.6 else (0, 0, 255)
+        
+        if error_2 > 0.05:
+            dir_text_2 = "ALEJARSE"
+        elif error_2 < -0.05:
+            dir_text_2 = "ACERCARSE"
+        else:
+            dir_text_2 = "OK"
+        
+        cv2.putText(debug_img, f"Config 2 [NEW]: {error_2:+.3f} {dir_text_2}", 
+                (20, y_text), cv2.FONT_HERSHEY_SIMPLEX, 0.6, error_color_2, 2)
+        y_text += spacing
+        
+        # Curvas
+        cv2.putText(debug_img, f"Curve: C1={'YES' if is_curve_1 else 'NO'} | C2={'YES' if is_curve_2 else 'NO'}", 
+                (20, y_text), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 200, 0), 2)
+        y_text += spacing
+        
+        # Puntos
+        cv2.putText(debug_img, f"Points: C1={len(horizon_data_1)} | C2={len(horizon_data_2)}", 
+                (20, y_text), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 255), 2)
+        y_text += spacing
+        
+        # === BARRA DE ERROR COMBINADA ===
+        # Decidir qué error mostrar (usar Config 1 como default)
+        active_config = 1  # Puedes cambiar esto según lo necesites
+        active_error = error_1 if active_config == 1 else error_2
+        active_color = error_color_1 if active_config == 1 else error_color_2
+        
+        center_x = w // 2
+        bar_x = int(center_x + active_error * w / 4)
+        
+        # Dibujar centro
+        cv2.rectangle(debug_img, (center_x - 2, h-20), (center_x + 2, h), (255, 255, 255), -1)
+        
+        # Barra coloreada
+        if abs(active_error) < 0.2:
+            bar_color = (0, 255, 0)  # Verde: OK
+        elif abs(active_error) < 0.5:
+            bar_color = (0, 200, 255)  # Naranja: Moderado
+        else:
+            bar_color = (0, 0, 255)  # Rojo: Grande
+        
+        cv2.rectangle(debug_img, (bar_x - 5, h-35), (bar_x + 5, h-10), bar_color, -1)
+        
+        # Flecha indicando dirección
+        if active_error > 0.05:  # Alejarse
+            cv2.arrowedLine(debug_img, (bar_x, h-45), (bar_x + 15, h-45), (255, 255, 0), 2)
+        elif active_error < -0.05:  # Acercarse
+            cv2.arrowedLine(debug_img, (bar_x, h-45), (bar_x - 15, h-45), (255, 255, 0), 2)
+        
+        # === LEYENDA ===
+        legend_y = h - 60
+        cv2.putText(debug_img, "SIGN: (+)=Away (-)=Closer", (w - 250, legend_y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+        
+        # Mostrar configuración activa
+        cv2.putText(debug_img, f"Active: Config {active_config}", (w - 250, legend_y + 20),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
         
         # ==================== ESTADÍSTICAS ====================
-        stats_y = h - 60
+        stats_y = h - 90
         if frame_stats and 'drivable_percent' in frame_stats:
-            cv2.putText(debug_img, f"Area transitable: {frame_stats['drivable_percent']:.1f}%", 
-                    (20, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.colors['drivable'], 2)
-            stats_y -= 30
+            cv2.putText(debug_img, f"Drivable: {frame_stats['drivable_percent']:.1f}%", 
+                    (w - 200, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colors['drivable'], 1)
+            stats_y -= 20
         
         if frame_stats and 'lane_percent' in frame_stats:
-            cv2.putText(debug_img, f"Carriles: {frame_stats['lane_percent']:.1f}%", 
-                    (20, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.colors['lane'], 2)
-            stats_y -= 30
+            cv2.putText(debug_img, f"Lane: {frame_stats['lane_percent']:.1f}%", 
+                    (w - 200, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 100, 200), 1)
+            stats_y -= 20
         
         if frame_stats and 'num_lane_contours' in frame_stats:
-            cv2.putText(debug_img, f"Contornos carril: {frame_stats['num_lane_contours']}", 
-                    (20, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 200, 0), 2)
+            cv2.putText(debug_img, f"Contours: {frame_stats['num_lane_contours']}", 
+                    (w - 200, stats_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 1)
         
         return debug_img
     

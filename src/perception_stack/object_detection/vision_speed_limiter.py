@@ -1,317 +1,272 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-import numpy as np
 import time
 from collections import deque
 
-from sensor_msgs.msg import PointCloud2
-from sensor_msgs_py import point_cloud2
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Point
-from visualization_msgs.msg import Marker
-from std_msgs.msg import Float32
+# Mensajes ROS
+from custom_interfaces.msg import ObjectInfoArray, ObjectInfo
+from std_msgs.msg import Float32, Bool
 
-from custom_interfaces.msg import SegmentationData
-
-class LaneMemorySegmenterNode(Node):
+class VisionAlphaController(Node):
     def __init__(self):
-        super().__init__('lane_memory_segmenter')
-
-        # ==================== PARÁMETROS ====================
-        self.declare_parameter('frame_id', 'odom')
-        self.declare_parameter('max_age', 8.0)
-        self.declare_parameter('voxel_size', 0.15)
-        self.declare_parameter('slice_length', 0.15)
-        self.declare_parameter('lookahead', 2.0)
-        self.declare_parameter('lane_half_width', 1.5)
-        self.declare_parameter('smoothing_factor', 0.7)
-        self.declare_parameter('max_prediction_curvature', 10.0)
-
-        self.frame_id = self.get_parameter('frame_id').value
-        self.max_age = self.get_parameter('max_age').value
-        self.voxel_size = self.get_parameter('voxel_size').value
-        self.slice_length = self.get_parameter('slice_length').value
-        self.lookahead = self.get_parameter('lookahead').value
-        self.lane_half_width = self.get_parameter('lane_half_width').value
-        self.smoothing_factor = self.get_parameter('smoothing_factor').value
-        self.max_prediction_curvature = self.get_parameter('max_prediction_curvature').value
-
-        # ==================== MEMORIA ====================
-        self.lane_memory = []          # edge points [x, y, t]
-        self.lane_mask_memory = []     # mask points [x, y, t]
-        self.lane_width_est = 3.0
-        self.lane_width_alpha = 0.15
-
-        self.last_good_target = None
-        self.last_good_prediction = None
-        self.last_good_curvature = None
-        self.last_good_time = None
-        self.nominal_lookahead = self.lookahead
-        self.freeze_timeout = 3.0
-
-        self.target_history = deque(maxlen=5)
-
-        self.robot_pose = None
-        self.centerline = None
-        self.edge_centerline = None
-        self.mask_centerline = None
-
-        # ==================== SUB / PUB ====================
-        self.create_subscription(PointCloud2, '/lane/edge_points', self.edge_callback, 10)
-        self.create_subscription(SegmentationData, '/segmentation/data', self.mask_callback, 10)
-        self.create_subscription(Odometry, '/odometry/local', self.odom_callback, 10)
-
-        self.pub_prediction = self.create_publisher(Marker, '/lane/prediction', 10)
-        self.pub_target = self.create_publisher(Marker, '/lane/target_point', 10)
-        self.pub_target_vis = self.create_publisher(Marker, '/lane/target_vis', 10)
-        self.pub_curvature = self.create_publisher(Float32, '/lane/curvature', 10)
-        self.pub_e_lat = self.create_publisher(Float32, '/lane/error_lateral', 10)
-        self.pub_e_head = self.create_publisher(Float32, '/lane/error_heading', 10)
-
-        # ==================== TIMER ====================
-        self.create_timer(0.1, self.timer_callback)
-
-    # ================== CALLBACKS =====================
-    def edge_callback(self, msg: PointCloud2):
-        now = self.get_clock().now().nanoseconds * 1e-9
-        for p in point_cloud2.read_points(msg, field_names=('x', 'y'), skip_nans=True):
-            self.lane_memory.append([p[0], p[1], now])
-
-    def mask_callback(self, msg: SegmentationData):
-        now = self.get_clock().now().nanoseconds * 1e-9
-        mask_array = np.frombuffer(msg.mask_data, dtype=np.uint8).reshape(msg.height, msg.width)
-        ys, xs = np.where(mask_array == 2)  # solo carril
-        for x, y in zip(xs, ys):
-            self.lane_mask_memory.append([float(x), float(y), now])
-
-    def odom_callback(self, msg: Odometry):
-        p = msg.pose.pose.position
-        q = msg.pose.pose.orientation
-        _, _, yaw = self.euler_from_quaternion(q)
-        self.robot_pose = {'x': p.x, 'y': p.y, 'yaw': yaw}
-
-    # ================== TIMER ==========================
-    def timer_callback(self):
-        if self.robot_pose is None or (len(self.lane_memory) + len(self.lane_mask_memory)) < 5:
-            return
-
-        self.forget_old()
-        self.forget_old_mask()
-
-        self.edge_centerline = self.process_pointcloud(self.lane_memory)
-        self.mask_centerline = self.process_pointcloud(self.lane_mask_memory)
-
-        # Calcular ancho estimado si existen ambos
-        if self.edge_centerline is not None and self.mask_centerline is not None:
-            dists = [np.min(np.linalg.norm(self.edge_centerline - pm, axis=1)) for pm in self.mask_centerline]
-            if len(dists) > 0:
-                width_inst = 2.0 * np.mean(dists)
-                self.lane_width_est = (self.lane_width_alpha * width_inst +
-                                       (1 - self.lane_width_alpha) * self.lane_width_est)
-
-        # Escoger centerline a usar
-        if self.mask_centerline is not None:
-            self.centerline = self.mask_centerline
-        else:
-            self.centerline = self.edge_centerline
-
-        use_freeze = self.centerline is None or len(self.centerline) < 5
-        prediction, target, curvature = None, None, 0.0
-
-        if not use_freeze:
-            prediction, target, curvature = self.predict_lane(self.centerline)
-            if target is None and self.last_good_target is not None:
-                target = self.last_good_target
-            elif target is not None:
-                self.last_good_target = target.copy()
-
-            self.last_good_prediction = prediction.copy() if prediction is not None else None
-            self.last_good_curvature = curvature
-            self.last_good_time = time.time()
-
-        else:
-            if self.last_good_time is None:
-                return
-            age = time.time() - self.last_good_time
-            if age > self.freeze_timeout:
-                return
-            prediction = self.last_good_prediction
-            target = self.last_good_target
-            curvature = self.last_good_curvature
-
-        # Suavizado de target
-        if target is not None:
-            self.target_history.append(target)
-            target_smoothed = np.mean(np.array(self.target_history), axis=0)
-        else:
-            target_smoothed = None
-
-        e_lat, e_heading, closest = self.compute_errors(prediction, target_smoothed) if target_smoothed is not None else (0.0, 0.0, None)
-
-        self.publish_errors(e_lat, e_heading, closest)
-        self.publish_prediction_marker(prediction)
-        if target_smoothed is not None:
-            self.publish_target_marker(target_smoothed)
-        self.publish_curvature(curvature)
-
-    # ================== UTILIDADES =====================
-    def forget_old(self):
-        now = self.get_clock().now().nanoseconds * 1e-9
-        self.lane_memory = [p for p in self.lane_memory if now - p[2] < self.max_age]
-
-    def forget_old_mask(self):
-        now = self.get_clock().now().nanoseconds * 1e-9
-        self.lane_mask_memory = [p for p in self.lane_mask_memory if now - p[2] < self.max_age]
-
-    def process_pointcloud(self, memory):
-        if len(memory) < 5:
-            return None
-        voxels = {}
-        for x, y, _ in memory:
-            if np.isnan(x) or np.isnan(y):
+        super().__init__('vision_alpha_controller')
+        
+        # ============ PARÁMETROS CONFIGURABLES ============
+        self.declare_parameters(namespace='', parameters=[
+            ('bump_crosswalk_max_distance', 4.0),      # metros
+            ('bump_crosswalk_min_distance', 2.5),      # metros
+            ('bump_alpha_min', 0.5),                   # valor mínimo de alpha para badenes/cruces
+            ('person_distance_threshold', 3.0),        # metros en eje X
+            ('person_lateral_threshold', 3.0),         # metros en eje Y (absoluto)
+            ('person_alpha_zero_time', 5.0),           # segundos con alpha a 0
+            ('vehicle_distance_start', 4.0),           # metros donde empieza a reducir
+            ('vehicle_distance_critical', 3.0),        # metros donde alpha=0
+            ('vehicle_lateral_threshold', 1.0),        # metros en eje Y (absoluto)
+            ('vehicle_classes', ['car', 'truck', 'bus', 'motorcycle', 'bicycle']),  # clases de vehículos
+            ('bump_classes', ['speed bump']),          # clases de badenes
+            ('crosswalk_classes', ['crosswalk']),      # clases de cruces peatonales
+            ('update_rate', 10.0),                     # Hz de actualización
+            ('default_alpha', 1.0),                    # valor por defecto
+        ])
+        
+        # ============ VARIABLES DE ESTADO ============
+        self.last_objects_info = None
+        self.last_objects_time = None
+        self.alpha_value = self.get_parameter('default_alpha').value
+        self.active_state = False
+        
+        # Para manejo de tiempos con personas
+        self.person_zero_start_time = None
+        self.in_person_zero_mode = False
+        
+        # Historial para suavizado
+        self.alpha_history = deque(maxlen=10)
+        self.alpha_history.append(self.alpha_value)
+        
+        # ============ SUSCRIPTORES ============
+        self.create_subscription(
+            ObjectInfoArray,
+            '/objects/fused_info',
+            self.objects_callback,
+            10
+        )
+        
+        # ============ PUBLICADORES ============
+        self.alpha_pub = self.create_publisher(
+            Float32,
+            '/alpha/vision',
+            10
+        )
+        
+        self.active_pub = self.create_publisher(
+            Bool,
+            '/active/vision',
+            10
+        )
+        
+        # ============ TIMER PARA PUBLICACIÓN ============
+        self.timer = self.create_timer(
+            1.0 / self.get_parameter('update_rate').value,
+            self.publish_alpha
+        )
+        
+        self.get_logger().info("Vision Alpha Controller iniciado")
+    
+    def objects_callback(self, msg: ObjectInfoArray):
+        """Procesar información de objetos fusionados"""
+        self.last_objects_info = msg
+        self.last_objects_time = time.time()
+        
+        # Actualizar estado activo
+        self.active_state = True
+        
+        # Calcular nuevo valor de alpha
+        new_alpha = self.calculate_alpha(msg)
+        
+        # Suavizar cambios bruscos
+        self.alpha_history.append(new_alpha)
+        self.alpha_value = sum(self.alpha_history) / len(self.alpha_history)
+    
+    def calculate_alpha(self, msg: ObjectInfoArray) -> float:
+        """
+        Calcular valor de alpha basado en objetos detectados
+        Prioridades:
+        1. Personas cercanas (alpha=0.0 por 5s, luego 0.5)
+        2. Vehículos cercanos
+        3. Badenes/cruces peatonales
+        4. Valor por defecto (1.0)
+        """
+        # Obtener parámetros
+        default_alpha = self.get_parameter('default_alpha').value
+        bump_classes = self.get_parameter('bump_classes').value
+        crosswalk_classes = self.get_parameter('crosswalk_classes').value
+        vehicle_classes = self.get_parameter('vehicle_classes').value
+        
+        # Variables para cálculos
+        min_alpha = default_alpha
+        has_person_near = False
+        person_info = None
+        
+        # Verificar cada objeto
+        for obj in msg.objects:
+            # Ignorar objetos sin distancia válida
+            if not obj.distance_valid:
                 continue
-            key = (int(x / self.voxel_size), int(y / self.voxel_size))
-            voxels.setdefault(key, []).append((x, y))
-        cloud = [np.mean(np.array(v), axis=0) for v in voxels.values() if len(v) > 0]
-        if len(cloud) < 5:
-            return None
-        cloud = np.array(cloud)
-        cloud = cloud[cloud[:, 0].argsort()]
-        centers = []
-        x_min, x_max = cloud[0, 0], cloud[-1, 0]
-        x = x_min
-        while x < x_max:
-            pts = cloud[(cloud[:, 0] >= x) & (cloud[:, 0] < x + self.slice_length)]
-            if len(pts) > 2:
-                centers.append([pts[:, 0].mean(), pts[:, 1].mean()])
-            x += self.slice_length
-        return np.array(centers) if len(centers) >= 2 else None
-
-    def euler_from_quaternion(self, q):
-        import math
-        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
-        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
-        yaw = math.atan2(siny_cosp, cosy_cosp)
-        # Roll, Pitch no usados
-        return 0.0, 0.0, yaw
-
-    # ================== PREDICCIÓN Y TARGET =====================
-    def predict_lane(self, centerline):
-        if len(centerline) < 5 or self.robot_pose is None:
-            return None, None, 0.0
-        rx, ry, yaw = self.robot_pose['x'], self.robot_pose['y'], self.robot_pose['yaw']
-        robot_pos = np.array([rx, ry])
-        forward = np.array([np.cos(yaw), np.sin(yaw)])
-
-        x = centerline[:, 0]
-        y = centerline[:, 1]
-        coeffs = np.polyfit(x, y, 2)
-        poly = np.poly1d(coeffs)
-
-        xs = np.linspace(x.min(), x.max(), 200)
-        ys = poly(xs)
-        curve = np.column_stack((xs, ys))
-        vecs = curve - robot_pos
-        ahead_mask = np.dot(vecs, forward) > 0.2
-        curve_ahead = curve[ahead_mask]
-        if len(curve_ahead) < 5:
-            return None, None, 0.0
-
-        dists = np.linalg.norm(np.diff(curve_ahead, axis=0), axis=1)
-        s = np.insert(np.cumsum(dists), 0, 0.0)
-        idx = np.argmin(np.abs(s - self.lookahead))
-        base_pt = curve_ahead[idx]
-        dy_dx = 2 * coeffs[0] * base_pt[0] + coeffs[1]
-        normal = np.array([-dy_dx, 1.0])
-        normal /= np.linalg.norm(normal)
-        offset = self.lane_half_width if self.mask_centerline is not None else self.lane_width_est / 2.0
-        target = base_pt + normal * offset
-        pred_base = curve_ahead[:idx+10]
-        prediction = pred_base + normal * offset
-        # Curvature
-        k_now = abs(2*coeffs[0]) / (1 + dy_dx**2)**1.5
-        idx_preview = np.argmin(np.abs(s - (self.lookahead + self.max_prediction_curvature)))
-        idx_preview = min(idx_preview, len(curve_ahead)-1)
-        preview_pt = curve_ahead[idx_preview]
-        dy_dx_future = 2 * coeffs[0] * preview_pt[0] + coeffs[1]
-        k_future = abs(2*coeffs[0]) / (1 + dy_dx_future**2)**1.5
-        curvature = 0.4 * k_now + 0.6 * k_future
-        return prediction, target, curvature
-
-    # ================== ERRORES =====================
-    def compute_errors(self, prediction, target_point):
-        if prediction is None or target_point is None or self.robot_pose is None:
-            return 0.0, 0.0, None
-        pred_array = np.array(prediction)
-        target_array = np.array(target_point)
-        distances = np.linalg.norm(pred_array - target_array, axis=1)
-        closest_idx = np.argmin(distances)
-        P0 = pred_array[closest_idx]
-        P1 = pred_array[min(closest_idx+1, len(pred_array)-1)]
-        robot_pos = np.array([self.robot_pose['x'], self.robot_pose['y']])
-        v = P1 - P0
-        w = robot_pos - P0
-        v_norm = np.linalg.norm(v)
-        if v_norm < 1e-3:
-            return 0.0, 0.0, None
-        e_lat = (-v[0]*w[1] + v[1]*w[0]) / v_norm
-        dx, dy = target_point[0] - robot_pos[0], target_point[1] - robot_pos[1]
-        target_heading = np.arctan2(dy, dx)
-        e_heading = np.arctan2(np.sin(target_heading - self.robot_pose['yaw']),
-                               np.cos(target_heading - self.robot_pose['yaw']))
-        t = np.dot(w, v) / np.dot(v, v)
-        closest = P0 + np.clip(t, 0.0, 1.0)*v
-        return e_lat, e_heading, closest
-
-    # ================== PUBLISH =====================
-    def publish_prediction_marker(self, prediction):
-        if prediction is None or len(prediction) == 0:
-            return
-        marker = Marker()
-        marker.header.frame_id = self.frame_id
-        marker.header.stamp = self.get_clock().now().to_msg()
-        marker.ns = "prediction"
-        marker.id = 1
-        marker.type = Marker.LINE_STRIP
-        marker.scale.x = 0.05
-        marker.color.r, marker.color.g, marker.color.b, marker.color.a = (0.0, 0.7, 1.0, 1.0)
-        for x, y in prediction:
-            marker.points.append(Point(x=float(x), y=float(y), z=0.0))
-        self.pub_prediction.publish(marker)
-
-    def publish_target_marker(self, target):
-        if target is None or self.robot_pose is None:
-            return
-        m = Marker()
-        m.header.frame_id = self.frame_id
-        m.header.stamp = self.get_clock().now().to_msg()
-        m.ns = "lane_target"
-        m.id = 0
-        m.type = Marker.LINE_STRIP
-        m.scale.x = 0.05
-        m.color.r, m.color.g, m.color.b, m.color.a = (0.0, 1.0, 0.0, 1.0)
-        p0 = Point(x=self.robot_pose['x'], y=self.robot_pose['y'], z=0.1)
-        p1 = Point(x=target[0], y=target[1], z=0.1)
-        m.points = [p0, p1]
-        self.pub_target_vis.publish(m)
-
-    def publish_curvature(self, curvature):
-        msg = Float32()
-        msg.data = curvature
-        self.pub_curvature.publish(msg)
-
-    def publish_errors(self, e_lat, e_heading, closest):
-        msg = Float32()
-        msg.data = e_lat
-        self.pub_e_lat.publish(msg)
-        msg.data = e_heading
-        self.pub_e_head.publish(msg)
+            
+            distance = obj.distance  # Eje X (adelante)
+            lateral = obj.lateral_offset  # Eje Y (lateral)
+            
+            # ============ 1. DETECCIÓN DE PERSONAS ============
+            if 'person' in obj.class_name.lower() or 'pedestrian' in obj.class_name.lower():
+                person_dist_thresh = self.get_parameter('person_distance_threshold').value
+                person_lat_thresh = self.get_parameter('person_lateral_threshold').value
+                
+                if (distance <= person_dist_thresh and 
+                    abs(lateral) <= person_lat_thresh):
+                    has_person_near = True
+                    person_info = obj
+                    
+                    # Manejar el modo de 5 segundos con alpha=0.0
+                    current_time = time.time()
+                    
+                    if not self.in_person_zero_mode:
+                        # Primera detección cercana de persona
+                        self.in_person_zero_mode = True
+                        self.person_zero_start_time = current_time
+                        self.get_logger().warn(
+                            f"Persona detectada cerca: d={distance:.1f}m, lat={lateral:.1f}m. "
+                            f"Alpha=0.0 por 5 segundos."
+                        )
+                        return 0.0
+                    else:
+                        # Ya estábamos en modo persona cercana
+                        time_in_mode = current_time - self.person_zero_start_time
+                        person_zero_time = self.get_parameter('person_alpha_zero_time').value
+                        
+                        if time_in_mode < person_zero_time:
+                            # Seguimos en los primeros 5 segundos
+                            return 0.0
+                        else:
+                            # Pasados 5 segundos, alpha=0.5
+                            self.get_logger().info(
+                                f"Persona persistente detectada. Alpha=0.5"
+                            )
+                            return 0.5
+            
+            # ============ 2. DETECCIÓN DE VEHÍCULOS ============
+            if any(vehicle_class in obj.class_name.lower() for vehicle_class in vehicle_classes):
+                vehicle_start = self.get_parameter('vehicle_distance_start').value
+                vehicle_critical = self.get_parameter('vehicle_distance_critical').value
+                vehicle_lat_thresh = self.get_parameter('vehicle_lateral_threshold').value
+                
+                if (abs(lateral) <= vehicle_lat_thresh and 
+                    vehicle_critical <= distance <= vehicle_start):
+                    
+                    # Reducción progresiva de alpha
+                    alpha_range = vehicle_start - vehicle_critical
+                    distance_from_start = vehicle_start - distance
+                    
+                    if alpha_range > 0:
+                        alpha_reduction = (distance_from_start / alpha_range) * default_alpha
+                        vehicle_alpha = max(0.0, default_alpha - alpha_reduction)
+                        min_alpha = min(min_alpha, vehicle_alpha)
+                        
+                        self.get_logger().info(
+                            f"Vehículo detectado: {obj.class_name} "
+                            f"d={distance:.1f}m, lat={lateral:.1f}m. Alpha={vehicle_alpha:.2f}"
+                        )
+                    
+                elif (abs(lateral) <= vehicle_lat_thresh and 
+                      distance < vehicle_critical):
+                    # Vehículo muy cerca, alpha=0.0
+                    self.get_logger().warn(
+                        f"Vehículo MUY CERCA: {obj.class_name} "
+                        f"d={distance:.1f}m, lat={lateral:.1f}m. Alpha=0.0"
+                    )
+                    return 0.0
+            
+            # ============ 3. DETECCIÓN DE BADENES/CRUCES ============
+            is_bump = any(bump_class in obj.class_name.lower() for bump_class in bump_classes)
+            is_crosswalk = any(cross_class in obj.class_name.lower() for cross_class in crosswalk_classes)
+            
+            if is_bump or is_crosswalk:
+                bump_max = self.get_parameter('bump_crosswalk_max_distance').value
+                bump_min = self.get_parameter('bump_crosswalk_min_distance').value
+                bump_alpha_min = self.get_parameter('bump_alpha_min').value
+                
+                if bump_min <= distance <= bump_max:
+                    # Reducción progresiva de alpha
+                    bump_range = bump_max - bump_min
+                    distance_from_max = bump_max - distance
+                    
+                    if bump_range > 0:
+                        alpha_reduction = (distance_from_max / bump_range) * (default_alpha - bump_alpha_min)
+                        bump_alpha = max(bump_alpha_min, default_alpha - alpha_reduction)
+                        min_alpha = min(min_alpha, bump_alpha)
+                        
+                        obj_type = "Badén" if is_bump else "Cruce peatonal"
+                        self.get_logger().info(
+                            f"{obj_type} detectado: d={distance:.1f}m. Alpha={bump_alpha:.2f}"
+                        )
+                
+                elif distance < bump_min:
+                    # Muy cerca del badén/cruce
+                    min_alpha = min(min_alpha, bump_alpha_min)
+                    self.get_logger().info(
+                        f"{'Badén' if is_bump else 'Cruce'} MUY CERCA: "
+                        f"d={distance:.1f}m. Alpha={bump_alpha_min:.2f}"
+                    )
+        
+        # ============ MANEJO DE FIN DE MODO PERSONA ============
+        if self.in_person_zero_mode and not has_person_near:
+            # Ya no hay personas cercanas, salir del modo
+            self.in_person_zero_mode = False
+            self.person_zero_start_time = None
+            self.get_logger().info("Personas ya no detectadas cerca. Volviendo a alpha normal.")
+        
+        # ============ RETORNAR EL VALOR FINAL ============
+        if self.in_person_zero_mode:
+            # Si estamos en modo persona, ya se manejó en la lógica anterior
+            # Esto es solo para seguridad
+            if time.time() - self.person_zero_start_time < self.get_parameter('person_alpha_zero_time').value:
+                return 0.0
+            else:
+                return 0.5
+        
+        return min_alpha
+    
+    def publish_alpha(self):
+        """Publicar valores de alpha y estado activo"""
+        # Publicar estado activo
+        active_msg = Bool()
+        active_msg.data = self.active_state
+        self.active_pub.publish(active_msg)
+        
+        # Publicar valor de alpha
+        alpha_msg = Float32()
+        alpha_msg.data = float(self.alpha_value)
+        self.alpha_pub.publish(alpha_msg)
+        
+        # Si no hay datos recientes, volver a estado inactivo
+        if self.last_objects_time and (time.time() - self.last_objects_time > 1.0):
+            self.active_state = False
+            self.alpha_value = self.get_parameter('default_alpha').value
+            self.alpha_history.clear()
+            self.alpha_history.append(self.alpha_value)
+            
+            # Resetear modo persona
+            self.in_person_zero_mode = False
+            self.person_zero_start_time = None
+    
+    def destroy_node(self):
+        super().destroy_node()
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = LaneMemorySegmenterNode()
+    node = VisionAlphaController()
+    
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

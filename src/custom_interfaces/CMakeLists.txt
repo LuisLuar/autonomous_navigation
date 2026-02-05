@@ -27,6 +27,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/LaneModel.msg"
   "msg/ObjectInfo.msg"
   "msg/ObjectInfoArray.msg"
+  "msg/PixelPoint.msg"
+  "msg/LaneLine.msg"
+  "msg/LaneLines.msg"
   DEPENDENCIES builtin_interfaces
   DEPENDENCIES std_msgs
   DEPENDENCIES nav_msgs 

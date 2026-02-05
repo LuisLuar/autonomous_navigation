@@ -17,20 +17,22 @@ def generate_launch_description():
             output='screen',
         ),
 
-        # Lanzar nodo de limitador de velocidad LIDAR
+        # Lanza nodo controlador robusto
         Node(
             package='navigation_system',
-            executable='lidar_speed_limiter',
+            executable='robust_controller',
             output='screen',    
         ),
 
-        # Lanzar nodo de sesgo lateral LIDAR
-        Node(
-            package='navigation_system',
-            executable='lidar_lateral_bias',
-            output='screen',    
-        ),
+        
 
+        
+
+
+        
+    ])
+
+"""
         # Lanza nodo de monitor de objetivo alcanzado
         Node(
             package='navigation_system',
@@ -38,57 +40,8 @@ def generate_launch_description():
             output='screen',    
         ),
 
-        # Lanza nodo controlador robusto
-        Node(
-            package='navigation_system',
-            executable='robust_controller',
-            output='screen',    
-        ), 
-
-        # lanzar nodoglobal path map to odom
-        Node(
-            package='navigation_system',
-            executable='global_path_map_to_odom',
-            output='screen',    
-        ),         
         
-    ])
-
-"""
-        #Lanzar nodo de seguidor de path local
-        Node(
-            package='navigation_system',
-            executable='local_path_follower',
-            output='screen',    
-        ),
-
-        #Lanza nodo de map matching
-        Node(
-            package='navigation_system',
-            executable='map_matching',
-            output='screen',    
-        ),
-
-        #Lanzar nodo de extracción de path local desde línea de ego
-        Node(
-            package='navigation_system',
-            executable='lane_local_path_extractor',
-            output='screen',    
-        ),
-
-        #Lanzar nodo de controlador pursuit Stanley
-        Node(
-            package='navigation_system',
-            executable='pursuit_controller',
-            output='screen',    
-        ),
-
-        #Lanzar nodo de controlador cerebral
-        Node(
-            package='navigation_system',
-            executable='brain_controller',
-            output='screen',    
-        ),
+        
 
         # Lanza nodo Matching
         Node(
@@ -97,17 +50,17 @@ def generate_launch_description():
             output='screen',    
         ),
 
-        # Lanzar nodo de fusión de velocidades
-        Node(
-            package='navigation_system',
-            executable='cmd_vel_fusion',
-            output='screen',    
-        ),
-
         # lanza nodeo de extraccion de elementos OSM
         Node(
             package='navigation_system',
             executable='information_osm',
+            output='screen',    
+        ), 
+
+        # lanzar nodoglobal path map to odom
+        Node(
+            package='navigation_system',
+            executable='global_path_map_to_odom',
             output='screen',    
         ),    
 

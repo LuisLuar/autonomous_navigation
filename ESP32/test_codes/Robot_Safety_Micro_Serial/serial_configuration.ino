@@ -31,12 +31,12 @@ void recibirDatos() {
         // Solo aplicar comandos de relés si update_rele es true
         if (update_rele) {
           // Aplicar el comando directamente a los relés (igual que en Rele_callback)
-          digitalWrite(GPIO_RELE_M_LEFT,   rele_cmd & (1 << 0) ? HIGH : LOW);  
+          //digitalWrite(GPIO_RELE_M_LEFT,   rele_cmd & (1 << 0) ? HIGH : LOW);  
           digitalWrite(GPIO_RELE_M_RIGHT,  rele_cmd & (1 << 1) ? HIGH : LOW);  
-          digitalWrite(GPIO_RELE_STOP,     rele_cmd & (1 << 2) ? HIGH : LOW);  
+          /*digitalWrite(GPIO_RELE_STOP,     rele_cmd & (1 << 2) ? HIGH : LOW);  
           digitalWrite(GPIO_RELE_LEFT,     rele_cmd & (1 << 3) ? HIGH : LOW);  
           digitalWrite(GPIO_RELE_RIGHT,    rele_cmd & (1 << 4) ? HIGH : LOW);  
-          digitalWrite(GPIO_RELE_SAFETY,   rele_cmd & (1 << 5) ? HIGH : LOW);
+          digitalWrite(GPIO_RELE_SAFETY,   rele_cmd & (1 << 5) ? HIGH : LOW);*/
           
           // Opcional: enviar ACK por serial
           // Serial.println("RELE_CMD_OK");

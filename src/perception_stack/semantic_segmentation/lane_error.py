@@ -39,7 +39,7 @@ class LaneErrorPredictiveRobust(Node):
         self.declare_parameter('ref_ratio_1', 0.77)  # IGUAL al original: 0.8
         
         # Pesos EXACTAMENTE iguales al original
-        self.declare_parameter('horizon_weights_1', [0.001, 0.002, 0.04, 0.002, 0.001])
+        self.declare_parameter('horizon_weights_1', [0.002, 0.003, 0.04, 0.002, 0.001])
         
         # Rango vertical EXACTO al original: (0.7 + ratio * 0.2) → entre 70% y 90%
         self.declare_parameter('y_range_1_start', 0.71)
@@ -48,7 +48,7 @@ class LaneErrorPredictiveRobust(Node):
         # Configuración NUEVA (solo lane_mask, prioriza izquierda)
         self.declare_parameter('num_horizons_2', 5)
         self.declare_parameter('ref_ratio_2', 0.75)  # Misma ref_ratio que original
-        self.declare_parameter('horizon_weights_2', [0.001, 0.002, 0.04, 0.002, 0.001])
+        self.declare_parameter('horizon_weights_2', [0.002, 0.003, 0.04, 0.002, 0.001])
         
         # Rango vertical ligeramente diferente para comparación
         self.declare_parameter('y_range_2_start', 0.75)

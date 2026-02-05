@@ -29,29 +29,18 @@ def generate_launch_description():
 
         Node(
             package='system_management',
-            executable='rplidar_supervisor',
-            output='screen'
-        ),
-
-
-        Node(
-            package='system_management',
             executable='system_health',
             output='screen'
         ),
         
     ])
 
-#Node(
-#            package='system_management',
-#            executable='esp32_supervisor',
-#            output='screen'
-#        ),
+
 
 """
         Node(
             package='system_management',
-            executable='components_supervisor',
+            executable='esp32_supervisor',
             output='screen'
         ),
 
@@ -60,6 +49,20 @@ def generate_launch_description():
             executable='VC_supervisor',
             output='screen'
         ),
+
+        Node(
+            package='system_management',
+            executable='rplidar_supervisor',
+            output='screen'
+        ),
+
+        Node(
+            package='system_management',
+            executable='components_supervisor',
+            output='screen'
+        ),
+
+        
         
 
 """

@@ -11,7 +11,7 @@ const float MAG_SCALE_Z = 0.65; //0.6f;
 
 // Declinación magnética
 // -5° 4'  => -5.0666667 grados (negativa = WEST)
-const float MAG_DECLINATION_DEG = -5.0666667f;
+const float MAG_DECLINATION_DEG = -4.9667f; //-5.0666667f;
 
 // conversion constants
 const float G_TO_MS2 = 9.80665f;

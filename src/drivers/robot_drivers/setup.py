@@ -34,7 +34,9 @@ setup(
             'webcam_tester = robot_drivers.test_webcam:main',
             'droidcam_camera = robot_drivers.droidcam_camera:main',
             'test_webcam = robot_drivers.test_webcam:main',
-            'image_folder = robot_drivers.image_folder:main'
+            'image_folder = robot_drivers.image_folder:main', 
+            'camera_right = robot_drivers.camera_right:main',
+            'camera_left = robot_drivers.camera_left:main',
         ],
     },
 )

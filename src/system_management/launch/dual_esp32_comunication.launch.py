@@ -15,17 +15,16 @@ def generate_launch_description():
             name='unifier_control_comunication',
             output='screen'
         ),
-        
     ])
 
 """
-
-    Node(
+        Node(
             package='system_management',
             executable='bridge_serial_safety',
             name='bridge_serial_safety',
             output='screen'
         ),
+
         Node(
             package='system_management',
             executable='unifier_safety_comunication',
@@ -33,4 +32,5 @@ def generate_launch_description():
             output='screen'
         ),
 
+    
 """
