@@ -3,12 +3,12 @@ import rclpy
 from rclpy.node import Node
 import cv2
 import numpy as np
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CompressedImage
 from custom_interfaces.msg import SegmentationData, ObjectInfoArray
 from cv_bridge import CvBridge
 import time
 from collections import defaultdict
-
+from custom_interfaces.msg import PixelPoint
 
 class CombinedVisualizerNode(Node):
     def __init__(self):
@@ -45,29 +45,53 @@ class CombinedVisualizerNode(Node):
         self.trajectories = defaultdict(list)
         self.max_trajectory_points = 10
         
-        # Suscripciones
-        self.image_sub = self.create_subscription(
-            Image, '/camera/rgb/image_raw', self.image_callback, 10
+        # CAMBIADO: Configurar QoS Best Effort para que coincida con el publicador
+        best_effort_qos = rclpy.qos.QoSProfile(
+            reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
+            durability=rclpy.qos.DurabilityPolicy.VOLATILE,
+            depth=1
         )
+        
+        # Suscripciones con QoS Best Effort para la imagen comprimida
+        self.image_sub = self.create_subscription(
+            CompressedImage, 
+            '/image_raw/compressed', 
+            self.image_callback, 
+            best_effort_qos  # Usar QoS Best Effort
+        )
+        
+        # Las otras suscripciones pueden mantener el QoS por defecto
         self.segmentation_sub = self.create_subscription(
             SegmentationData, '/segmentation/data', self.segmentation_callback, 10
         )
         self.objects_sub = self.create_subscription(
             ObjectInfoArray, '/objects/fused_info', self.objects_callback, 10
         )
+
+        self.pixels_sub = self.create_subscription(
+            PixelPoint,  
+            '/lane/ipm_inverse_pixel_points',#'/lane/ipm_inverse_pixel_points',
+            self.pixels_callback,
+            10
+        )
+
+        # Variable para guardar los píxeles
+        self.current_pixels = None  # Será una lista de tuplas (u, v)
         
         # Publicador único
         self.viz_pub = self.create_publisher(Image, '/debug/camera_front', 10)
         
-        self.get_logger().info("Visualizador combinado inicializado")
+        self.get_logger().info("Visualizador combinado inicializado (usando imagen comprimida con QoS Best Effort)")
     
     def image_callback(self, msg):
-        """Recibe imagen de cámara"""
+        """Recibe imagen comprimida de cámara"""
         try:
-            self.current_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+            # Decodificar imagen comprimida
+            np_arr = np.frombuffer(msg.data, np.uint8)
+            self.current_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             self.process_and_publish()
         except Exception as e:
-            self.get_logger().error(f"Error procesando imagen: {e}", throttle_duration_sec=5.0)
+            self.get_logger().error(f"Error procesando imagen comprimida: {e}", throttle_duration_sec=5.0)
     
     def segmentation_callback(self, msg):
         """Recibe datos de segmentación"""
@@ -82,6 +106,16 @@ class CombinedVisualizerNode(Node):
     def objects_callback(self, msg):
         """Recibe objetos detectados"""
         self.current_objects = msg
+        self.process_and_publish()
+    
+    def pixels_callback(self, msg):
+        """Recibe píxeles del centerline"""
+        if not msg.is_valid or len(msg.x_coordinates) == 0:
+            self.current_pixels = None
+            return
+        
+        # Convertir a lista de tuplas (x, y)
+        self.current_pixels = list(zip(msg.x_coordinates, msg.y_coordinates))
         self.process_and_publish()
     
     def process_and_publish(self):
@@ -102,11 +136,15 @@ class CombinedVisualizerNode(Node):
             if self.current_objects is not None:
                 display_image = self.draw_objects(display_image)
             
-            # 3. Añadir información de estado
-            display_image = self.add_status_overlay(display_image)
+            # 3. Dibujar píxeles del centerline (si existen)
+            if self.current_pixels is not None:
+                display_image = self.draw_pixels(display_image)
             
-            # 4. Calcular y mostrar FPS
-            display_image = self.add_fps_display(display_image)
+            # 4. Añadir información de estado
+            #display_image = self.add_status_overlay(display_image)
+            
+            # 5. Calcular y mostrar FPS
+            #display_image = self.add_fps_display(display_image)
             
             # Publicar
             viz_msg = self.bridge.cv2_to_imgmsg(display_image, 'bgr8')
@@ -209,6 +247,26 @@ class CombinedVisualizerNode(Node):
         
         return image
     
+    def draw_pixels(self, image):
+        """Dibujar píxeles del centerline"""
+        if self.current_pixels is None or len(self.current_pixels) == 0:
+            return image
+        
+        # Color para los píxeles del centerline (Rojo brillante)
+        pixel_color = (255, 255, 0)  # BGR: Rojo
+        
+        # Dibujar cada píxel
+        for u, v in self.current_pixels:
+            # Convertir a enteros (por si acaso)
+            x, y = int(u), int(v)
+            
+            # Verificar que esté dentro de la imagen
+            if 0 <= x < image.shape[1] and 0 <= y < image.shape[0]:
+                # Dibujar un punto grande para que sea visible
+                cv2.circle(image, (x, y), 3, pixel_color, -1)  # Círculo relleno
+        
+        return image
+
     def get_object_color(self, class_name, track_id=0):
         """Obtener color para un objeto"""
         class_lower = class_name.lower()

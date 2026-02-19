@@ -2,7 +2,6 @@
 """
 LaneDetector - Versión simplificada para detección de líneas de carril
 ======================================================
-- Eliminado DBSCAN
 - Detección simple basada en agrupación por Y
 - Enfocado en líneas horizontales (paralelas a eje X)
 - Líneas separadas por offset en Y
@@ -11,16 +10,13 @@ LaneDetector - Versión simplificada para detección de líneas de carril
 import rclpy
 from rclpy.node import Node
 import numpy as np
-from collections import deque
 import math
-from typing import List, Dict
 
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Header, Float32, Bool
 from sensor_msgs_py import point_cloud2
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
-from std_msgs.msg import ColorRGBA
 
 # Importar mensajes personalizados
 from custom_interfaces.msg import LaneLines, LaneLine  # Ajusta el nombre de tu paquete
@@ -31,12 +27,12 @@ class LaneDetector(Node):
         
         # =================== PARÁMETROS SIMPLIFICADOS ===================
         self.declare_parameters('', [
-            ('x_range_min', 1.50),
+            ('x_range_min', 2.0),
             ('x_range_max', 5.0),
             ('max_lateral_distance', 5.0),
             
             # Parámetros simplificados para detección de líneas
-            ('y_bin_size', 0.4),           # Tamaño de bin en Y para agrupar puntos
+            ('y_bin_size', 0.15),           # Tamaño de bin en Y para agrupar puntos
             ('min_points_per_line', 10),    # Mínimo de puntos para considerar una línea
             ('min_line_length', 1.0),       # Longitud mínima de línea en X
             ('max_line_width', 0.1),        # Ancho máximo permitido (std en Y)
@@ -47,7 +43,7 @@ class LaneDetector(Node):
             ('lane_width', 2.8),            # Ancho de carril esperado
             
             # Parámetros de ángulo
-            ('max_angle_deviation', 15.0),  # Máxima desviación angular en grados (líneas horizontales)
+            ('max_angle_deviation', 35.0),  # Máxima desviación angular en grados (líneas horizontales)
             
             # Parámetros de visualización
             ('visualize_candidates', True),
@@ -72,12 +68,6 @@ class LaneDetector(Node):
         self.pub_lines = self.create_publisher(
             LaneLines, 
             '/lane/detected_lines', 
-            10
-        )
-        
-        self.pub_markers = self.create_publisher(
-            MarkerArray, 
-            '/lane/debug/candidates', 
             10
         )
         
@@ -129,10 +119,6 @@ class LaneDetector(Node):
         # 5. PUBLICAR INFORMACIÓN BÁSICA
         self.publish_line_count(len(lines_base))
         self.publish_curve_status()
-        
-        # 6. VISUALIZACIÓN EN RVIZ
-        if self.get_parameter('visualize_candidates').value and lines_base:
-            self.visualize_lines_as_markers(lines_base)
         
         # 7. LOGS DE DEBUG
         if self.get_parameter('debug').value and len(lines_base) > 0:
@@ -358,56 +344,6 @@ class LaneDetector(Node):
             self.get_logger().debug(
                 f" Publicadas {len(lines_base)} líneas en /lane/detected_lines"
             )"""
-    
-    def visualize_lines_as_markers(self, lines):
-        """Visualización simplificada en RViz"""
-        marker_array = MarkerArray()
-        
-        for i, line in enumerate(lines):
-            line_marker = Marker()
-            line_marker.header.frame_id = "base_footprint"
-            line_marker.header.stamp = self.get_clock().now().to_msg()
-            line_marker.ns = "lane_lines"
-            line_marker.id = i
-            line_marker.type = Marker.LINE_STRIP
-            line_marker.action = Marker.ADD
-            
-            line_marker.points = []
-            points_array = np.array(line['points'])
-            
-            # Ordenar por X para visualización continua
-            sorted_indices = np.argsort(points_array[:, 0])
-            sorted_points = points_array[sorted_indices]
-            
-            for point in sorted_points:
-                p = Point()
-                p.x = float(point[0])
-                p.y = float(point[1])
-                p.z = 0.0
-                line_marker.points.append(p)
-            
-            line_marker.scale.x = self.get_parameter('line_thickness').value
-            
-            # Color según posición Y
-            if line.get('is_expected_position', False):
-                # Línea en posición esperada - Verde
-                line_marker.color.r = 0.0
-                line_marker.color.g = 1.0
-                line_marker.color.b = 0.0
-            else:
-                # Otra línea - Amarillo
-                line_marker.color.r = 1.0
-                line_marker.color.g = 1.0
-                line_marker.color.b = 0.0
-            
-            line_marker.color.a = 0.8
-            
-            line_marker.pose.orientation.w = 1.0
-            line_marker.lifetime.sec = 1
-            
-            marker_array.markers.append(line_marker)
-        
-        self.pub_markers.publish(marker_array)
     
     def publish_filtered_points(self, points):
         header = Header()

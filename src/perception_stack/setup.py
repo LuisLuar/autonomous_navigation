@@ -41,7 +41,6 @@ setup(
             'segmenter_yolop = semantic_segmentation.segmenter_yolop:main',               
             'visualizer_segmentation = semantic_segmentation.visualizer_segmentation:main',
             'lane_error = semantic_segmentation.lane_error:main',
-            'bev_center_debug = semantic_segmentation.bev_center_debug:main',
             'ipm_lane_detection = semantic_segmentation.ipm_lane_detection:main',
             'pixel_to_meter_front = semantic_segmentation.pixel_to_meter_front:main',
             'pixel_to_meter_left = semantic_segmentation.pixel_to_meter_left:main', 
@@ -64,7 +63,11 @@ setup(
             'correct_color_right = perception_stack.correct_color_right:main',
             'lane_pointcloud_merger = semantic_segmentation.lane_pointcloud_merger:main',
             'detector_senaletica = object_detection.detector_senaletica:main',
-            'lane_detector = semantic_segmentation.lane_detector:main'
+            'lane_detector = semantic_segmentation.lane_detector:main',
+            'base_footprint_topology = semantic_segmentation.base_footprint_topology:main',
+            'lane_model_estimator = semantic_segmentation.lane_model_estimator:main',
+            'lane_model_tracking = semantic_segmentation.lane_model_tracking:main',
+            'inverse_IPM = perception_stack.inverse_IPM:main'
             
         ],
     },

@@ -67,10 +67,10 @@ class RosMultiStream(Node):
         }
 
         # Suscriptor para cámara RGB original
-        self.subscription_camera = self.create_subscription(Image,"/debug/camera_front",self.camera_listener,10) #/camera/rgb/image_raw              /debug/camera_front
+        self.subscription_camera = self.create_subscription(Image,"/debug/camera_left",self.camera_listener,10) #/camera/rgb/image_raw              /debug/camera_front
 
         # Suscriptor para detecciones
-        self.subscription_detection = self.create_subscription(Image,"/debug/camera_left",self.detection_listener,10) #/camera/rgb/left       /debug/camera_left
+        self.subscription_detection = self.create_subscription(Image,"/debug/camera_front",self.detection_listener,10) #/camera/rgb/left       /debug/camera_left
 
         # Suscriptor para segmentación
         self.subscription_segmentation = self.create_subscription(Image,"/debug/camera_right",self.segmentation_listener,10) #/camera/rgb/right         /debug/camera_right

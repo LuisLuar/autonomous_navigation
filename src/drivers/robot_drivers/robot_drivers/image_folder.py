@@ -16,7 +16,7 @@ class DualImagePublisher(Node):
         super().__init__('dual_image_publisher')
         
         # ===== PARÁMETROS HARCODEADOS (ajusta según necesites) =====
-        self.folder_path = "/home/raynel/autonomous_navigation/src/saves/data_logs/ruta11_20260127_122730/perception_right"
+        self.folder_path = "/home/raynel/autonomous_navigation/src/saves/data_logs/ruta100_20260218_132640/perception"
         self.current_idx = 0
         self.frame_rate = 20.0  # Hz
         self.auto_advance = False  # Avanzar automáticamente?

@@ -26,11 +26,15 @@ class YOLOPCannyCandidatesRight(Node):
         self.latest_seg = None
 
         # ================= PARÁMETROS =================
-        self.declare_parameter('canny_low_road', 60)
+        self.declare_parameter('canny_low_road', 100)
         self.declare_parameter('canny_high_road', 150)
         self.declare_parameter('canny_low_lane', 40)
         self.declare_parameter('canny_high_lane', 120)
-        self.declare_parameter('road_close_kernel', 7)
+        self.declare_parameter('road_close_kernel', 70)
+
+        self.declare_parameter('row_step', 1)
+        self.declare_parameter('min_segment_width_lane', 2)
+        self.declare_parameter('min_segment_width_road', 3)
 
         # ================= SUBS =================
         self.create_subscription(
@@ -92,15 +96,51 @@ class YOLOPCannyCandidatesRight(Node):
         high_r = self.get_parameter('canny_high_road').value
         road_edges = cv2.Canny(road_mask, low_r, high_r)
 
+        road_points = np.zeros_like(road_edges)
+
+        row_step = self.get_parameter('row_step').value
+        min_segment_width_road = self.get_parameter('min_segment_width_road').value 
+
+        for y in range(0, h, row_step):
+            xs = np.where(road_edges[y] > 0)[0]
+            if len(xs) < min_segment_width_road:
+                continue
+
+            # dividir bordes en segmentos independientes
+            segments = np.split(xs, np.where(np.diff(xs) > 1)[0] + 1)
+
+            for seg in segments:
+                if len(seg) >= min_segment_width_road:
+                    x_center = int(seg.mean())
+                    road_points[y, x_center] = 255
+
         # ================= LANE EDGES =================
         low_l = self.get_parameter('canny_low_lane').value
         high_l = self.get_parameter('canny_high_lane').value
         lane_roi_gray = cv2.bitwise_and(gray, gray, mask=lane_mask)
         lane_edges = cv2.Canny(lane_roi_gray, low_l, high_l)
 
+        # ================= LANE CENTERLINE =================
+        lane_center = np.zeros_like(lane_mask)
+
+        min_segment_width_lane = self.get_parameter('min_segment_width_lane').value   # para líneas reales
+
+        for y in range(0, h, row_step):
+            xs = np.where(lane_mask[y] > 0)[0]
+            if len(xs) < min_segment_width_lane:
+                continue
+
+            # dividir en segmentos contiguos
+            segments = np.split(xs, np.where(np.diff(xs) > 1)[0] + 1)
+
+            for seg in segments:
+                if len(seg) >= min_segment_width_lane:
+                    x_center = int(seg.mean())
+                    lane_center[y, x_center] = 255
+
         # ================= EXTRAER PÍXELES =================
-        ys_r, xs_r = np.where(road_edges > 0)
-        ys_l, xs_l = np.where(lane_edges > 0)
+        ys_r, xs_r = np.where(road_points > 0)
+        ys_l, xs_l = np.where(lane_center > 0)
 
         x_coords = np.concatenate([xs_r, xs_l]).astype(np.uint32)
         y_coords = np.concatenate([ys_r, ys_l]).astype(np.uint32)
@@ -111,7 +151,7 @@ class YOLOPCannyCandidatesRight(Node):
         ])
 
         total_points = len(x_coords)
-        is_valid = total_points > 100
+        is_valid = total_points > 10
         global_quality = min(1.0, total_points / 5000.0)
 
         # ================= PUBLICAR =================
@@ -127,8 +167,12 @@ class YOLOPCannyCandidatesRight(Node):
 
         # ================= DEBUG VISUAL =================
         """vis = np.zeros((h, w, 3), dtype=np.uint8)
-        vis[road_edges > 0] = (0, 0, 255)
-        vis[lane_edges > 0] = (255, 0, 0)
+        vis[road_edges > 0] = (50, 50, 50)       # gris: Canny original
+        #vis[lane_edges > 0] = (50, 50, 50)
+
+        vis[road_points > 0] = (0, 0, 255)       # rojo: centro por segmento        
+        vis[lane_center > 0] = (0, 255, 255)  # amarillo
+
 
         txt = f'Pts: {total_points} | Q: {global_quality:.2f}'
         cv2.putText(vis, txt, (10, 30),

@@ -83,7 +83,7 @@ class TopologyAssigner(Node):
             ('min_confidence_for_lane_change', 0.7), # Confianza mínima
             
             # PARÁMETROS PARA SUAVIZADO DE PERSISTENT_Y
-            ('persistent_y_smoothing_factor', 0.1),  # Factor de suavizado para persistent_y
+            ('persistent_y_smoothing_factor', 0.8),  # Factor de suavizado para persistent_y
             
             # PARÁMETROS PARA TRANSICIÓN DE CAMBIO DE CARRIL
             ('transition_max_y_distance', 1.0),       # Distancia Y máxima durante transición
@@ -92,7 +92,7 @@ class TopologyAssigner(Node):
             ('transition_frames', 5),                # Frames en estado de transición
             
             # PARÁMETROS PARA LIMPIEZA DE MEMORIA
-            ('memory_retention_factor', 0.3),        # Factor de retención de memoria (0.0 = limpiar todo, 1.0 = mantener todo)
+            ('memory_retention_factor', 0.1),        # Factor de retención de memoria (0.0 = limpiar todo, 1.0 = mantener todo)
             ('confidence_reduction_factor', 0.6),     # Factor de reducción de confianza al cambiar de carril
         ])
         
@@ -226,7 +226,7 @@ class TopologyAssigner(Node):
         #  NO calibrar si el yaw aún se está moviendo
         if not self.is_yaw_stable():
             if self.get_parameter('debug').value:
-                self.get_logger().debug("⏳ Esperando estabilización del yaw...")
+                self.get_logger().debug(" Esperando estabilización del yaw...")
             return
         
         self.is_in_curve = msg.is_in_curve
@@ -353,17 +353,17 @@ class TopologyAssigner(Node):
             return
         
         self.get_logger().info(
-            f"🔧 Calibrando con {len(all_lines)} líneas de "
+            f" Calibrando con {len(all_lines)} líneas de "
             f"{len(self.calibration_data['lines_buffer'])} frames"
         )
         
         line_groups = self.cluster_lines_by_lateral_position_debug(all_lines)
-        self.get_logger().info(f"📊 Grupos encontrados: {len(line_groups)}")
+        self.get_logger().info(f" Grupos encontrados: {len(line_groups)}")
         
         min_groups = self.get_parameter('min_groups_for_calibration').value
         if len(line_groups) < min_groups:
             self.get_logger().warn(
-                f"❌ Se necesitan al menos {min_groups} líneas, "
+                f" Se necesitan al menos {min_groups} líneas, "
                 f"solo se encontraron {len(line_groups)}"
             )
             return
@@ -372,7 +372,7 @@ class TopologyAssigner(Node):
         topology = self.determine_lane_topology_flexible(line_groups)
         
         if topology is None:
-            self.get_logger().warn("❌ No se pudo determinar la topología del carril")
+            self.get_logger().warn(" No se pudo determinar la topología del carril")
             return
         
         self.build_road_model(line_groups, topology)
@@ -486,7 +486,7 @@ class TopologyAssigner(Node):
     
     def determine_lane_topology_flexible(self, line_groups):
         n_lines = len(line_groups)
-        self.get_logger().info(f"🔍 Determinando topología con {n_lines} líneas")
+        self.get_logger().info(f" Determinando topología con {n_lines} líneas")
         
         line_groups.sort(key=lambda g: g['mean_y'], reverse=True)
         y_positions = [g['mean_y'] for g in line_groups]
@@ -495,7 +495,7 @@ class TopologyAssigner(Node):
         right_count = sum(1 for y in y_positions if y < -0.2)
         
         self.get_logger().info(
-            f"📊 Líneas izquierdas (Y>0.2): {left_count}, "
+            f" Líneas izquierdas (Y>0.2): {left_count}, "
             f"derechas (Y<-0.2): {right_count}"
         )
         
@@ -517,8 +517,15 @@ class TopologyAssigner(Node):
             robot_position = 'IZQUIERDO'
         elif left_count == 1 and right_count == 1:
             robot_position = 'INTERMEDIO'
-        
-        self.get_logger().info(f"🤖 Robot en carril: {robot_position}")
+        elif left_count == 2 and right_count == 0:
+            robot_position = 'INTERMEDIO'
+
+        elif left_count == 1 and right_count == 0:
+            robot_position = 'INTERMEDIO'
+
+
+
+        self.get_logger().info(f" Robot en carril: {robot_position}")
         self.robot_lane_position = robot_position
         
         topology = None
@@ -542,6 +549,12 @@ class TopologyAssigner(Node):
                         'lane_dividing': line_groups[1],
                         'right_lane': line_groups[2]
                     }
+            elif n_lines == 2 and left_count == 2:
+                topology = {
+                    'left_border': line_groups[0],
+                    'lane_dividing': line_groups[1],
+                    
+                }
             elif n_lines == 2:
                 topology = {
                     'lane_dividing': line_groups[0],
@@ -607,7 +620,7 @@ class TopologyAssigner(Node):
             
             if self.missing_lines and self.get_parameter('debug').value:
                 self.get_logger().info(
-                    f"⚠️ Líneas faltantes detectadas: {self.missing_lines}"
+                    f" Líneas faltantes detectadas: {self.missing_lines}"
                 )
         
         return topology
@@ -704,7 +717,7 @@ class TopologyAssigner(Node):
         
         if self.missing_lines:
             self.get_logger().info(
-                f"⚠️ Estructura vial incompleta. Líneas faltantes: {self.missing_lines}"
+                f" Estructura vial incompleta. Líneas faltantes: {self.missing_lines}"
             )
     
     # =================== TRANSFORMACIÓN A ODOM ===================
@@ -821,14 +834,14 @@ class TopologyAssigner(Node):
             # Detectar cambio si la posición ha cambiado
             if self.current_robot_relative_position != self.last_robot_relative_position:
                 self.get_logger().info(
-                    f"🔄 Posición relativa cambiada: {self.last_robot_relative_position} -> {self.current_robot_relative_position}"
+                    f" Posición relativa cambiada: {self.last_robot_relative_position} -> {self.current_robot_relative_position}"
                 )
                 
                 # Si no estamos en transición, iniciar transición
                 if self.system_state == SystemState.TRACKING:
                     self.system_state = SystemState.LANE_CHANGE_TRANSITION
                     self.transition_frame_count = 0
-                    self.get_logger().info("🚗 Iniciando transición de cambio de carril")
+                    self.get_logger().info(" Iniciando transición de cambio de carril")
         
         # Actualizar posición anterior
         self.last_robot_relative_position = self.current_robot_relative_position
@@ -843,11 +856,11 @@ class TopologyAssigner(Node):
                 self.handle_lane_change()
                 self.system_state = SystemState.TRACKING
                 self.transition_frame_count = 0
-                self.get_logger().info("✅ Transición completada, volviendo a TRACKING")
+                self.get_logger().info(" Transición completada, volviendo a TRACKING")
     
     def handle_lane_change(self):
         """Maneja el cambio de carril actualizando la topología"""
-        self.get_logger().info(f"🚗 Cambio de carril detectado: {self.last_robot_relative_position} -> {self.current_robot_relative_position}")
+        self.get_logger().info(f" Cambio de carril detectado: {self.last_robot_relative_position} -> {self.current_robot_relative_position}")
         
         # Actualizar posición del robot
         if self.current_robot_relative_position == "LEFT":
@@ -857,7 +870,7 @@ class TopologyAssigner(Node):
         else:
             self.robot_lane_position = "INTERMEDIO"
         
-        self.get_logger().info(f"🤖 Robot en carril: {self.robot_lane_position}")
+        self.get_logger().info(f" Robot en carril: {self.robot_lane_position}")
         
         # Limpiar memorías antes de reetiquetar
         self.clean_memories_for_lane_change()
@@ -868,7 +881,7 @@ class TopologyAssigner(Node):
         # Marcar que hay una actualización pendiente
         self.topology_update_pending = True
         
-        self.get_logger().info(f"🔄 Topología actualizada. Líneas faltantes: {self.missing_lines}")
+        self.get_logger().info(f" Topología actualizada. Líneas faltantes: {self.missing_lines}")
     
     def clean_memories_for_lane_change(self):
         """Limpia las memorías al cambiar de carril para evitar fantasmas geométricos"""
@@ -890,7 +903,7 @@ class TopologyAssigner(Node):
             # Resetear contador de frames fuente
             model.source_frames = 1
             
-            self.get_logger().debug(f"🧹 Memoria {name} limpiada: {len(model.points)} puntos, confianza: {model.confidence:.2f}")
+            self.get_logger().debug(f" Memoria {name} limpiada: {len(model.points)} puntos, confianza: {model.confidence:.2f}")
     
     def update_topology_for_new_position(self):
         """Actualiza la topología basada en la nueva posición del robot"""
@@ -1161,7 +1174,7 @@ class TopologyAssigner(Node):
         if label in self.missing_line_candidates_history:
             del self.missing_line_candidates_history[label]
         
-        self.get_logger().info(f"✅ Línea {label} agregada al modelo")
+        self.get_logger().info(f" Línea {label} agregada al modelo")
     
     def predict_missing_line_position(self, missing_line):
         if not self.road_model:

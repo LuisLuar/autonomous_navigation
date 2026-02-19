@@ -2,7 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage  # CAMBIADO: de Image a CompressedImage
 from std_msgs.msg import Bool
 import cv2
 from cv_bridge import CvBridge
@@ -14,17 +14,17 @@ import sys
 import termios
 import tty
 from rclpy.qos import qos_profile_sensor_data
+import numpy as np
 
 class ImageCaptureNode(Node):
     def __init__(self):
         super().__init__('image_capture_node')
         
         # Configuración - CAMBIA ESTA RUTA SEGÚN TUS NECESIDADES
-        self.save_directory = "/home/raynel/captured_images"  # ← CAMBIA ESTA RUTA
+        self.save_directory = "/home/raynel/Documents/calibrate_camera"  # ← CAMBIA ESTA RUTA
         
         # Crear directorio si no existe
         os.makedirs(self.save_directory, exist_ok=True)
-        #self.get_logger().info(f"Imágenes se guardarán en: {self.save_directory}")
         
         # Inicializar CV Bridge
         self.bridge = CvBridge()
@@ -33,12 +33,19 @@ class ImageCaptureNode(Node):
         self.latest_image = None
         self.image_lock = threading.Lock()
         
-        # Subscriptores
+        # QoS Best Effort para la imagen comprimida (como en tu código que funciona)
+        best_effort_qos = rclpy.qos.QoSProfile(
+            reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
+            durability=rclpy.qos.DurabilityPolicy.VOLATILE,
+            depth=1
+        )
+        
+        # Subscriptores - CAMBIADO: ahora usa CompressedImage
         self.image_sub = self.create_subscription(
-            Image,
-            '/camera/rgb/image_raw',
+            CompressedImage,  # CAMBIADO
+            '/image_raw/compressed',  # CAMBIADO
             self.image_callback,
-            qos_profile_sensor_data
+            best_effort_qos  # QoS Best Effort
         )
         
         self.capture_sub = self.create_subscription(
@@ -51,8 +58,9 @@ class ImageCaptureNode(Node):
         # Contador de imágenes
         self.image_count = self.get_next_image_number()
         
-        #self.get_logger().info("Nodo de captura de imágenes inicializado")
-        #self.get_logger().info("Presiona ESPACIO para capturar imagen o envía mensaje al topic /capture")
+        #self.get_logger().info("Nodo de captura de imágenes COMPRIMIDAS inicializado")
+        #self.get_logger().info("Esperando imágenes en /image_raw/compressed")
+        #self.get_logger().info("Presiona ESPACIO para capturar imagen o envía true al topic /capture")
         
         # Iniciar thread para detección de teclas
         self.keyboard_thread = threading.Thread(target=self.keyboard_listener, daemon=True)
@@ -84,20 +92,24 @@ class ImageCaptureNode(Node):
                 return 1
                 
         except Exception as e:
-            #self.get_logger().error(f"Error buscando imágenes existentes: {e}")
             return 1
     
     def image_callback(self, msg):
-        """Callback para recibir imágenes de la cámara"""
+        """Callback para recibir imágenes COMPRIMIDAS de la cámara"""
         try:
+            # CAMBIADO: Decodificar imagen comprimida
+            np_arr = np.frombuffer(msg.data, np.uint8)
+            image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            
             with self.image_lock:
-                self.latest_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+                self.latest_image = image
+                
         except Exception as e:
-            #self.get_logger().error(f"Error procesando imagen: {e}")
+            #self.get_logger().error(f"Error procesando imagen comprimida: {e}")
             pass
     
     def capture_callback(self, msg):
-        """Callback para capturar imagen cuando llega mensaje Bool"""
+        """Callback para capturar imagen cuando llega mensaje Bool true"""
         if msg.data:
             #self.get_logger().info("Captura solicitada via topic /capture")
             self.capture_image()
@@ -135,12 +147,9 @@ class ImageCaptureNode(Node):
     
     def keyboard_listener(self):
         """Escucha las teclas presionadas en segundo plano"""
-        #self.get_logger().info("Escuchando teclas... (Presiona ESPACIO para capturar, 'q' para salir)")
-        
         try:
             # Verificar si stdin es un terminal válido
             if not sys.stdin.isatty():
-                #self.get_logger().warning(" No hay terminal disponible para leer teclas. Solo se aceptarán comandos por topic.")
                 return
             
             # Configurar terminal para lectura de teclas
@@ -167,12 +176,10 @@ class ImageCaptureNode(Node):
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
                 
         except Exception as e:
-            #self.get_logger().warning(f"No se pudo inicializar el listener de teclado: {e}")
-            #self.get_logger().info("Usa el topic /capture para capturar imágenes")
             pass
     
     def change_save_directory(self, new_directory):
-        """Cambia el directorio de guardado (puedes llamar esta función desde otro nodo)"""
+        """Cambia el directorio de guardado"""
         try:
             os.makedirs(new_directory, exist_ok=True)
             self.save_directory = new_directory
@@ -186,10 +193,6 @@ class ImageCaptureNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    
-    # Importar asyncio para el manejo de teclas
-    global asyncio
-    import asyncio
     
     node = ImageCaptureNode()
     

@@ -39,6 +39,16 @@ def generate_launch_description():
             output='screen',
         ),
 
+        
+        
+        Node(
+            package='saves',
+            executable='healthy_recorder',
+            output='screen',
+        )
+    ])
+
+"""
         Node(
             package='saves',
             executable='perception_recorder_left',
@@ -50,10 +60,4 @@ def generate_launch_description():
             executable='perception_recorder_right',
             output='screen',
         ),
-        
-        Node(
-            package='saves',
-            executable='healthy_recorder',
-            output='screen',
-        )
-    ])
+"""

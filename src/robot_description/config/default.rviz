@@ -48,7 +48,7 @@ Visualization Manager:
         Z: 0
       Plane: XY
       Plane Cell Count: 10
-      Reference Frame: odom #map base_link 
+      Reference Frame: base_footprint #map base_link 
       Value: true
 
     # =============================================
@@ -196,63 +196,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /camera/rgb/image_raw
-      Value: true
-
-    # =============================================
-    # 5. VISUALIZACIÓN DE IMAGEN DE PROFUNDIDAD
-    # =============================================
-    - Class: rviz_default_plugins/Image
-      Enabled: false
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: "Cámara Profundidad"
-      Normalize Range: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /camera/depth/image_raw
-      Value: true
-
-    # =============================================
-    # 6. NUBE DE PUNTOS 3D 
-    # =============================================
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz_default_plugins/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: false
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: "Nube de Puntos 3D"
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.01
-      Style: Points
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /camera/depth_registered/points
-      Use Fixed Frame: true
-      Use rainbow: false
+        Value: /debug/camera_front
       Value: true
     
     # =============================================
@@ -351,369 +295,9 @@ Visualization Manager:
       Size (Pixels): 2
       Size (m): 0.01
       Style: Points
-      Topic: /lane/meter_candidates_front
+      Topic: /lane/meter_candidates
       Use Fixed Frame: true
       Use rainbow: false
-
-    # =============================================
-    # 11. NUBE DE PUNTOS CAMARA IZQUIERDA
-    # =============================================
-    - Class: rviz_default_plugins/PointCloud2
-      Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds: true
-      Axis: Z
-      Channel Name: intensity
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: "CAMERA LEFT"
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.01
-      Style: Points
-      Topic: /lane/meter_candidates_left
-      Use Fixed Frame: true
-      Use rainbow: false
-
-    # =============================================
-    # 11. NUBE DE PUNTOS CAMARA DERECHA
-    # =============================================
-    - Class: rviz_default_plugins/PointCloud2
-      Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds: true
-      Axis: Z
-      Channel Name: intensity
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: "CAMERA RIGHT"
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.01
-      Style: Points
-      Topic: /lane/meter_candidates_right
-      Use Fixed Frame: true
-      Use rainbow: false
-
-    # =============================================
-    # 18. FUSION CAMARAS
-    # =============================================
-    - Class: rviz_default_plugins/PointCloud2
-      Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds: true
-      Axis: Z
-      Channel Name: intensity
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: false
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: "MERGED"
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.01
-      Style: Points
-      Topic: /lane/merged_candidates
-      Use Fixed Frame: true
-      Use rainbow: false
-
-    # =============================================
-    # 15. MEMORIA BORDE IZQUIERDO
-    # =============================================
-    - Class: rviz_default_plugins/PointCloud2
-      Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds: true
-      Axis: Z
-      Channel Name: intensity
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: false
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: "MEMORIA IZQUIERDO"
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.01
-      Style: Points
-      Topic: /memory/left_border
-      Use Fixed Frame: true
-      Use rainbow: false
-    
-    # =============================================
-    # 16. MEMORIA LINEA DIVISORA
-    # =============================================
-    - Class: rviz_default_plugins/PointCloud2
-      Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds: true
-      Axis: Z
-      Channel Name: intensity
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: false
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: "MEMORIA DIVISORIA"
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.01
-      Style: Points
-      Topic: /memory/lane_dividing
-      Use Fixed Frame: true
-      Use rainbow: false
-
-    # =============================================
-    # 17. MEMORIA LINEA DERECHA
-    # =============================================
-    - Class: rviz_default_plugins/PointCloud2
-      Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds: true
-      Axis: Z
-      Channel Name: intensity
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: false
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: "MEMORIA LINEA DERECHA"
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.01
-      Style: Points
-      Topic: /memory/right_lane
-      Use Fixed Frame: true
-      Use rainbow: false
-    
-    # =============================================
-    # 18. MEMORIA BORDE DERECHO
-    # =============================================
-    - Class: rviz_default_plugins/PointCloud2
-      Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds: true
-      Axis: Z
-      Channel Name: intensity
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: "LOCAL IZQUIERDO"
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.01
-      Style: Points
-      Topic: /memory_local/left_border
-      Use Fixed Frame: true
-      Use rainbow: false
-
-    # =============================================
-    # 16. MEMORIA LINEA DIVISORA
-    # =============================================
-    - Class: rviz_default_plugins/PointCloud2
-      Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds: true
-      Axis: Z
-      Channel Name: intensity
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: "LOCAL DIVISORIA"
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.01
-      Style: Points
-      Topic: /memory_local/lane_dividing
-      Use Fixed Frame: true
-      Use rainbow: false
-
-    # =============================================
-    # 17. MEMORIA LINEA DERECHA
-    # =============================================
-    - Class: rviz_default_plugins/PointCloud2
-      Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds: true
-      Axis: Z
-      Channel Name: intensity
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: "LOCAL LINEA DERECHA"
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.01
-      Style: Points
-      Topic: /memory_local/right_lane
-      Use Fixed Frame: true
-      Use rainbow: false
-    
-    # =============================================
-    # 18. MEMORIA BORDE DERECHO
-    # =============================================
-    - Class: rviz_default_plugins/PointCloud2
-      Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds: true
-      Axis: Z
-      Channel Name: intensity
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: "LOCAL DERECHO"
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 2
-      Size (m): 0.01
-      Style: Points
-      Topic: /memory_local/right_border
-      Use Fixed Frame: true
-      Use rainbow: false
-   
-    # =============================================
-    # 19. CENTERLINE BORDE IZQUIERDO
-    # =============================================
-    - Class: rviz_default_plugins/Marker
-      Enabled: true
-      Name: "CENTER IZQUIERDO"
-      Namespaces:
-        lane_memory: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /debug/left_border
-
-    # =============================================
-    # 20. CENTERLINE LINEA DIVISORA
-    # =============================================
-    - Class: rviz_default_plugins/Marker
-      Enabled: true
-      Name: "CENTER DIVISORA"
-      Namespaces:
-        lane_memory: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /debug/lane_dividing
-    
-    # =============================================
-    # 21. CENTERLINE BORDE DERECHO
-    # =============================================
-    - Class: rviz_default_plugins/Marker
-      Enabled: true
-      Name: "CENTER DERECHO"
-      Namespaces:
-        lane_memory: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /debug/right_border
-    
-    # =============================================
-    # 22. CENTERLINE LINEA DERECHA
-    # =============================================
-    - Class: rviz_default_plugins/Marker
-      Enabled: true
-      Name: "CENTER LINEA DERECHA"
-      Namespaces:
-        lane_memory: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /debug/right_lane
-
-    # =============================================
-    # 23. TARGET POINT
-    # =============================================
-    - Class: rviz_default_plugins/Marker
-      Enabled: true
-      Name: "TARGET POINT"
-      Namespaces:
-        lane_memory: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /lane/target
     
     # =============================================
     # 24. OBJECT MARKER
@@ -731,27 +315,126 @@ Visualization Manager:
         objects: true
 
     # =============================================
-    # 24. POSIBLES LINEAS
+    # 18. DBSCAN
     # =============================================
-    - Class: rviz_default_plugins/MarkerArray
+    - Class: rviz_default_plugins/PointCloud2
+      Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
       Enabled: true
-      Name: DEBUG LANE"
-      Topic:
-        Value: /lane/debug/candidates
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-      Namespaces:
-        objects: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: "DBSCAN"
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.01
+      Style: Points
+      Topic: /lane/debug_clusters'
+      Use Fixed Frame: true
+      Use rainbow: false
 
+
+    # =============================================
+    # 18. MODELO ESTIMADO
+    # =============================================
+    - Class: rviz_default_plugins/PointCloud2
+      Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: "MODELO ESTIMADO"
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.01
+      Style: Points
+      Topic: /lane/debug_fitted_lines
+      Use Fixed Frame: true
+      Use rainbow: false
+
+      # =============================================
+    # 18. LINEAS ESTIMADAS
+    # =============================================
+    - Class: rviz_default_plugins/PointCloud2
+      Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: "LINEAS ANTES"
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.01
+      Style: Points
+      Topic: /lane/all_fitted_lines
+      Use Fixed Frame: true
+      Use rainbow: false
+      
+    # =============================================
+    # 18. TRACKING LANE CENTER
+    # =============================================
+    - Class: rviz_default_plugins/PointCloud2
+      Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: "LANE CENTER TRACKING"
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.01
+      Style: Points
+      Topic: /lane/centerline_pc
+      Use Fixed Frame: true
+      Use rainbow: false
+
+    
     
 
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    # FRAME FIJO: Cambiar entre 'odom' (navegación) o 'base_link' (visión)
-    Fixed Frame: odom #map
+    # FRAME FIJO: Cambiar entre 'base_footprint' (navegación) o 'base_link' (visión)
+    Fixed Frame: base_footprint #map
     Frame Rate: 30
   Name: root
   Tools:

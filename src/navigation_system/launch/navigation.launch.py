@@ -9,13 +9,6 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-        
-        # Lanzar nodo de planificador global
-        Node(
-            package='navigation_system',
-            executable='global_planner',
-            output='screen',
-        ),
 
         # Lanza nodo controlador robusto
         Node(
@@ -24,15 +17,16 @@ def generate_launch_description():
             output='screen',    
         ),
 
-        
-
-        
-
-
-        
     ])
 
 """
+        # Lanzar nodo de planificador global
+        Node(
+            package='navigation_system',
+            executable='global_planner',
+            output='screen',
+        ),
+        
         # Lanza nodo de monitor de objetivo alcanzado
         Node(
             package='navigation_system',

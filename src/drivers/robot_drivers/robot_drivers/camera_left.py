@@ -20,7 +20,7 @@ class CameraLeft(Node):
         self.heartbeat_interval = 5.0
         
         # SOLO fuente IP camera - especificar backend FFMPEG para streams HTTP
-        self.camera_source = "/dev/video0"  #"http://10.42.0.17:8080/video" 
+        self.camera_source = "/dev/video2"  #"http://10.42.0.17:8080/video" 
         
         # Variables de estado
         self.reconnect_attempts = 0

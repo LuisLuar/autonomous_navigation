@@ -8,12 +8,7 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     return LaunchDescription([
-        #Interfaz Grafica
-        Node(
-            package='system_management',
-            executable='gui',
-            output='screen'
-        ),
+        
 
         # Lanza la visualización en RVIZ2
         IncludeLaunchDescription(
@@ -34,6 +29,13 @@ def generate_launch_description():
         Node(
             package='system_management',
             executable='rele_combiner',
+            output='screen'
+        ),
+        
+        #Interfaz Grafica
+        Node(
+            package='system_management',
+            executable='gui',
             output='screen'
         ),
 

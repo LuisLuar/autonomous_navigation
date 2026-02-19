@@ -33,8 +33,21 @@ def generate_launch_description():
             default_value='false'),
         launch.actions.DeclareLaunchArgument(
             'output_location',
-	    default_value='~/dual_ekf_navsat_example_debug.txt'),
+	    default_value='~/dual_ekf_navsat_example_debug.txt'),     
+	
+        launch_ros.actions.Node(
+                package='robot_localization', 
+                executable='ekf_node', 
+                name='ekf_filter_node_odom',
+                output='screen',
+                parameters=[parameters_file_path],
+                remappings=[('odometry/filtered', 'odometry/local')]           
+            ),  
+        
+        
+])
 
+"""
         Node(
             package='filter_ekf',
             executable='utm_map_origin',
@@ -51,17 +64,8 @@ def generate_launch_description():
             package='filter_ekf',
             executable='local_path',
             output='screen'
-        ),           
-	
-        launch_ros.actions.Node(
-                package='robot_localization', 
-                executable='ekf_node', 
-                name='ekf_filter_node_odom',
-                output='screen',
-                parameters=[parameters_file_path],
-                remappings=[('odometry/filtered', 'odometry/local')]           
-            ),  
-        
+        ),      
+
         launch_ros.actions.Node(
                 package='robot_localization', 
                 executable='ekf_node', 
@@ -84,4 +88,5 @@ def generate_launch_description():
                             ('odometry/filtered', 'odometry/global')]           
 
             )
-])
+
+"""

@@ -151,10 +151,10 @@ void setup() {
   //____________IMU______________
   //while (!Serial) {}
 
-  if (!IMU_begin()) {
+  /*if (!IMU_begin()) {
     Serial.println("Error al inicializar el IMU");
     while (1);
-  }
+  }*/
   //_______________________________
 
   //___________SENSOR SHARP____________________
@@ -228,14 +228,14 @@ void ControlLoop(void *parameter) {
   lastTime_serial = millis();
 
   while (1) {
-    dt_imu = millis() - lastTime_imu;
+    /*dt_imu = millis() - lastTime_imu;
 
     if (mpu.update()) {
       if (dt_imu >= sampleTime_imu) {
         lastTime_imu = millis();
         IMU_update();
       }
-    }
+    }*/
 
     dt_enc = millis() - lastTime_enc;
     if (dt_enc >= sampleTime_enc) {

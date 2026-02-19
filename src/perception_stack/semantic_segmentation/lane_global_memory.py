@@ -17,10 +17,10 @@ class RoadLineProcessor(Node):
         super().__init__('road_line_processor')
         
         # Configuración de parámetros
-        self.declare_parameter('mem_size', 10)
-        self.declare_parameter('lookahead_distance', 2.0)
-        self.declare_parameter('lookbehind_distance', 2.0)
-        self.declare_parameter('point_spacing', 0.1)
+        self.declare_parameter('mem_size', 1)
+        self.declare_parameter('lookahead_distance', 0.5)
+        self.declare_parameter('lookbehind_distance', 0.5)
+        self.declare_parameter('point_spacing', 0.8)
         self.declare_parameter('fit_method', 'linear')  # 'linear', 'quadratic'
         
         self.mem_size = self.get_parameter('mem_size').value
@@ -319,6 +319,8 @@ class RoadLineProcessor(Node):
         
         return msg
 
+    def destroy_node(self):
+        super().destroy_node()
 
 def main(args=None):
     rclpy.init(args=args)

@@ -8,28 +8,6 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     return LaunchDescription([
-
-        # Micro ROS Agent como Node
-        Node(
-            package='micro_ros_agent',
-            executable='micro_ros_agent',
-            arguments=['udp4', '--port', '8888'],
-            output='screen',
-            name='micro_ros_agent'
-        ),
-
-        # Lanzar comunicacion dual con micro-ros y serial
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('system_management'),
-                    'launch',
-                    'dual_esp32_comunication.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ),
-
         
         # Lanzar camara - gps -lidar - websockets
         IncludeLaunchDescription(
@@ -102,6 +80,17 @@ def generate_launch_description():
             ]),
             launch_arguments={}.items()
         ),
+
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('camera_cpp_nodes'),
+                    'launch',
+                    'perception_pipeline.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
         
         # Lanzar nodo para guardar datos
         IncludeLaunchDescription(
@@ -115,6 +104,7 @@ def generate_launch_description():
             launch_arguments={}.items()
         ), 
 
+
         # Lanza los nodos de GUI y rele combiner
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -125,13 +115,35 @@ def generate_launch_description():
                 ])
             ]),
             launch_arguments={}.items()
-        ),      
+        ), 
+
+        
         
         
     ])
 
 """      
-         
+        
+        # Micro ROS Agent como Node
+        Node(
+            package='micro_ros_agent',
+            executable='micro_ros_agent',
+            arguments=['udp4', '--port', '8888'],
+            output='screen',
+            name='micro_ros_agent'
+        ),
+
+        # Lanzar comunicacion dual con micro-ros y serial
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('system_management'),
+                    'launch',
+                    'dual_esp32_comunication.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
         
 
         

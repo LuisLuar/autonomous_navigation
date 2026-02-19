@@ -172,7 +172,7 @@ class ROSBridge(Node):
         #self.create_subscription(Image, '/camera/depth/image_raw', self.cb_camera_depth, 1) 
 
         # Redes neuronales
-        self.create_subscription(Image, '/camera/rgb/image_raw', self.cb_camera_segmentation, 1)
+        self.create_subscription(Image, '/debug/camera_left', self.cb_camera_segmentation, 1)
         self.create_subscription(Image, '/camera/rgb/left', self.cb_camera_detection, 1) #/detection/annotated_image
 
         # Path global

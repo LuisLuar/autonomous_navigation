@@ -39,6 +39,8 @@ setup(
             'healthy_recorder = saves.healthy_recorder:main',
             'perception_recorder_left = saves.perception_recorder_left:main',
             'perception_recorder_right = saves.perception_recorder_right:main',
+            'control_signals = saves.control_signals:main',
+            'image_replay = saves.image_replay:main',
         ],
     },
 )

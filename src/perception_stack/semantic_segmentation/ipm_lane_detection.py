@@ -36,7 +36,7 @@ class LaneEdgeIPMNodeAdaptive(Node):
         super().__init__('lane_edge_ipm_adaptive')
         
         # =================== PARÁMETROS IPM ===================
-        calibration_path = "/home/raynel/autonomous_navigation/src/perception_stack/params/calibration.json"
+        calibration_path = "/home/raynel/autonomous_navigation/src/perception_stack/params/calibration_front.json"
         try:
             with open(calibration_path, 'r') as f:
                 calib = json.load(f)

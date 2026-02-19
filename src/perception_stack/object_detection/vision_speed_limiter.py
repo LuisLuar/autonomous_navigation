@@ -14,11 +14,11 @@ class VisionAlphaController(Node):
         
         # ============ PARÁMETROS CONFIGURABLES ============
         self.declare_parameters(namespace='', parameters=[
-            ('bump_crosswalk_max_distance', 4.0),      # metros
-            ('bump_crosswalk_min_distance', 2.5),      # metros
+            ('bump_crosswalk_max_distance', 8.0),      # metros
+            ('bump_crosswalk_min_distance', 2.0),      # metros
             ('bump_alpha_min', 0.5),                   # valor mínimo de alpha para badenes/cruces
             ('person_distance_threshold', 3.0),        # metros en eje X
-            ('person_lateral_threshold', 3.0),         # metros en eje Y (absoluto)
+            ('person_lateral_threshold', 2.0),         # metros en eje Y (absoluto)
             ('person_alpha_zero_time', 5.0),           # segundos con alpha a 0
             ('vehicle_distance_start', 4.0),           # metros donde empieza a reducir
             ('vehicle_distance_critical', 3.0),        # metros donde alpha=0
@@ -26,7 +26,7 @@ class VisionAlphaController(Node):
             ('vehicle_classes', ['car', 'truck', 'bus', 'motorcycle', 'bicycle']),  # clases de vehículos
             ('bump_classes', ['speed bump']),          # clases de badenes
             ('crosswalk_classes', ['crosswalk']),      # clases de cruces peatonales
-            ('update_rate', 10.0),                     # Hz de actualización
+            ('update_rate', 20.0),                     # Hz de actualización
             ('default_alpha', 1.0),                    # valor por defecto
         ])
         
@@ -71,7 +71,7 @@ class VisionAlphaController(Node):
             self.publish_alpha
         )
         
-        self.get_logger().info("Vision Alpha Controller iniciado")
+        #self.get_logger().info("Vision Alpha Controller iniciado")
     
     def objects_callback(self, msg: ObjectInfoArray):
         """Procesar información de objetos fusionados"""
@@ -134,10 +134,10 @@ class VisionAlphaController(Node):
                         # Primera detección cercana de persona
                         self.in_person_zero_mode = True
                         self.person_zero_start_time = current_time
-                        self.get_logger().warn(
+                        """self.get_logger().warn(
                             f"Persona detectada cerca: d={distance:.1f}m, lat={lateral:.1f}m. "
                             f"Alpha=0.0 por 5 segundos."
-                        )
+                        )"""
                         return 0.0
                     else:
                         # Ya estábamos en modo persona cercana
@@ -149,9 +149,9 @@ class VisionAlphaController(Node):
                             return 0.0
                         else:
                             # Pasados 5 segundos, alpha=0.5
-                            self.get_logger().info(
+                            """self.get_logger().info(
                                 f"Persona persistente detectada. Alpha=0.5"
-                            )
+                            )"""
                             return 0.5
             
             # ============ 2. DETECCIÓN DE VEHÍCULOS ============
@@ -172,18 +172,18 @@ class VisionAlphaController(Node):
                         vehicle_alpha = max(0.0, default_alpha - alpha_reduction)
                         min_alpha = min(min_alpha, vehicle_alpha)
                         
-                        self.get_logger().info(
+                        """self.get_logger().info(
                             f"Vehículo detectado: {obj.class_name} "
                             f"d={distance:.1f}m, lat={lateral:.1f}m. Alpha={vehicle_alpha:.2f}"
-                        )
+                        )"""
                     
                 elif (abs(lateral) <= vehicle_lat_thresh and 
                       distance < vehicle_critical):
                     # Vehículo muy cerca, alpha=0.0
-                    self.get_logger().warn(
+                    """self.get_logger().warn(
                         f"Vehículo MUY CERCA: {obj.class_name} "
                         f"d={distance:.1f}m, lat={lateral:.1f}m. Alpha=0.0"
-                    )
+                    )"""
                     return 0.0
             
             # ============ 3. DETECCIÓN DE BADENES/CRUCES ============
@@ -206,24 +206,24 @@ class VisionAlphaController(Node):
                         min_alpha = min(min_alpha, bump_alpha)
                         
                         obj_type = "Badén" if is_bump else "Cruce peatonal"
-                        self.get_logger().info(
+                        """self.get_logger().info(
                             f"{obj_type} detectado: d={distance:.1f}m. Alpha={bump_alpha:.2f}"
-                        )
+                        )"""
                 
                 elif distance < bump_min:
                     # Muy cerca del badén/cruce
                     min_alpha = min(min_alpha, bump_alpha_min)
-                    self.get_logger().info(
+                    """self.get_logger().info(
                         f"{'Badén' if is_bump else 'Cruce'} MUY CERCA: "
                         f"d={distance:.1f}m. Alpha={bump_alpha_min:.2f}"
-                    )
+                    )"""
         
         # ============ MANEJO DE FIN DE MODO PERSONA ============
         if self.in_person_zero_mode and not has_person_near:
             # Ya no hay personas cercanas, salir del modo
             self.in_person_zero_mode = False
             self.person_zero_start_time = None
-            self.get_logger().info("Personas ya no detectadas cerca. Volviendo a alpha normal.")
+            #self.get_logger().info("Personas ya no detectadas cerca. Volviendo a alpha normal.")
         
         # ============ RETORNAR EL VALOR FINAL ============
         if self.in_person_zero_mode:

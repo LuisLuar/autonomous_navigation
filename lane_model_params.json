@@ -1,0 +1,12 @@
+{
+    "expected_lane_width": 2.8,
+    "lane_width_tolerance": 0.2,
+    "max_outlier_dist": 0.15,
+    "dbscan_eps": 0.4,
+    "dbscan_min_samples": 20,
+    "min_line_points": 100,
+    "max_absolute_angle": 1.0,
+    "max_c0_jump": 0.2,
+    "max_c1_jump": 0.6,
+    "history_len": 100
+}

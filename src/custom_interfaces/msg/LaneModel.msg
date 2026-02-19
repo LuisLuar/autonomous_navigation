@@ -1,5 +1,7 @@
-# Hipótesis de carril completo
-nav_msgs/Path[] lanes          # Todos los carriles detectados (centros)
-int32 ego_lane_index           # Índice del carril propio
-float32[] lane_widths          # Anchos estimados de cada carril
-bool[] has_marking             # Si tiene marcación visible
+std_msgs/Header header
+
+float32 lane_width     # B
+float32 d_lat           # desplazamiento lateral
+float32 yaw             # psi
+float32 curvature       # kappa
+float32 confidence      # [0..1]

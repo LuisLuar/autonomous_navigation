@@ -3,17 +3,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-        Node(
-            package='system_management',
-            executable='camera_supervisor',
-            output='screen'
-        ),
-
-        Node(
-            package='system_management',
-            executable='gps_supervisor',
-            output='screen'
-        ),
+        
         
         Node(
             package='system_management',
@@ -21,11 +11,7 @@ def generate_launch_description():
             output='screen'
         ),
 
-        Node(
-            package='system_management',
-            executable='microros_agent_supervisor',
-            output='screen'
-        ),
+        
 
         Node(
             package='system_management',
@@ -38,6 +24,24 @@ def generate_launch_description():
 
 
 """
+        Node(
+            package='system_management',
+            executable='camera_supervisor',
+            output='screen'
+        ),
+
+        Node(
+            package='system_management',
+            executable='gps_supervisor',
+            output='screen'
+        ),
+
+        Node(
+            package='system_management',
+            executable='microros_agent_supervisor',
+            output='screen'
+        ),
+
         Node(
             package='system_management',
             executable='esp32_supervisor',

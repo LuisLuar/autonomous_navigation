@@ -6,13 +6,70 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     return LaunchDescription([
 
-        # Capture frame node
+        # ========= Capture frame node ===================
         Node(
             package='perception_stack',
             executable='capture_frame',
             output='screen',
         ),
+        
+        # ===============PAPER =============
+        Node(
+            package='perception_stack',
+            executable='lane_model_estimator',
+            output='screen',
+        ),
 
+        Node(
+            package='perception_stack',
+            executable='lane_model_tracking',
+            output='screen',
+        ),
+
+        Node(
+            package='perception_stack',
+            executable='inverse_IPM',
+            output='screen',
+        ),
+
+        # =========== YOLO V11 ===========
+        Node(
+            package='perception_stack',
+            executable='detector_yolo',
+            output='screen',
+        ),
+
+        Node(
+            package='perception_stack',
+            executable='detector_senaletica',
+            output='screen',
+        ),
+
+        Node(
+            package='perception_stack',
+            executable='object_fusion',
+            output='screen',
+        ),
+
+        # ============ Speed limiter nodes =============
+        Node(
+            package='perception_stack',
+            executable='vision_speed_limiter',
+            output='screen',
+        ),
+
+        # ============ VISUALIZADORES =============
+        Node(
+            package='perception_stack',
+            executable='visualizer_camera_front',
+            output='screen',
+        ),
+
+    ])
+
+
+
+"""  
         # =========== SEGMENTER YOLOP ===========
         Node(
             package='perception_stack',
@@ -30,21 +87,10 @@ def generate_launch_description():
             package='perception_stack',
             executable='segmenter_yolop_right',
             output='screen',
-        ),
+        ),      
 
-        # =========== CORRECCION COLOR ===========
-        Node(
-            package='perception_stack',
-            executable='correct_color_left',
-            output='screen',
-        ),    
-
-        Node(
-            package='perception_stack',
-            executable='correct_color_right',
-            output='screen',
-        ),        
-
+        
+ 
         # =========== CANNY extraccion de pixeles candidatos ===========
         Node(
             package='perception_stack',
@@ -90,6 +136,52 @@ def generate_launch_description():
             output='screen',
         ),
 
+
+        # =========== VISUALIZADOR ===========
+        Node(
+            package='perception_stack',
+            executable='visualizer_camera_left',
+            output='screen',
+        ),    
+
+         Node(
+            package='perception_stack',
+            executable='visualizer_camera_right',
+            output='screen',
+        ), 
+
+        Node(
+            package='perception_stack',
+            executable='visualizer_camera_front',
+            output='screen',
+        ),
+
+
+        # =========== CORRECCION COLOR ===========
+        Node(
+            package='perception_stack',
+            executable='correct_color_left',
+            output='screen',
+        ),    
+
+        Node(
+            package='perception_stack',
+            executable='correct_color_right',
+            output='screen',
+        ), 
+        
+        
+
+        # ===============================
+        Node(
+            package='perception_stack',
+            executable='object_to_odom',
+            output='screen',
+        ), 
+        
+        
+        
+
         # =========== DETECCION POSIBLES LINEAS ===========
         Node(
             package='perception_stack',
@@ -104,6 +196,7 @@ def generate_launch_description():
             output='screen',
         ), 
 
+        
         # =========== MEMORIA GLOBAL ===========
         Node(
             package='perception_stack',
@@ -126,62 +219,31 @@ def generate_launch_description():
         ),
 
 
-        # =========== YOLO V11 ===========
+        
+
+        # ==========================================
+        # IPM SOLO PARA DEBUG
         Node(
             package='perception_stack',
-            executable='detector_yolo',
+            executable='ipm',
             output='screen',
         ),
 
+        # BEV CENTER DEBUG
         Node(
             package='perception_stack',
-            executable='detector_senaletica',
+            executable='bev_center_debug',
             output='screen',
         ),
 
+        #=================================
+
+        # Detector YOLO V11 LEFT
         Node(
             package='perception_stack',
-            executable='object_fusion',
+            executable='detector_yolo_left',
             output='screen',
         ),
-
-        Node(
-            package='perception_stack',
-            executable='object_to_odom',
-            output='screen',
-        ), 
-
-        # ============ Speed limiter nodes =============
-        Node(
-            package='perception_stack',
-            executable='vision_speed_limiter',
-            output='screen',
-        ),
-
-        # =========== VISUALIZADOR ===========
-        Node(
-            package='perception_stack',
-            executable='visualizer_camera_front',
-            output='screen',
-        ),
-
-        Node(
-            package='perception_stack',
-            executable='visualizer_camera_left',
-            output='screen',
-        ),    
-
-         Node(
-            package='perception_stack',
-            executable='visualizer_camera_right',
-            output='screen',
-        ), 
-       
-    ])
-
-
-
-"""  
 
 
 
@@ -220,30 +282,18 @@ def generate_launch_description():
             output='screen',
         ),
 
+        
         # IPM node + lane detection
         Node(
             package='perception_stack',
             executable='ipm_lane_detection',
             output='screen',
         ),
-
-        # IPM SOLO PARA DEBUG
-        Node(
-            package='perception_stack',
-            executable='ipm',
-            output='screen',
-        ),
-
         
 
         
 
-        # BEV CENTER DEBUG
-        Node(
-            package='perception_stack',
-            executable='bev_center_debug',
-            output='screen',
-        ),
+        
 
 
     

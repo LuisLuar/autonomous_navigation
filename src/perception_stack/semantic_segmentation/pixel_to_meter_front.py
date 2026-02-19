@@ -19,7 +19,7 @@ class PixelToMeterTransform(Node):
         super().__init__('pixel_to_meter_transform_front')
 
         # =================== CARGA DE CALIBRACIÓN ===================
-        calibration_path = "/home/raynel/autonomous_navigation/src/perception_stack/params/calibration_front.json"
+        calibration_path = "/home/raynel/autonomous_navigation/src/perception_stack/params/camera_calibration.json"
         try:
             with open(calibration_path, 'r') as f:
                 calib = json.load(f)
@@ -36,10 +36,10 @@ class PixelToMeterTransform(Node):
             return
 
         # =================== PARÁMETROS ===================
-        self.declare_parameter("min_distance", 0.5)
-        self.declare_parameter("max_distance", 12.0)
+        self.declare_parameter("min_distance", 1.5)
+        self.declare_parameter("max_distance", 7.0)
 
-        self.declare_parameter("camera_offset_x", 0.31)
+        self.declare_parameter("camera_offset_x", -0.216)
         self.declare_parameter("camera_offset_y", 0.0)
 
         self.min_distance = self.get_parameter("min_distance").value
@@ -52,7 +52,7 @@ class PixelToMeterTransform(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         # =================== PUBLICADORES ===================
-        self.pub_lane_candidates   = self.create_publisher(PointCloud2, '/lane/meter_candidates_front', 10)
+        self.pub_lane_candidates   = self.create_publisher(PointCloud2, '/lane/meter_candidates', 10)
        
         # =================== SUBSCRIPCIONES ===================
         self.create_subscription(

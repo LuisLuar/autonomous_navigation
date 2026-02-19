@@ -25,7 +25,7 @@ class LanePointCloudMerger(Node):
         
         # Parámetros ajustados para la cámara izquierda
         self.declare_parameters('', [
-            ('max_age_left', 0.5),      # Mayor tolerancia para cámara izquierda (500ms)
+            ('max_age_left', 0.2),      # Mayor tolerancia para cámara izquierda (500ms)
             ('max_age_others', 0.15),   # Menor tolerancia para cámaras rápidas (150ms)
             ('min_sources', 2),         # Mínimas fuentes requeridas
             ('debug', True),

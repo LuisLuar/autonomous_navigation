@@ -7,15 +7,8 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-        
          
-        # Lanzar nodo GPS
-        Node(
-            package='robot_drivers',
-            executable='gps',
-            output='screen',
-            name='gps_node'
-        ),
+        
 
         # Lanzar WebSocket Bridge
         Node(
@@ -33,12 +26,6 @@ def generate_launch_description():
             name='webrtc_streamer'
         ),  
 
-                                
-    ])
-
-"""
-        
-        
         # Lanzar nodo cámara con reconexión
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -51,6 +38,20 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
 
+        
+
+                        
+    ])
+
+"""
+        # Lanzar nodo GPS
+        Node(
+            package='robot_drivers',
+            executable='gps',
+            output='screen',
+            name='gps_node'
+        ),
+
         #Lanzar nodo Camara Izquierda
         Node(
             package='robot_drivers',
@@ -58,15 +59,18 @@ def generate_launch_description():
             output='screen',
         ),
 
+        
         #Lanzar nodo Camara Derecha
         Node(
             package='robot_drivers',
             executable='camera_right',
             output='screen',
-        ),  
+        ),
+            
+
+
         
-
-
+        
         # Lanzar nodo DroidCam
         Node(
             package='robot_drivers',

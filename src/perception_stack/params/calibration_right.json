@@ -1,12 +1,19 @@
 {
-  "camera_height": 0.38,
-  "camera_pitch": -0.087,
+  "camera_height": 0.46,
+  "camera_pitch": 0.018,
   "camera_pitch_degrees": -13.929832785372819,
   "intrinsics": {
-    "fx": 574.1,
-    "fy": 574.1,
-    "cx": 320.0,
-    "cy": 240.0
+    "fx": 479.66,
+    "fy": 479.63,
+    "cx": 321.43,
+    "cy": 239.13
+  },
+  "distortion": {
+    "k1": 0.087814,
+    "k2": -0.224605,
+    "p1": 0.001618,
+    "p2": 0.000306,
+    "k3": 0.159639
   },
   "calibration_points": [
     {

@@ -224,10 +224,10 @@ class LaneTargetGeneratorNode(Node):
                     perp = np.array([-line_dir[1], line_dir[0]])  # Rotar 90 grados
                     
                     # Mover desde lane_dividing hacia la derecha (mitad del ancho)
-                    target_point = ld_point - perp * (self.lane_width / 2.0) - 0.3
+                    target_point = ld_point - perp * (self.lane_width / 2.0) #- 0.3
                 else:
                     # Sin ancho estimado, usar línea - 1.5m (ancho estándar)
-                    target_point = ld_point - left * 1.5 - 0.3
+                    target_point = ld_point - left * 1.5 #- 0.3
                 
                 self.structure_confidence = 0.7
                 
@@ -252,7 +252,7 @@ class LaneTargetGeneratorNode(Node):
                     target_point = rl_point + perp * (self.lane_width / 2.0)
                 else:
                     # Sin ancho estimado, usar línea + 1.5m (ancho estándar)
-                    target_point = rl_point + left * 1.5 +0.3
+                    target_point = rl_point + left * 1.5 #+0.3
                 
                 self.structure_confidence = 0.7
                 
