@@ -36,7 +36,6 @@ class CombinedVisualizerNode(Node):
         
         # Buffers
         self.current_image = None
-        self.current_seg_mask = None
         self.current_objects = None
         self.last_fps_time = time.time()
         self.frame_count = 0
@@ -60,10 +59,6 @@ class CombinedVisualizerNode(Node):
             best_effort_qos  # Usar QoS Best Effort
         )
         
-        # Las otras suscripciones pueden mantener el QoS por defecto
-        self.segmentation_sub = self.create_subscription(
-            SegmentationData, '/segmentation/data', self.segmentation_callback, 10
-        )
         self.objects_sub = self.create_subscription(
             ObjectInfoArray, '/objects/fused_info', self.objects_callback, 10
         )
@@ -71,12 +66,15 @@ class CombinedVisualizerNode(Node):
         self.pixels_sub = self.create_subscription(
             PixelPoint,  
             '/lane/ipm_inverse_pixel_points',#'/lane/ipm_inverse_pixel_points',
-            self.pixels_callback,
+            self.pixels_centerline_callback,
             10
         )
 
+        #self.pixels_lane_sub = self.create_subscription(PixelPoint,  '/segmentation_data', self.pixels_lane_callback,10)
         # Variable para guardar los píxeles
-        self.current_pixels = None  # Será una lista de tuplas (u, v)
+        self.current_centerline_pixels = None  # Será una lista de tuplas (u, v)
+        self.current_lane_pixels = None  # Será una lista de tuplas (u, v)
+        
         
         # Publicador único
         self.viz_pub = self.create_publisher(Image, '/debug/camera_front', 10)
@@ -93,29 +91,30 @@ class CombinedVisualizerNode(Node):
         except Exception as e:
             self.get_logger().error(f"Error procesando imagen comprimida: {e}", throttle_duration_sec=5.0)
     
-    def segmentation_callback(self, msg):
-        """Recibe datos de segmentación"""
-        try:
-            # Reconstruir máscara desde bytes
-            mask_flat = np.frombuffer(msg.mask_data, dtype=np.uint8)
-            self.current_seg_mask = mask_flat.reshape((msg.height, msg.width))
-            self.process_and_publish()
-        except Exception as e:
-            self.get_logger().error(f"Error procesando segmentación: {e}", throttle_duration_sec=5.0)
     
     def objects_callback(self, msg):
         """Recibe objetos detectados"""
         self.current_objects = msg
         self.process_and_publish()
     
-    def pixels_callback(self, msg):
+    def pixels_centerline_callback(self, msg):
         """Recibe píxeles del centerline"""
-        if not msg.is_valid or len(msg.x_coordinates) == 0:
-            self.current_pixels = None
+        if len(msg.u) == 0:
+            self.current_centerline_pixels = None
             return
         
-        # Convertir a lista de tuplas (x, y)
-        self.current_pixels = list(zip(msg.x_coordinates, msg.y_coordinates))
+        # Convertir a lista de tuplas (u, v)
+        self.current_centerline_pixels = list(zip(msg.u, msg.v))
+        self.process_and_publish()
+
+    def pixels_lane_callback(self, msg):
+        """Recibe píxeles de candidatos a carril"""
+        if len(msg.u) == 0:
+            self.current_lane_pixels = None
+            return
+        
+        # Convertir a lista de tuplas (u, v)
+        self.current_lane_pixels = list(zip(msg.u, msg.v))
         self.process_and_publish()
     
     def process_and_publish(self):
@@ -128,18 +127,18 @@ class CombinedVisualizerNode(Node):
             display_image = self.current_image.copy()
             height, width = display_image.shape[:2]
             
-            # 1. Aplicar segmentación (si existe)
-            if self.current_seg_mask is not None:
-                display_image = self.apply_segmentation(display_image)
-            
             # 2. Dibujar objetos (si existen)
             if self.current_objects is not None:
                 display_image = self.draw_objects(display_image)
             
-            # 3. Dibujar píxeles del centerline (si existen)
-            if self.current_pixels is not None:
-                display_image = self.draw_pixels(display_image)
+            # 3. Dibujar píxeles del lane(si existen)
+            #if self.current_lane_pixels is not None:
+                #display_image = self.draw_pixels(display_image, self.current_lane_pixels, (0, 255, 0)) # RGB:
             
+            # 3. Dibujar píxeles del centerline (si existen)
+            if self.current_centerline_pixels is not None:
+                display_image = self.draw_pixels(display_image,self.current_centerline_pixels , (255, 0, 255)) # RGB:
+
             # 4. Añadir información de estado
             #display_image = self.add_status_overlay(display_image)
             
@@ -156,31 +155,6 @@ class CombinedVisualizerNode(Node):
             
         except Exception as e:
             self.get_logger().error(f"Error en visualización: {e}", throttle_duration_sec=5.0)
-    
-    def apply_segmentation(self, image):
-        """Aplicar overlay de segmentación"""
-        # Crear máscara coloreada
-        colored_mask = np.zeros((self.current_seg_mask.shape[0], 
-                               self.current_seg_mask.shape[1], 3), dtype=np.uint8)
-        
-        for class_id, color in self.seg_colors.items():
-            colored_mask[self.current_seg_mask == class_id] = color
-        
-        # Overlay para área transitable
-        drivable_mask = (self.current_seg_mask == 1)
-        if np.any(drivable_mask):
-            overlay = image.copy()
-            overlay[drivable_mask] = colored_mask[drivable_mask]
-            image = cv2.addWeighted(overlay, self.seg_alpha, image, 1 - self.seg_alpha, 0)
-        
-        # Contornos para carriles
-        lane_mask = (self.current_seg_mask == 2).astype(np.uint8) * 255
-        contours, _ = cv2.findContours(lane_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for contour in contours:
-            if cv2.contourArea(contour) > 50:
-                cv2.drawContours(image, [contour], -1, (0, 255, 255), 1)
-        
-        return image
     
     def draw_objects(self, image):
         """Dibujar objetos detectados"""
@@ -247,22 +221,19 @@ class CombinedVisualizerNode(Node):
         
         return image
     
-    def draw_pixels(self, image):
-        """Dibujar píxeles del centerline"""
-        if self.current_pixels is None or len(self.current_pixels) == 0:
+    def draw_pixels(self, image, pixels, color=(255, 255, 0)):
+        """Método más rápido: asignación directa de píxeles"""
+        if self.current_centerline_pixels is None or len(self.current_centerline_pixels) == 0:
             return image
         
-        # Color para los píxeles del centerline (Rojo brillante)
-        pixel_color = (255, 255, 0)  # BGR: Rojo
+        r, g, b = color
+        pixel_color = (b, g, r)
         
-        # Dibujar cada píxel
-        for u, v in self.current_pixels:
-            # Convertir a enteros (por si acaso)
+        # Asignación directa - ultra rápida
+        for u, v in pixels:
             x, y = int(u), int(v)
-            
-            # Verificar que esté dentro de la imagen
             if 0 <= x < image.shape[1] and 0 <= y < image.shape[0]:
-                # Dibujar un punto grande para que sea visible
+                #image[y, x] = pixel_color  # Asignación directa, sin funciones OpenCV
                 cv2.circle(image, (x, y), 3, pixel_color, -1)  # Círculo relleno
         
         return image

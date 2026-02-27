@@ -54,12 +54,12 @@ class ObjectFusionNode(Node):
                 calib = json.load(f)
             
             # Parámetros físicos (Cámara -> Robot)
-            self.cam_h_ = float(calib['camera_height'])
+            self.cam_h_ = float(calib['camera_z'])
             self.cam_x_ = float(calib['camera_x'])
             self.cam_y_ = float(calib['camera_y'])
             
             # Intrínsecos y Orientación
-            self.pitch_ = float(calib['camera_pitch'])
+            self.pitch_ = float(calib['camera_roll'])
             self.fx_ = float(calib['intrinsics']['fx'])
             self.fy_ = float(calib['intrinsics']['fy'])
             self.cx_ = float(calib['intrinsics']['cx'])

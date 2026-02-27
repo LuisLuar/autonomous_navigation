@@ -30,14 +30,9 @@ setup(
         'console_scripts': [
             # Aquí registrarás tus ejecutables
             'global_planner = path_planner.global_planner:main',
-            'cmd_vel_fusion = local_planner.cmd_vel_fusion:main',
-            'bt_manager = behavior_tree.bt_manager:main',
-            'map_matching = path_planner.map_matching:main',
-            'matching = path_planner.matching:main',
             'information_osm = path_planner.information_osm:main',
             'osm_limiter = local_planner.osm_limiter:main',
             'robust_controller = local_planner.robust_controller:main',
-            'global_path_map_to_odom = path_planner.global_path_map_to_odom:main',
             'goal_reached = path_planner.goal_reached:main',
         ],
     },

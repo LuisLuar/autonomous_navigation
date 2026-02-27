@@ -37,28 +37,11 @@ def generate_launch_description():
         
         
 
-        # Lanza nodo Matching
-        Node(
-            package='navigation_system',
-            executable='matching',
-            output='screen',    
-        ),
-
         # lanza nodeo de extraccion de elementos OSM
         Node(
             package='navigation_system',
             executable='information_osm',
             output='screen',    
-        ), 
-
-        # lanzar nodoglobal path map to odom
-        Node(
-            package='navigation_system',
-            executable='global_path_map_to_odom',
-            output='screen',    
-        ),    
-
-        
-        
+        ),         
 
 """

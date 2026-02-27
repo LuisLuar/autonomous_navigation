@@ -41,6 +41,7 @@ setup(
             'perception_recorder_right = saves.perception_recorder_right:main',
             'control_signals = saves.control_signals:main',
             'image_replay = saves.image_replay:main',
+            'image_publisher = saves.image:main',
         ],
     },
 )

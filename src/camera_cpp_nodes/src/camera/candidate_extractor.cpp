@@ -1,104 +1,81 @@
 #include <rclcpp/rclcpp.hpp>
-#include <opencv2/opencv.hpp>
-#include "custom_interfaces/msg/segmentation_data.hpp"
+#include <vector>
+#include <algorithm>
+#include <map>
 #include "custom_interfaces/msg/pixel_point.hpp"
 
 class CandidateExtractorNode : public rclcpp::Node {
 public:
     CandidateExtractorNode() : Node("candidate_extractor") {
-        // Parámetros
-        this->declare_parameter("row_step", 2);
-        this->declare_parameter("min_width", 2);
-        this->declare_parameter("road_kernel", 5);
+        // Parámetros de refinamiento
+        this->declare_parameter("min_width", 10); // Ancho mínimo en píxeles para considerar un carril
+        this->declare_parameter("max_width", 50); // Para descartar manchas grandes de ruido
 
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
 
-        // Suscriptor a la segmentación
-        sub_seg_ = this->create_subscription<custom_interfaces::msg::SegmentationData>(
-            "/segmentation/data", qos,
-            std::bind(&CandidateExtractorNode::segmentation_callback, this, std::placeholders::_1));
+        // Suscriptor a los puntos "brutos" del segmentador
+        sub_pixels_ = this->create_subscription<custom_interfaces::msg::PixelPoint>(
+            "/segmentation_data", qos,
+            std::bind(&CandidateExtractorNode::pixel_callback, this, std::placeholders::_1));
 
-        // Publicador de candidatos
-        pub_pixels_ = this->create_publisher<custom_interfaces::msg::PixelPoint>(
+        // Publicador de puntos refinados (Solo centros)
+        pub_refined_ = this->create_publisher<custom_interfaces::msg::PixelPoint>(
             "/lane/pixel_candidates", 10);
 
-        RCLCPP_INFO(this->get_logger(), "Extractor de Candidatos C++ iniciado a 30Hz.");
+        RCLCPP_INFO(this->get_logger(), "Nodo de Refinamiento (Centros de Carril) iniciado.");
     }
 
 private:
-    void segmentation_callback(const custom_interfaces::msg::SegmentationData::SharedPtr msg) {
-        // 1. Reconstruir la máscara desde los datos serializados
-        cv::Mat combined(msg->height, msg->width, CV_8UC1, const_cast<uint8_t*>(msg->mask_data.data()));
-        
-        cv::Mat road_mask = (combined == 1);
-        cv::Mat lane_mask = (combined == 2);
+    void pixel_callback(const custom_interfaces::msg::PixelPoint::SharedPtr msg) {
+        if (msg->u.empty()) return;
 
-        // 2. Limpiar Road Mask (Morphological Close)
-        int k_size = this->get_parameter("road_kernel").as_int();
-        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(k_size, k_size));
-        cv::morphologyEx(road_mask, road_mask, cv::MORPH_CLOSE, kernel);
-
-        // Vectores para el mensaje
-        std::vector<uint32_t> x_coords;
-        std::vector<uint32_t> y_coords;
-        std::vector<float> confidences;
-
-        int row_step = this->get_parameter("row_step").as_int();
-        int min_width = this->get_parameter("min_width").as_int();
-
-        // 3. Procesar ROAD MASK (Extracción de Bordes por Gradiente)
-        cv::Mat road_edges;
-        cv::morphologyEx(road_mask, road_edges, cv::MORPH_GRADIENT, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3)));
-
-        for (int y = 0; y < road_edges.rows; y += row_step) {
-            uint8_t* row_ptr = road_edges.ptr<uint8_t>(y);
-            for (int x = 0; x < road_edges.cols; x++) {
-                if (row_ptr[x] > 0) {
-                    x_coords.push_back(x);
-                    y_coords.push_back(y);
-                    confidences.push_back(0.7f); // Confianza para bordes de carretera
-                }
-            }
+        // 1. Agrupar puntos por fila (V)
+        // Usamos un mapa donde la llave es la fila V y el valor es una lista de coordenadas U
+        std::map<uint16_t, std::vector<uint16_t>> rows_map;
+        for (size_t i = 0; i < msg->u.size(); ++i) {
+            rows_map[msg->v[i]].push_back(msg->u[i]);
         }
 
-        // 4. Procesar LANE MASK (Centro de Masa por fila)
-        // Esto es mucho más robusto que Canny para líneas de carril
-        for (int y = 0; y < lane_mask.rows; y += row_step) {
-            uint8_t* row_ptr = lane_mask.ptr<uint8_t>(y);
-            int start_x = -1;
-            
-            for (int x = 0; x < lane_mask.cols; x++) {
-                if (row_ptr[x] > 0) {
-                    if (start_x == -1) start_x = x;
-                } else {
-                    if (start_x != -1) {
-                        int end_x = x - 1;
-                        int width = end_x - start_x + 1;
-                        if (width >= min_width) {
-                            x_coords.push_back(start_x + width / 2);
-                            y_coords.push_back(y);
-                            confidences.push_back(1.0f); // Máxima confianza para líneas pintadas
-                        }
-                        start_x = -1;
-                    }
-                }
-            }
-        }
-
-        // 5. Publicar mensaje PixelPoint
         auto out_msg = custom_interfaces::msg::PixelPoint();
         out_msg.header = msg->header;
-        out_msg.x_coordinates = x_coords;
-        out_msg.y_coordinates = y_coords;
-        out_msg.confidences = confidences;
-        out_msg.is_valid = (x_coords.size() > 50);
-        out_msg.global_quality = std::min(1.0f, static_cast<float>(x_coords.size()) / 2000.0f);
 
-        pub_pixels_->publish(out_msg);
+        int min_w = this->get_parameter("min_width").as_int();
+        int max_w = this->get_parameter("max_width").as_int();
+
+        // 2. Para cada fila, encontrar segmentos contiguos y calcular su centro
+        for (auto& [v_row, u_coords] : rows_map) {
+            // Ordenar las U para encontrar continuidad
+            std::sort(u_coords.begin(), u_coords.end());
+
+            if (u_coords.empty()) continue;
+
+            int start_u = u_coords[0];
+            for (size_t i = 1; i <= u_coords.size(); ++i) {
+                // Si el pixel no es contiguo o es el final del vector, cerramos segmento
+                if (i == u_coords.size() || u_coords[i] > u_coords[i-1] + 2) { 
+                    int end_u = u_coords[i-1];
+                    int width = end_u - start_u + 1;
+
+                    // 3. Filtrar por ancho y guardar solo el centro
+                    if (width >= min_w && width <= max_w) {
+                        uint16_t center_u = start_u + (width / 2);
+                        out_msg.u.push_back(center_u);
+                        out_msg.v.push_back(v_row);
+                    }
+
+                    if (i < u_coords.size()) start_u = u_coords[i];
+                }
+            }
+        }
+
+        // 4. Publicar puntos finales
+        if (!out_msg.u.empty()) {
+            pub_refined_->publish(out_msg);
+        }
     }
 
-    rclcpp::Subscription<custom_interfaces::msg::SegmentationData>::SharedPtr sub_seg_;
-    rclcpp::Publisher<custom_interfaces::msg::PixelPoint>::SharedPtr pub_pixels_;
+    rclcpp::Subscription<custom_interfaces::msg::PixelPoint>::SharedPtr sub_pixels_;
+    rclcpp::Publisher<custom_interfaces::msg::PixelPoint>::SharedPtr pub_refined_;
 };
 
 int main(int argc, char** argv) {

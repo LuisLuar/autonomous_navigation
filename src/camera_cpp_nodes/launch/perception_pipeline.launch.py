@@ -43,8 +43,8 @@ def generate_launch_description():
             executable='ipm_node',
             name='ipm_node',
             parameters=[
-                {'min_distance': 1.5},
-                {'max_distance': 7.0}
+                {'min_distance': 0.0},
+                {'max_distance': 30.0}
             ],
             output='screen'
         ),   

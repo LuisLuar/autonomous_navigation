@@ -7,6 +7,7 @@ import colorsys
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py import point_cloud2
 from custom_interfaces.msg import LaneModel
+from sklearn.cluster import DBSCAN
 
 class QuadraticLaneEstimator(Node):
     def __init__(self):
@@ -44,34 +45,60 @@ class QuadraticLaneEstimator(Node):
         pts = np.array([(p[0], p[1]) for p in point_cloud2.read_points(msg, field_names=['x', 'y'], skip_nans=True)])
         if len(pts) < self.min_points: return
 
-        # 1. Agrupamiento por Bins
-        y_bins = np.round(pts[:, 1] / self.cluster_tol)
-        unique_bins = np.unique(y_bins)
+        # eps: Distancia máxima entre dos muestras para que se consideren vecinas
+        # min_samples: El número de puntos necesarios para formar un "cluster"
+        # Creamos una copia para el clustering
+        pts_scaled = pts.copy()
+
+        # Comprimimos el eje X logarítmicamente o con una raíz
+        # Esto hace que 1 metro de diferencia a los 10m se vea "más corto" 
+        # que 1 metro de diferencia a los 2m.
+        pts_scaled[:, 0] = np.sqrt(pts[:, 0]) 
+
+        clustering = DBSCAN(eps=0.15, min_samples=5).fit(pts_scaled)
+        labels = clustering.labels_
         
+        unique_labels = set(labels)
+        # ------------------------------------
+
         candidates = []
         cluster_cloud_pts = []
+        mean = []
         
-        for i, b in enumerate(unique_bins):
-            cluster_mask = (y_bins == b)
-            cluster_pts = pts[cluster_mask]
-            if len(cluster_pts) < self.min_points: continue
+        for label in unique_labels:
+            if label == -1: continue  # Saltar el ruido detectado por DBSCAN
             
-            # Color para debug
-            hue = (i * 0.618) % 1.0
+            # Máscara para obtener solo los puntos de este cluster
+            cluster_mask = (labels == label)
+            cluster_pts = pts[cluster_mask]
+            
+            if len(cluster_pts) < self.min_points: 
+                continue
+            
+            # Color para debug (mantenemos tu lógica de colores)
+            hue = (label * 0.618) % 1.0
             rgb = colorsys.hsv_to_rgb(hue, 0.8, 1.0)
             color_int = self.get_rgb_uint32(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
             
             for p in cluster_pts:
                 cluster_cloud_pts.append([float(p[0]), float(p[1]), 0.0, color_int])
 
-            # 2. AJUSTE DE GRADO 2 (y = c2*x^2 + c1*x + c0)
-            # c2: curvatura, c1: yaw inicial, c0: offset lateral
-            coeffs = np.polyfit(cluster_pts[:, 0], cluster_pts[:, 1], 2)
-            c2, c1, c0 = coeffs
-            
-            # Filtro de sensatez: El ángulo en el origen (x=0) no debe ser extremo
-            if abs(np.arctan(c1)) < self.max_yaw_angle:
-                candidates.append({'c0': c0, 'c1': c1, 'c2': c2, 'pts': cluster_pts})
+            # AJUSTE DE POLINOMIO (Se mantiene igual)
+            try:
+                if max(cluster_pts[:, 0]) > 7.0 and len(cluster_pts) > 50:
+                    # Usamos x como variable independiente y 'y' como dependiente
+                    coeffs = np.polyfit(cluster_pts[:, 0], cluster_pts[:, 1], 2)
+                    c2, c1, c0 = coeffs
+                else:
+                    # Para pocos puntos, ajustamos una línea recta (grado 1)
+                    coeffs = np.polyfit(cluster_pts[:, 0], cluster_pts[:, 1], 1)
+                    c1, c0 = coeffs
+                    c2 = 0.0
+                
+                if abs(np.arctan(c1)) < self.max_yaw_angle:
+                    candidates.append({'mean': np.mean(cluster_pts[:, 1]), 'c0': c0, 'c1': c1, 'c2': c2, 'pts': cluster_pts})
+            except np.RankWarning:
+                continue
 
         if cluster_cloud_pts:
             self.pub_debug_clusters.publish(self.create_pc2_msg(msg.header, cluster_cloud_pts))
@@ -81,8 +108,22 @@ class QuadraticLaneEstimator(Node):
         # 3. Clasificación Izquierda / Derecha (por el intercepto c0)
         l_cands = [c for c in candidates if c['c0'] > 0]
         r_cands = [c for c in candidates if c['c0'] < 0]
-        best_l = min(l_cands, key=lambda x: x['c0']) if l_cands else None
-        best_r = max(r_cands, key=lambda x: x['c0']) if r_cands else None
+
+        best_l = min(l_cands, key=lambda x: abs(x['mean'])) if l_cands else None
+        best_r = min(r_cands, key=lambda x: abs(x['mean'])) if r_cands else None
+
+        """if best_l and best_r:
+            self.get_logger().info(f"IZQUIERDA: puntos: {len(best_l['pts'])} c0: {best_l['c0']:.2f} max: {max(best_l['pts'][:, 0]):.2f} | DERECHA:{len(best_r['pts'])} c0: {best_r['c0']:.2f} max: {max(best_r['pts'][:, 0]):.2f} | ANCHO: {abs(best_l['c0'] - best_r['c0']):.2f}")
+        elif best_l:
+            self.get_logger().info(f"IZQUIERDA:{len(best_l['pts'])} c0: {best_l['c0']:.2f} max: {max(best_l['pts'][:, 0]):.2f} | DERECHA: NO VISTA")
+        elif best_r:
+            self.get_logger().info(f"IZQUIERDA: NO VISTA | DERECHA:{len(best_r['pts'])} c0: {best_r['c0']:.2f} max: {max(best_r['pts'][:, 0]):.2f}")"""
+
+        if best_l and best_r and abs(best_l['c0'] - best_r['c0']) > 4.0:
+            if abs(best_l['c0']) < abs(best_r['c0']):
+                best_r = None
+            else:                
+                best_l = None
 
         # 4. Construcción del Mensaje y Debug Visual
         out = LaneModel()

@@ -26,6 +26,14 @@ def generate_launch_description():
             name='webrtc_streamer'
         ),  
 
+        
+
+        
+
+                        
+    ])
+
+"""
         # Lanzar nodo cámara con reconexión
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -37,65 +45,13 @@ def generate_launch_description():
             ]),
             launch_arguments={}.items()
         ),
-
         
-
-                        
-    ])
-
-"""
         # Lanzar nodo GPS
         Node(
             package='robot_drivers',
             executable='gps',
             output='screen',
             name='gps_node'
-        ),
-
-        #Lanzar nodo Camara Izquierda
-        Node(
-            package='robot_drivers',
-            executable='camera_left',
-            output='screen',
-        ),
-
-        
-        #Lanzar nodo Camara Derecha
-        Node(
-            package='robot_drivers',
-            executable='camera_right',
-            output='screen',
-        ),
-            
-
-
-        
-        
-        # Lanzar nodo DroidCam
-        Node(
-            package='robot_drivers',
-            executable='droidcam_camera',
-            output='screen',
-        ),
-
-        # Lanzar test webcam 
-        Node(
-            package='robot_drivers',
-            executable='webcam_tester',
-            output='screen',
-            name='webcam_tester'
-        ), 
-
-        # Lanzar RPLidar A1
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('rplidar_ros'),
-                    'launch',
-                    'rplidar_a1_launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
         ),
 
              

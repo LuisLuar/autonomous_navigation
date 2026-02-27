@@ -4,7 +4,7 @@
 #include <opencv2/opencv.hpp>
 #include <torch/script.h> 
 #include <torch/torch.h>
-#include "custom_interfaces/msg/segmentation_data.hpp"
+#include "custom_interfaces/msg/pixel_point.hpp"
 
 class YOLOPv2Segmenter : public rclcpp::Node {
 public:
@@ -19,7 +19,7 @@ public:
             // YOLOPv2 oficial usa FP16 en GPU para velocidad
             if (device_.is_cuda()) module_.to(at::kHalf);
 
-            RCLCPP_INFO(this->get_logger(), "YOLOPv2 cargado exitosamente en %s", device_.is_cuda() ? "CUDA" : "CPU");
+            //RCLCPP_INFO(this->get_logger(), "YOLOPv2 cargado exitosamente en %s", device_.is_cuda() ? "CUDA" : "CPU");
         } catch (const c10::Error& e) {
             RCLCPP_ERROR(this->get_logger(), "Error cargando el modelo: %s", e.what());
         }
@@ -29,7 +29,7 @@ public:
             "/image_raw/compressed", qos,
             std::bind(&YOLOPv2Segmenter::image_callback, this, std::placeholders::_1));
         
-        publisher_ = this->create_publisher<custom_interfaces::msg::SegmentationData>("/segmentation/data", 1);
+        publisher_ = this->create_publisher<custom_interfaces::msg::PixelPoint>("/segmentation_data", 10);
     }
 
 private:
@@ -68,19 +68,32 @@ private:
             // 3. POST-PROCESAMIENTO (Basado en utils de YOLOPv2)
             //cv::Mat da_mask = get_da_mask(da_logits, ori_h, ori_w);
             cv::Mat ll_mask = get_ll_mask(ll_logits, ori_h, ori_w);
+            
 
             // 4. EMPAQUETADO
-            cv::Mat combined(ori_h, ori_w, CV_8UC1, cv::Scalar(0));
-            //combined.setTo(1, da_mask > 0);
-            combined.setTo(2, ll_mask > 0);
-
-            auto out_msg = custom_interfaces::msg::SegmentationData();
+            auto out_msg = custom_interfaces::msg::PixelPoint();
             out_msg.header = msg->header;
-            out_msg.height = ori_h;
-            out_msg.width = ori_w;
-            out_msg.mask_data.assign(combined.data, combined.data + (combined.total()));
-            
-            publisher_->publish(out_msg);
+
+            // Reservar memoria aproximada para evitar reallocs
+            size_t approx_points = ll_mask.total() / 15;
+            out_msg.u.reserve(approx_points);
+            out_msg.v.reserve(approx_points);
+
+            // Recorrer máscara y guardar puntos positivos
+            for (int y = 0; y < ll_mask.rows; ++y) {
+                const uint8_t* row_ptr = ll_mask.ptr<uint8_t>(y);
+
+                for (int x = 0; x < ll_mask.cols; ++x) {
+                    if (row_ptr[x] > 0) {
+                        out_msg.u.push_back(static_cast<uint16_t>(x));
+                        out_msg.v.push_back(static_cast<uint16_t>(y));
+                    }
+                }
+            }
+
+            if (!out_msg.u.empty()) {
+                publisher_->publish(out_msg);
+            }
 
         } catch (const std::exception& e) {
             RCLCPP_ERROR(this->get_logger(), "Error en proceso: %s", e.what());
@@ -124,7 +137,7 @@ private:
     torch::jit::Module module_;
     torch::Device device_{torch::kCPU};
     rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr subscription_;
-    rclcpp::Publisher<custom_interfaces::msg::SegmentationData>::SharedPtr publisher_;
+    rclcpp::Publisher<custom_interfaces::msg::PixelPoint>::SharedPtr publisher_;
 };
 
 int main(int argc, char** argv) {

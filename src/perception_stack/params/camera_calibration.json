@@ -1,9 +1,9 @@
 {
-  "camera_height": 1.2,
+  "camera_z": 1.2,
   "camera_x": -0.216,
   "camera_y": 0.0,
-  "camera_pitch": -0.32653260698303155,
-  "camera_pitch_degrees": -18.70894025353174,
+  "camera_roll": -0.32653260698303155,
+  "camera_roll_degrees": -18.70894025353174,
   "intrinsics": {
     "fx": 439.7870380536204,
     "fy": 439.3538405064575,

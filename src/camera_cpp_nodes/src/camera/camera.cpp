@@ -6,9 +6,17 @@
 #include <atomic>
 #include <cstdlib> // Para system()
 
+#include <fstream>
+#include <nlohmann/json.hpp>
+
+
+using json = nlohmann::json;
+
+
 class CameraNode : public rclcpp::Node {
 public:
     CameraNode() : Node("camera_node"), running_(true) {
+        setup_undistortion("/home/raynel/autonomous_navigation/src/perception_stack/params/camera_calibration.json");
         // QoS Best Effort para máxima velocidad
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
         publisher_ = this->create_publisher<sensor_msgs::msg::CompressedImage>("/image_raw/compressed", qos);
@@ -64,6 +72,47 @@ public:
     }
 
 private:
+    
+
+    void setup_undistortion(const std::string& path) {
+        std::ifstream f(path);
+        if (!f.is_open()) {
+            RCLCPP_ERROR(this->get_logger(), "No se pudo abrir el archivo de calibración");
+            return;
+        }
+        json calib = json::parse(f);
+
+        fx = calib["intrinsics"]["fx"];
+        fy = calib["intrinsics"]["fy"];
+        cx = calib["intrinsics"]["cx"];
+        cy = calib["intrinsics"]["cy"];
+
+        k1 = calib["distortion"]["k1"];
+        k2 = calib["distortion"]["k2"];
+        p1 = calib["distortion"]["p1"];
+        p2 = calib["distortion"]["p2"];
+        k3 = calib["distortion"]["k3"];
+
+        // Valores de tu JSON de calibración
+        cv::Mat K = (cv::Mat_<double>(3,3) << 
+            fx, 0.0, cx,
+            0.0, fy, cy,
+            0.0, 0.0, 1.0);
+
+        cv::Mat D = (cv::Mat_<double>(1,5) << 
+            k1, k2, p1, p2, k3);
+
+        cv::Size image_size(640, 360);
+        
+        // Obtener la matriz óptima para no perder demasiados píxeles en los bordes
+        cv::Mat newK = cv::getOptimalNewCameraMatrix(K, D, image_size, 0, image_size);
+
+        // Pre-calcular los mapas de rectificación (Esto es lo que ahorra CPU)
+        cv::initUndistortRectifyMap(K, D, cv::Mat(), newK, image_size, CV_32FC1, map1_, map2_);
+        use_undistortion_ = true;
+        RCLCPP_INFO(this->get_logger(), "Mapas de rectificación calculados.");
+    }
+
     void apply_v4l2_settings(const std::string & device) {
         RCLCPP_INFO(this->get_logger(), "Configurando controles manuales en %s...", device.c_str());
         
@@ -102,13 +151,22 @@ private:
         // Redimensionamiento con Supersampling (Filtro AREA)
         cv::resize(local_frame, resized_frame_, cv::Size(640, 360), 0, 0, cv::INTER_AREA);
 
+        // 2. Aplicar rectificación (Remap es muy ligero)
+        cv::Mat undistorted;
+        if (use_undistortion_) {
+            cv::remap(resized_frame_, undistorted, map1_, map2_, cv::INTER_LINEAR);
+        } else {
+            undistorted = resized_frame_;
+        }
+
         auto msg = std::make_unique<sensor_msgs::msg::CompressedImage>();
         msg->header.stamp = this->now();
         msg->header.frame_id = "camera_link";
         msg->format = "jpeg";
         
-        cv::imencode(".jpg", resized_frame_, msg->data, compression_params_);
+        cv::imencode(".jpg", undistorted, msg->data, compression_params_);
         publisher_->publish(std::move(msg));
+
     }
 
     cv::VideoCapture cap_;
@@ -117,6 +175,12 @@ private:
     std::mutex frame_mutex_;
     cv::Mat frame_buffer_, resized_frame_;
     bool new_frame_available_ = false;
+
+    // variables para la rectificación
+    cv::Mat map1_, map2_;
+    double k1, k2, p1, p2, k3;
+    double fx, fy, cx, cy;
+    bool use_undistortion_ = true;
     
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr publisher_;
