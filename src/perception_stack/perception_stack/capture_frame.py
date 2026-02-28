@@ -21,7 +21,7 @@ class ImageCaptureNode(Node):
         super().__init__('image_capture_node')
         
         # Configuración - CAMBIA ESTA RUTA SEGÚN TUS NECESIDADES
-        self.save_directory = "/home/raynel/Documents/calibrate_camera"  # ← CAMBIA ESTA RUTA
+        self.save_directory = "/home/robot/Documents/calibrate_camera"  # ← CAMBIA ESTA RUTA
         
         # Crear directorio si no existe
         os.makedirs(self.save_directory, exist_ok=True)

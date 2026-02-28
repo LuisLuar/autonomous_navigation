@@ -16,7 +16,7 @@ class YoloDetectorNode(Node):
         super().__init__('yolo_senaletica')
 
         # ------------ Config Modelo -------------
-        self.model_path = "/home/raynel/autonomous_navigation/src/perception_stack/object_detection/models/senaletica2.pt"
+        self.model_path = "/home/robot/autonomous_navigation/src/perception_stack/object_detection/models/senaletica2.pt"
         
         self.conf_thres = float(os.getenv("YOLO_CONF", 0.79))
         self.iou_thres = float(os.getenv("YOLO_IOU", 0.45))

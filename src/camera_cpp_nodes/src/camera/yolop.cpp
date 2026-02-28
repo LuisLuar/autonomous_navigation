@@ -12,7 +12,7 @@ public:
         device_ = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;
         try {
             // Cargar modelo exportado con torch.jit.save()
-            module_ = torch::jit::load("/home/raynel/autonomous_navigation/src/perception_stack/semantic_segmentation/pretrained/yolopv2.pt");
+            module_ = torch::jit::load("/home/robot/autonomous_navigation/src/perception_stack/semantic_segmentation/pretrained/yolopv2.pt");
             module_.to(device_);
             module_.eval();
             

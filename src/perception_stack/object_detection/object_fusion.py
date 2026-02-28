@@ -22,7 +22,7 @@ class ObjectFusionNode(Node):
         
         # ============ CARGAR CALIBRACIÓN DESDE JSON ============
         # Ruta idéntica a tu nodo C++
-        calib_path = "/home/raynel/autonomous_navigation/src/perception_stack/params/camera_calibration.json"
+        calib_path = "/home/robot/autonomous_navigation/src/perception_stack/params/camera_calibration.json"
         self.load_calibration(calib_path)
         
         # ============ VARIABLES DE ESTADO ============

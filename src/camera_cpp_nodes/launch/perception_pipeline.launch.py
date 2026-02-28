@@ -4,7 +4,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     # Rutas a archivos de parámetros (ajusta si es necesario)
-    calibration_file = "/home/raynel/autonomous_navigation/src/perception_stack/params/calibration_front.json"
+    calibration_file = "/home/robot/autonomous_navigation/src/perception_stack/params/calibration_front.json"
 
     return LaunchDescription([
         # 1. CAMERA NODE (Captura y Redimensión)
@@ -12,7 +12,7 @@ def generate_launch_description():
             package='camera_cpp_nodes',
             executable='camera_node',
             name='camera_node',
-            parameters=[{'device': 2}],
+            parameters=[{'device': 0}],
             output='screen'
         ),
 

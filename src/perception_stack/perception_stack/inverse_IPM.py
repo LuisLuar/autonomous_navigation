@@ -14,7 +14,7 @@ class IPMInverseNode(Node):
         super().__init__('ipm_inverse_node')
 
         # =================== CARGA DE CALIBRACIÓN ===================
-        calibration_path = "/home/raynel/autonomous_navigation/src/perception_stack/params/camera_calibration.json"
+        calibration_path = "/home/robot/autonomous_navigation/src/perception_stack/params/camera_calibration.json"
         try:
             with open(calibration_path, 'r') as f:
                 calib = json.load(f)

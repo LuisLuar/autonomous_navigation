@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 2. Rutas de LibTorch (Prioridad)
-list(APPEND CMAKE_PREFIX_PATH "/home/raynel/libtorch_setup/libtorch")
+list(APPEND CMAKE_PREFIX_PATH "/home/robot/.local/lib/python3.10/site-packages/torch/share/cmake")
 
 # 3. Buscar dependencias
 find_package(ament_cmake REQUIRED)
@@ -26,6 +26,11 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
+
+if(NOT OpenCV_FOUND)
+    message(FATAL_ERROR "OpenCV no encontrado")
+endif()
+
 
 # 4. Ejecutables
 add_executable(camera_node src/camera/camera.cpp)
@@ -78,16 +83,13 @@ ament_target_dependencies(ipm_node
 )
 
 # 6. Configuración específica para el Segmentador (LibTorch + CUDA)
-target_link_directories(segmenter_node PRIVATE "/home/raynel/libtorch_setup/libtorch/lib")
+target_link_directories(segmenter_node PRIVATE ${TORCH_INSTALL_PREFIX}/lib)
 
 target_link_libraries(segmenter_node
   ${OpenCV_LIBRARIES}
-  "-Wl,--no-as-needed"
-  "/home/raynel/libtorch_setup/libtorch/lib/libcudart-d0da41ae.so.11.0"
   ${TORCH_LIBRARIES}
-  "torch_cuda"
-  "c10_cuda"
-  "-Wl,--as-needed"
+  torch_cuda
+  c10_cuda
 )
 
 # 7. Configuración específica para IPM (Eigen y JSON)
