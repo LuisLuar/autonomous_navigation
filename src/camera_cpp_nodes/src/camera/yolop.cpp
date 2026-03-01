@@ -2,28 +2,22 @@
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
-#include <torch/script.h> 
-#include <torch/torch.h>
+#include <NvInfer.h>
+#include <cuda_runtime_api.h>
+#include <fstream>
 #include "custom_interfaces/msg/pixel_point.hpp"
+
+class Logger : public nvinfer1::ILogger {
+    void log(Severity severity, const char* msg) noexcept override {
+        if (severity <= Severity::kWARNING) std::cout << msg << std::endl;
+    }
+} gLogger;
 
 class YOLOPv2Segmenter : public rclcpp::Node {
 public:
     YOLOPv2Segmenter() : Node("segmenter_yolop") {
-        device_ = torch::cuda::is_available() ? torch::kCUDA : torch::kCPU;
-        try {
-            // Cargar modelo exportado con torch.jit.save()
-            module_ = torch::jit::load("/home/raynel/autonomous_navigation/src/perception_stack/semantic_segmentation/pretrained/yolopv2.pt");
-            module_.to(device_);
-            module_.eval();
-            
-            // YOLOPv2 oficial usa FP16 en GPU para velocidad
-            if (device_.is_cuda()) module_.to(at::kHalf);
-
-            //RCLCPP_INFO(this->get_logger(), "YOLOPv2 cargado exitosamente en %s", device_.is_cuda() ? "CUDA" : "CPU");
-        } catch (const c10::Error& e) {
-            RCLCPP_ERROR(this->get_logger(), "Error cargando el modelo: %s", e.what());
-        }
-
+        load_engine("/home/raynel/autonomous_navigation/src/perception_stack/semantic_segmentation/pretrained/yolopv2_lane_OMEN.engine");
+        
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
         subscription_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
             "/image_raw/compressed", qos,
@@ -32,7 +26,47 @@ public:
         publisher_ = this->create_publisher<custom_interfaces::msg::PixelPoint>("/segmentation_data", 10);
     }
 
+    ~YOLOPv2Segmenter() {
+        cudaFree(buffers_[0]);
+        cudaFree(buffers_[1]);
+    }
+
 private:
+    void load_engine(const std::string& path) {
+        std::ifstream file(path, std::ios::binary);
+        if (!file.good()) {
+            RCLCPP_ERROR(this->get_logger(), "No se pudo abrir el archivo .engine");
+            return;
+        }
+        file.seekg(0, file.end);
+        size_t size = file.tellg();
+        file.seekg(0, file.beg);
+        std::vector<char> data(size);
+        file.read(data.data(), size);
+        file.close();
+
+        runtime_ = nvinfer1::createInferRuntime(gLogger);
+        engine_ = runtime_->deserializeCudaEngine(data.data(), size);
+        context_ = engine_->createExecutionContext();
+
+        // --- DIAGNÓSTICO DE TENSORES ---
+        int nbBindings = engine_->getNbIOTensors();
+        RCLCPP_INFO(this->get_logger(), "El modelo tiene %d tensores:", nbBindings);
+        
+        for (int i = 0; i < nbBindings; ++i) {
+            const char* name = engine_->getIOTensorName(i);
+            auto mode = engine_->getTensorIOMode(name);
+            RCLCPP_INFO(this->get_logger(), "Tensor %d: %s [%s]", 
+                        i, name, (mode == nvinfer1::TensorIOMode::kINPUT ? "INPUT" : "OUTPUT"));
+        }
+
+        // Reservar memoria
+        cudaMalloc(&buffers_[0], 1 * 3 * 640 * 640 * sizeof(float));
+        cudaMalloc(&buffers_[1], 1 * 1 * 640 * 640 * sizeof(float));
+        
+        RCLCPP_INFO(this->get_logger(), "TensorRT 10 Engine cargado correctamente.");
+    }
+
     void image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg) {
         try {
             cv::Mat frame = cv::imdecode(cv::Mat(msg->data), cv::IMREAD_COLOR);
@@ -41,48 +75,44 @@ private:
             int ori_h = frame.rows;
             int ori_w = frame.cols;
 
-            // 1. PRE-PROCESAMIENTO EXACTO AL DEMO
             cv::Mat resized;
-            cv::resize(frame, resized, cv::Size(640, 640), 0, 0, cv::INTER_LINEAR);
+            cv::resize(frame, resized, cv::Size(640, 640));
             cv::cvtColor(resized, resized, cv::COLOR_BGR2RGB);
+            resized.convertTo(resized, CV_32FC3, 1.0 / 255.0);
 
-            torch::Tensor tensor = torch::from_blob(resized.data, {640, 640, 3}, torch::kUInt8).to(device_);
-            tensor = tensor.permute({2, 0, 1}).unsqueeze(0);
-            
-            // Convertir a float y normalizar 1/255
-            if (device_.is_cuda()) {
-                tensor = tensor.to(at::kHalf).div(255.0);
-            } else {
-                tensor = tensor.to(torch::kFloat32).div(255.0);
+            std::vector<cv::Mat> channels(3);
+            cv::split(resized, channels);
+            float input_data[3 * 640 * 640];
+            for (int i = 0; i < 3; ++i) {
+                memcpy(input_data + i * 640 * 640, channels[i].data, 640 * 640 * sizeof(float));
             }
 
-            // 2. INFERENCIA
-            torch::NoGradGuard no_grad;
-            auto output = module_.forward({tensor});
+            // --- INFERENCIA TENSORRT 10 ---
+            cudaMemcpy(buffers_[0], input_data, 3 * 640 * 640 * sizeof(float), cudaMemcpyHostToDevice);
             
-            // YOLOPv2 retorna: [ [pred, anchor_grid], seg, ll ]
-            auto outputs = output.toTuple()->elements();
-            //torch::Tensor da_logits = outputs[1].toTensor(); // Driving Area
-            torch::Tensor ll_logits = outputs[2].toTensor(); // Lane Line
-
-            // 3. POST-PROCESAMIENTO (Basado en utils de YOLOPv2)
-            //cv::Mat da_mask = get_da_mask(da_logits, ori_h, ori_w);
-            cv::Mat ll_mask = get_ll_mask(ll_logits, ori_h, ori_w);
+            // Definir direcciones de tensores (los nombres dependen de cómo se exportó el ONNX)
+            // Por defecto YOLOPv2 suele usar "images" y "output"
+            context_->setTensorAddress("images", buffers_[0]);
+            context_->setTensorAddress("lane_mask", buffers_[1]);
             
+            context_->enqueueV3(0); // Ejecución en el stream default
+            
+            float output_data[640 * 640];
+            cudaMemcpy(output_data, buffers_[1], 640 * 640 * sizeof(float), cudaMemcpyDeviceToHost);
+            // ------------------------------
 
-            // 4. EMPAQUETADO
+            cv::Mat ll_mask_raw(640, 640, CV_32FC1, output_data);
+            cv::Mat ll_mask_bin;
+            cv::threshold(ll_mask_raw, ll_mask_bin, 0.5, 255, cv::THRESH_BINARY);
+            ll_mask_bin.convertTo(ll_mask_bin, CV_8UC1);
+
+            cv::Mat ll_mask;
+            cv::resize(ll_mask_bin, ll_mask, cv::Size(ori_w, ori_h), 0, 0, cv::INTER_NEAREST);
+
             auto out_msg = custom_interfaces::msg::PixelPoint();
             out_msg.header = msg->header;
-
-            // Reservar memoria aproximada para evitar reallocs
-            size_t approx_points = ll_mask.total() / 15;
-            out_msg.u.reserve(approx_points);
-            out_msg.v.reserve(approx_points);
-
-            // Recorrer máscara y guardar puntos positivos
             for (int y = 0; y < ll_mask.rows; ++y) {
                 const uint8_t* row_ptr = ll_mask.ptr<uint8_t>(y);
-
                 for (int x = 0; x < ll_mask.cols; ++x) {
                     if (row_ptr[x] > 0) {
                         out_msg.u.push_back(static_cast<uint16_t>(x));
@@ -90,52 +120,17 @@ private:
                     }
                 }
             }
-
-            if (!out_msg.u.empty()) {
-                publisher_->publish(out_msg);
-            }
+            if (!out_msg.u.empty()) publisher_->publish(out_msg);
 
         } catch (const std::exception& e) {
-            RCLCPP_ERROR(this->get_logger(), "Error en proceso: %s", e.what());
+            RCLCPP_ERROR(this->get_logger(), "Error: %s", e.what());
         }
     }
 
-    cv::Mat post_process_tensor(torch::Tensor mask, float thresh, int h, int w) {
-        // 1. Asegurar que estamos en Float32 para la interpolación (evita errores de bits)
-        // y asegurar que es 4D [1, 1, 640, 640]
-        torch::Tensor mask_4d = mask.view({1, 1, 640, 640}).to(torch::kFloat32);
-
-        // 2. Reescalar
-        auto options = torch::nn::functional::InterpolateFuncOptions()
-                            .size(std::vector<int64_t>({h, w}))
-                            .mode(torch::kBilinear)
-                            .align_corners(false);
-
-        torch::Tensor scaled = torch::nn::functional::interpolate(mask_4d, options);
-
-        // 3. Binarizar y mover a CPU
-        // Usamos view({h, w}) en lugar de squeeze() para ser ultra específicos
-        torch::Tensor binary_mask = (scaled.view({h, w}) > thresh).to(torch::kUInt8).to(torch::kCPU);
-        
-        // 4. Clonar para asegurar integridad de memoria en OpenCV
-        return cv::Mat(h, w, CV_8UC1, binary_mask.data_ptr()).clone();
-    }
-
-    cv::Mat get_da_mask(torch::Tensor logits, int h, int w) {
-        // Si logits es [1, 2, 640, 640], seleccionamos el canal 1 (carretera)
-        // Forzamos a que sea 2D [640, 640] antes de enviarlo a post_process
-        torch::Tensor mask = torch::softmax(logits, 1).select(1, 1).view({640, 640});
-        return post_process_tensor(mask, 0.5, h, w);
-    }
-
-    cv::Mat get_ll_mask(torch::Tensor logits, int h, int w) {
-        // Si logits es [1, 1, 640, 640], quitamos dimensiones extras para tener [640, 640]
-        torch::Tensor mask = torch::sigmoid(logits).view({640, 640});
-        return post_process_tensor(mask, 0.5, h, w);
-    }
-
-    torch::jit::Module module_;
-    torch::Device device_{torch::kCPU};
+    nvinfer1::IRuntime* runtime_;
+    nvinfer1::ICudaEngine* engine_;
+    nvinfer1::IExecutionContext* context_;
+    void* buffers_[2]; 
     rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr subscription_;
     rclcpp::Publisher<custom_interfaces::msg::PixelPoint>::SharedPtr publisher_;
 };

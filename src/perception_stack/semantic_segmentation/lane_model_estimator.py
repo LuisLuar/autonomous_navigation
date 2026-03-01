@@ -55,7 +55,7 @@ class QuadraticLaneEstimator(Node):
         # que 1 metro de diferencia a los 2m.
         pts_scaled[:, 0] = np.sqrt(pts[:, 0]) 
 
-        clustering = DBSCAN(eps=0.15, min_samples=5).fit(pts_scaled)
+        clustering = DBSCAN(eps=0.2, min_samples=5).fit(pts_scaled)
         labels = clustering.labels_
         
         unique_labels = set(labels)

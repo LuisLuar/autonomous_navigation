@@ -65,3 +65,5 @@ CATKIN_IGNORE
 *.h5
 *.pb
 *.tflite
+
+*.vscode
