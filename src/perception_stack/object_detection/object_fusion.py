@@ -99,14 +99,14 @@ class ObjectFusionNode(Node):
                 'class_id': det.class_id,
                 'is_airborne': is_air,
                 'confidence': det.confidence,
-                'bbox': [det.x1, det.y1, det.x2, det.y2, det.center_x, det.center_y]
+                'bbox': [det.u1, det.v1, det.u2, det.v2, det.center_u, det.center_v]
             })
 
             # --- IPM (Cálculo idéntico al C++) ---
             if not is_air:
                 # 1. Proyectar pixel a rayo
-                x_ray = (det.center_x - self.cx_) / self.fx_
-                y_ray = -(det.y2 - self.cy_) / self.fy_ # Inversión de signo clave
+                x_ray = (det.center_u - self.cx_) / self.fx_
+                y_ray = -(det.v2 - self.cy_) / self.fy_ # Inversión de signo clave
                 ray_cam = np.array([x_ray, y_ray, 1.0])
 
                 # 2. Rotar el rayo
@@ -155,8 +155,8 @@ class ObjectFusionNode(Node):
             obj.confidence = float(info['confidence'])
             
             bbox = info['bbox']
-            obj.x1, obj.y1, obj.x2, obj.y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
-            obj.center_x, obj.center_y = float(bbox[4]), float(bbox[5])
+            obj.u1, obj.v1, obj.u2, obj.v2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+            obj.center_u, obj.center_v = float(bbox[4]), float(bbox[5])
 
             if info['positions'] and not info['is_airborne']:
                 dist_x, lateral_y = info['positions'][-1]

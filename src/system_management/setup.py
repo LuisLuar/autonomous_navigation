@@ -42,6 +42,7 @@ setup(
             'test_lazo_cerrado =    test_code.gui_lazo_cerrado:main',
             'bridge_serial_safety =        others.bridge_serial_safety:main',
             'unifier_safety_comunication =        others.unifier_safety_comunication:main',
+            'esp32_safety = others.esp32_safety:main',
         ],
     },
 )

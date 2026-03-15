@@ -21,6 +21,8 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
 
+
+
         # Lanzar URDF y TF
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -84,7 +86,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
                 PathJoinSubstitution([
-                    FindPackageShare('camera_cpp_nodes'),
+                    FindPackageShare('cpp_nodes'),
                     'launch',
                     'perception_pipeline.launch.py'
                 ])
@@ -117,6 +119,11 @@ def generate_launch_description():
             launch_arguments={}.items()
         ), 
 
+        Node(
+            package='system_management',
+            executable='esp32_safety',
+            output='screen',
+        ),
         
         
         

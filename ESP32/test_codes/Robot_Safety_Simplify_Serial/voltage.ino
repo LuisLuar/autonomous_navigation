@@ -1,3 +1,4 @@
+//voltage.ino
 #define ADC_RESOLUTION 4095.0
 #define VREF 3.3
 
@@ -16,7 +17,6 @@ float readVoltage(int GPIO){
   
   // Para ADC=0, retornar 0 directamente
   if (rawValue == 0) {
-    Serial.println("ADC: 0\t Voltaje real: 0.00 V");
     voltajeFiltrado = 0.0;  // Reiniciar filtro
     return 0.0;
   }
@@ -29,13 +29,6 @@ float readVoltage(int GPIO){
 
   // Filtro pasa-bajos: 90% valor anterior + 10% lectura nueva
   // Esto elimina ruido sin afectar la medición de batería que cambia lentamente
-  voltajeFiltrado = 0.9 * voltajeFiltrado + 0.1 * voltageIn;
-
-  Serial.print("ADC: ");
-  Serial.print(rawValue);
-  Serial.print("\t Voltaje real: ");
-  Serial.print(voltajeFiltrado, 2);
-  Serial.println(" V");
-  
+  voltajeFiltrado = 0.9 * voltajeFiltrado + 0.1 * voltageIn;  
   return voltajeFiltrado;
 }

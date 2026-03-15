@@ -9,9 +9,9 @@ from custom_interfaces.msg import PixelPoint
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 
-class IPMInverseNode(Node):
+class IPMInverseNodeCL(Node):
     def __init__(self):
-        super().__init__('ipm_inverse_node')
+        super().__init__('ipm_inverse_node_CL')
 
         # =================== CARGA DE CALIBRACIÓN ===================
         calibration_path = "/home/raynel/autonomous_navigation/src/perception_stack/params/camera_calibration.json"
@@ -69,14 +69,14 @@ class IPMInverseNode(Node):
         # =================== COMUNICACIONES ===================
         self.create_subscription(
             PointCloud2,
-            '/lane/debug_fitted_lines', #/lane/centerline_pc
+            '/detection/meter_clouds', #/lane/centerline_pc
             self.centerline_callback,
             rclpy.qos.qos_profile_sensor_data
         )
 
         self.pub_pixel_points = self.create_publisher(
             PixelPoint,
-            '/lane/ipm_inverse_pixel_points',
+            '/lane/ipm_inverse_CL',
             10
         )
 
@@ -141,7 +141,7 @@ class IPMInverseNode(Node):
 
 def main():
     rclpy.init()
-    node = IPMInverseNode()
+    node = IPMInverseNodeCL()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

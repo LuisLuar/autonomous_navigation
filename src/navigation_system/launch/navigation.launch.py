@@ -10,6 +10,19 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
 
+        
+
+        Node(
+            package='navigation_system',
+            executable='nmpc_controller',
+            output='screen',    
+        ),
+
+        
+
+    ])
+
+"""
         # Lanza nodo controlador robusto
         Node(
             package='navigation_system',
@@ -17,9 +30,6 @@ def generate_launch_description():
             output='screen',    
         ),
 
-    ])
-
-"""
         # Lanzar nodo de planificador global
         Node(
             package='navigation_system',

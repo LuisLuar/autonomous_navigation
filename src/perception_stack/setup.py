@@ -39,7 +39,12 @@ setup(
             'detector_senaletica = object_detection.detector_senaletica:main',
             'lane_model_estimator = semantic_segmentation.lane_model_estimator:main',
             'lane_model_tracking = semantic_segmentation.lane_model_tracking:main',
-            'inverse_IPM = perception_stack.inverse_IPM:main'
+            'inverse_IPM = perception_stack.inverse_IPM:main',
+            'visualizer_jetson = perception_stack.visualizer_jetson:main',
+            'lane_data_logger = semantic_segmentation.lane_data_logger:main',
+            'lane_onnx_node = semantic_segmentation.lane_onnx_node:main',
+            'smoke = object_detection.smoke:main',
+            'inverse_IPM_CL = perception_stack.inverse_IPM_CL:main',
             
         ],
     },

@@ -4,7 +4,7 @@ from rclpy.node import Node
 import cv2
 import numpy as np
 from sensor_msgs.msg import Image, CompressedImage
-from custom_interfaces.msg import SegmentationData, ObjectInfoArray
+from custom_interfaces.msg import SegmentationData, DetectionArray, Detection
 from cv_bridge import CvBridge
 import time
 from collections import defaultdict
@@ -16,447 +16,174 @@ class CombinedVisualizerNode(Node):
         
         self.bridge = CvBridge()
         
-        # Configuración de segmentación
-        self.seg_colors = {
-            0: [0, 0, 0],        # Negro - Fondo
-            1: [0, 200, 0],      # Verde - Área transitable
-            2: [0, 255, 255]     # Amarillo - Carriles
-        }
-        self.seg_alpha = 0.3
-        
-        # Configuración de objetos
+        # Colores para Tracking (Inyectado)
         self.class_colors = {
-            'person': (0, 220, 255),      # Amarillo
-            'car': (0, 127, 255),         # Naranja
-            'bicycle': (255, 191, 0),     # Azul claro
-            'motorcycle': (255, 64, 0),   # Azul
-            'bus': (0, 0, 255),           # Rojo
-            'truck': (0, 0, 255),         # Rojo
+            0: (255, 0, 0),     #0: person - Azul
+            1: (0, 255, 0),     #1: bicycle - Verde
+            2: (0, 0, 255),     #2: car - Rojo
+            3: (255, 255, 0),   #3: motorcycle - Cyan
+            4: (255, 0, 255),   #4: bus - Magenta
+            5: (0, 255, 255),   #5: truck - Amarillo
+            6: (128, 0, 128),   #6: speed_bump - Púrpura
+            7: (255, 128, 0),   #7: crosswalk - Naranja
+            8: (0, 128, 255),   #8: speed_bump_signage - Azul claro
+            9: (128, 128, 0)    #9: crosswalk_signage - Verde oliva
         }
-        
+
+     
+     
+
         # Buffers
         self.current_image = None
-        self.current_objects = None
+        self.current_detections = None # Buffer para tracking
         self.last_fps_time = time.time()
         self.frame_count = 0
         
-        # Tracks para trayectorias simples
-        self.trajectories = defaultdict(list)
-        self.max_trajectory_points = 10
-        
-        # CAMBIADO: Configurar QoS Best Effort para que coincida con el publicador
         best_effort_qos = rclpy.qos.QoSProfile(
             reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
             durability=rclpy.qos.DurabilityPolicy.VOLATILE,
             depth=1
         )
         
-        # Suscripciones con QoS Best Effort para la imagen comprimida
+        # --- TUS SUSCRIPCIONES ORIGINALES ---
         self.image_sub = self.create_subscription(
-            CompressedImage, 
-            '/image_raw/compressed', 
-            self.image_callback, 
-            best_effort_qos  # Usar QoS Best Effort
-        )
+            CompressedImage, '/image_raw/compressed', self.image_callback, best_effort_qos)
         
-        self.objects_sub = self.create_subscription(
-            ObjectInfoArray, '/objects/fused_info', self.objects_callback, 10
-        )
-
         self.pixels_sub = self.create_subscription(
-            PixelPoint,  
-            '/lane/ipm_inverse_pixel_points',#'/lane/ipm_inverse_pixel_points',
-            self.pixels_centerline_callback,
-            10
-        )
+            PixelPoint, '/lane/ipm_inverse_CL', self.pixels_centerline_callback, 10)
 
-        #self.pixels_lane_sub = self.create_subscription(PixelPoint,  '/segmentation_data', self.pixels_lane_callback,10)
-        # Variable para guardar los píxeles
-        self.current_centerline_pixels = None  # Será una lista de tuplas (u, v)
-        self.current_lane_pixels = None  # Será una lista de tuplas (u, v)
+        self.pixels_lane_sub = self.create_subscription(
+            PixelPoint, '/segmentation_data', self.pixels_lane_callback, 10)
         
+        self.lane_selection_sub = self.create_subscription(
+            PixelPoint, '/lane/ipm_inverse_pixel_points', self.lane_selection_callback, 10)
         
-        # Publicador único
+        # --- NUEVA SUSCRIPCIÓN TRACKING (Sin dañar el resto) ---
+        self.det_sub = self.create_subscription(
+            DetectionArray, '/detection/results', self.detections_callback, 10)
+
+        self.current_centerline_pixels = None
+        self.current_lane_pixels = None
+        self.current_lane_selection_pixels = None
+        
         self.viz_pub = self.create_publisher(Image, '/debug/camera_front', 10)
-        
-        self.get_logger().info("Visualizador combinado inicializado (usando imagen comprimida con QoS Best Effort)")
-    
+        self.get_logger().info("Visualizador combinado con Tracking inyectado listo")
+
+    def detections_callback(self, msg):
+        self.current_detections = msg.detections
+
     def image_callback(self, msg):
-        """Recibe imagen comprimida de cámara"""
         try:
-            # Decodificar imagen comprimida
             np_arr = np.frombuffer(msg.data, np.uint8)
             self.current_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             self.process_and_publish()
         except Exception as e:
-            self.get_logger().error(f"Error procesando imagen comprimida: {e}", throttle_duration_sec=5.0)
-    
-    
-    def objects_callback(self, msg):
-        """Recibe objetos detectados"""
-        self.current_objects = msg
-        self.process_and_publish()
-    
+            self.get_logger().error(f"Error imagen: {e}")
+
     def pixels_centerline_callback(self, msg):
-        """Recibe píxeles del centerline"""
-        if len(msg.u) == 0:
-            self.current_centerline_pixels = None
-            return
-        
-        # Convertir a lista de tuplas (u, v)
-        self.current_centerline_pixels = list(zip(msg.u, msg.v))
-        self.process_and_publish()
+        if len(msg.u) == 0: self.current_centerline_pixels = None
+        else: self.current_centerline_pixels = list(zip(msg.u, msg.v))
 
     def pixels_lane_callback(self, msg):
-        """Recibe píxeles de candidatos a carril"""
-        if len(msg.u) == 0:
-            self.current_lane_pixels = None
-            return
-        
-        # Convertir a lista de tuplas (u, v)
-        self.current_lane_pixels = list(zip(msg.u, msg.v))
-        self.process_and_publish()
+        if len(msg.u) == 0: self.current_lane_pixels = None
+        else: self.current_lane_pixels = list(zip(msg.u, msg.v))
     
+    def lane_selection_callback(self, msg):
+        if len(msg.u) == 0: self.current_lane_selection_pixels = None
+        else: self.current_lane_selection_pixels = list(zip(msg.u, msg.v))
+
     def process_and_publish(self):
-        """Procesa y publica la imagen combinada"""
-        if self.current_image is None:
-            return
+        if self.current_image is None: return
         
         try:
-            # Crear copia para visualización
             display_image = self.current_image.copy()
-            height, width = display_image.shape[:2]
             
-            # 2. Dibujar objetos (si existen)
-            if self.current_objects is not None:
-                display_image = self.draw_objects(display_image)
+            # 1. TU DIBUJO DE CARRIL ORIGINAL (INTACTO)
+            if self.current_lane_selection_pixels is not None:
+                display_image = self.draw_lane_selection_overlay(display_image)
             
-            # 3. Dibujar píxeles del lane(si existen)
-            #if self.current_lane_pixels is not None:
-                #display_image = self.draw_pixels(display_image, self.current_lane_pixels, (0, 255, 0)) # RGB:
-            
-            # 3. Dibujar píxeles del centerline (si existen)
+            # 2. TUS PÍXELES ORIGINALES
+            if self.current_lane_pixels is not None:
+                display_image = self.draw_pixels(display_image, self.current_lane_pixels, (0, 255, 0))
             if self.current_centerline_pixels is not None:
-                display_image = self.draw_pixels(display_image,self.current_centerline_pixels , (255, 0, 255)) # RGB:
+                display_image = self.draw_pixels(display_image, self.current_centerline_pixels, (255, 0, 255))
 
-            # 4. Añadir información de estado
-            #display_image = self.add_status_overlay(display_image)
-            
-            # 5. Calcular y mostrar FPS
-            #display_image = self.add_fps_display(display_image)
-            
-            # Publicar
+            # 3. NUEVO: CAPA DE TRACKING (Inyectada al final)
+            if self.current_detections is not None:
+                for det in self.current_detections:
+                    color = self.class_colors.get(det.class_id, (255, 255, 255))
+                    # Dibujar Bbox
+                    cv2.rectangle(display_image, (det.u1, det.v1), (det.u2, det.v2), color, 2)
+                    # Etiqueta ID
+                    label = f"ID:{det.track_id}"
+                    cv2.putText(display_image, label, (det.u1, det.v1 - 10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
             viz_msg = self.bridge.cv2_to_imgmsg(display_image, 'bgr8')
             viz_msg.header.stamp = self.get_clock().now().to_msg()
             self.viz_pub.publish(viz_msg)
-            
-            # Actualizar FPS
             self.update_fps()
             
         except Exception as e:
-            self.get_logger().error(f"Error en visualización: {e}", throttle_duration_sec=5.0)
-    
-    def draw_objects(self, image):
-        """Dibujar objetos detectados"""
+            self.get_logger().error(f"Error en visualización: {e}")
+
+    # --- TU FUNCIÓN ORIGINAL INTACTA ---
+    def draw_lane_selection_overlay(self, image):
+        if self.current_lane_selection_pixels is None or len(self.current_lane_selection_pixels) < 2:
+            return image
         height, width = image.shape[:2]
-        
-        for obj in self.current_objects.objects:
-            # Coordenadas del bounding box
-            x1, y1, x2, y2 = obj.x1, obj.y1, obj.x2, obj.y2
-            
-            # Validar coordenadas
-            if x1 >= x2 or y1 >= y2 or x2 > width or y2 > height:
-                continue
-            
-            # Obtener color según clase
-            color = self.get_object_color(obj.class_name, obj.track_id)
-            
-            # Dibujar bounding box
-            thickness = 2 if obj.track_id > 0 else 1
-            cv2.rectangle(image, (x1, y1), (x2, y2), color, thickness)
-            
-            # Centro del objeto
-            center_x = int(obj.center_x)
-            center_y = int(obj.center_y)
-            cv2.circle(image, (center_x, center_y), 2, color, -1)
-            
-            # Etiqueta simplificada
-            label = self.get_object_label(obj)
-            if label:
-                # Fondo para texto
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                font_scale = 0.5
-                thickness = 1
-                
-                (tw, th), _ = cv2.getTextSize(label, font, font_scale, thickness)
-                label_y = max(y1 - 3, th + 3)
-                label_x = max(x1, 5)
-                
-                if label_x + tw + 6 < width:
-                    cv2.rectangle(
-                        image,
-                        (label_x - 2, label_y - th - 2),
-                        (label_x + tw + 2, label_y + 2),
-                        color,
-                        -1
-                    )
-                    
-                    cv2.putText(
-                        image,
-                        label,
-                        (label_x, label_y),
-                        font,
-                        font_scale,
-                        (255, 255, 255),
-                        thickness,
-                        cv2.LINE_AA
-                    )
-            
-            # Actualizar trayectoria si tiene track_id
-            if obj.track_id > 0:
-                self.update_trajectory(obj.track_id, center_x, center_y)
-        
-        # Dibujar trayectorias
-        image = self.draw_trajectories(image)
-        
+        points_by_v = defaultdict(list)
+        for u, v in self.current_lane_selection_pixels:
+            v_int, u_int = int(v), int(u)
+            if 0 <= v_int < height:
+                u_clamped = max(0, min(u_int, width - 1))
+                points_by_v[v_int].append(u_clamped)
+        if not points_by_v: return image
+        sorted_vs = sorted(points_by_v.keys())
+        min_v_detected = sorted_vs[0]
+        left_side, right_side = [], []
+        last_min_u = min(points_by_v[min_v_detected])
+        last_max_u = max(points_by_v[min_v_detected])
+        for v in range(min_v_detected, height):
+            if v in points_by_v:
+                curr_min, curr_max = min(points_by_v[v]), max(points_by_v[v])
+                if last_min_u <= 1: curr_min = 0
+                if last_max_u >= width - 2: curr_max = width - 1
+                last_min_u, last_max_u = curr_min, curr_max
+            else:
+                if last_min_u < 15: last_min_u = 0
+                if last_max_u > width - 15: last_max_u = width - 1
+            left_side.append([last_min_u, v])
+            right_side.append([last_max_u, v])
+        polygon_points = np.array(left_side + right_side[::-1], dtype=np.int32)
+        cv2.fillPoly(image, [polygon_points], (235, 183, 0)) 
         return image
     
+    # --- TU FUNCIÓN ORIGINAL INTACTA ---
     def draw_pixels(self, image, pixels, color=(255, 255, 0)):
-        """Método más rápido: asignación directa de píxeles"""
-        if self.current_centerline_pixels is None or len(self.current_centerline_pixels) == 0:
-            return image
-        
-        r, g, b = color
-        pixel_color = (b, g, r)
-        
-        # Asignación directa - ultra rápida
+        if pixels is None or len(pixels) == 0: return image
+        pixel_color = (color[2], color[1], color[0])
         for u, v in pixels:
             x, y = int(u), int(v)
             if 0 <= x < image.shape[1] and 0 <= y < image.shape[0]:
-                #image[y, x] = pixel_color  # Asignación directa, sin funciones OpenCV
-                cv2.circle(image, (x, y), 3, pixel_color, -1)  # Círculo relleno
-        
-        return image
-
-    def get_object_color(self, class_name, track_id=0):
-        """Obtener color para un objeto"""
-        class_lower = class_name.lower()
-        
-        # Buscar color por clase
-        for key, color in self.class_colors.items():
-            if key in class_lower:
-                base_color = color
-                break
-        else:
-            # Color por defecto basado en hash
-            h = hash(class_lower) & 0xFF
-            base_color = (h % 200, (h * 37) % 200, (h * 73) % 200)
-        
-        # Variar color si tiene track_id
-        if track_id > 0:
-            variation = track_id % 3
-            if variation == 1:
-                return (min(255, base_color[0] + 50), base_color[1], base_color[2])
-            elif variation == 2:
-                return (base_color[0], min(255, base_color[1] + 50), base_color[2])
-        
-        return base_color
-    
-    def get_object_label(self, obj):
-        """Crear etiqueta simplificada para objeto"""
-        parts = []
-        
-        # Nombre de clase abreviado
-        class_name = obj.class_name
-        if len(class_name) > 8:
-            class_name = class_name[:6] + ".."
-        parts.append(class_name)
-        
-        # ID de track si existe
-        if obj.track_id > 0:
-            parts.append(f"#{obj.track_id}")
-        
-        # Confianza si es alta
-        if obj.confidence > 0.7:
-            parts.append(f"{int(obj.confidence * 100)}%")
-        
-        # Distancia si está disponible
-        if obj.distance_valid and obj.distance > 0:
-            parts.append(f"{obj.distance:.1f}m")
-        
-        return " ".join(parts)
-    
-    def update_trajectory(self, track_id, x, y):
-        """Actualizar trayectoria de un objeto"""
-        if track_id in self.trajectories:
-            self.trajectories[track_id].append((x, y))
-            if len(self.trajectories[track_id]) > self.max_trajectory_points:
-                self.trajectories[track_id].pop(0)
-        else:
-            self.trajectories[track_id] = [(x, y)]
-        
-        # Limpiar trayectorias antiguas
-        if len(self.trajectories) > 20:
-            # Mantener solo los 15 tracks más recientes
-            keys = list(self.trajectories.keys())
-            if len(keys) > 15:
-                for key in keys[:-15]:
-                    del self.trajectories[key]
-    
-    def draw_trajectories(self, image):
-        """Dibujar trayectorias de objetos trackeados"""
-        for track_id, points in self.trajectories.items():
-            if len(points) < 2:
-                continue
-            
-            # Obtener color para este track
-            color = self.get_object_color("car", track_id)
-            
-            # Dibujar línea conectando puntos
-            for i in range(len(points) - 1):
-                pt1 = (int(points[i][0]), int(points[i][1]))
-                pt2 = (int(points[i+1][0]), int(points[i+1][1]))
-                cv2.line(image, pt1, pt2, color, 1, cv2.LINE_AA)
-        
-        return image
-    
-    def add_status_overlay(self, image):
-        """Añadir información de estado"""
-        height, width = image.shape[:2]
-        
-        # Fondo para texto
-        overlay = image.copy()
-        cv2.rectangle(overlay, (10, 10), (300, 110), (0, 0, 0), -1)
-        image = cv2.addWeighted(overlay, 0.6, image, 0.4, 0)
-        
-        # Texto
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.6
-        thickness = 1
-        y_pos = 35
-        line_spacing = 25
-        
-        # Título
-        cv2.putText(
-            image,
-            "CAMERA FRONT",
-            (20, y_pos),
-            font,
-            font_scale,
-            (255, 255, 255),
-            thickness + 1
-        )
-        
-        # Información de segmentación
-        if self.current_seg_mask is not None:
-            total_pixels = self.current_seg_mask.size
-            drivable_pct = (np.sum(self.current_seg_mask == 1) / total_pixels) * 100
-            lane_pct = (np.sum(self.current_seg_mask == 2) / total_pixels) * 100
-            
-            cv2.putText(
-                image,
-                f"Drivable: {drivable_pct:.1f}%",
-                (20, y_pos + line_spacing),
-                font,
-                font_scale * 0.8,
-                (0, 255, 0),
-                thickness
-            )
-            
-            cv2.putText(
-                image,
-                f"Lanes: {lane_pct:.1f}%",
-                (20, y_pos + 2 * line_spacing),
-                font,
-                font_scale * 0.8,
-                (0, 255, 255),
-                thickness
-            )
-        
-        # Información de objetos
-        if self.current_objects is not None:
-            obj_count = len(self.current_objects.objects)
-            track_count = len(set(obj.track_id for obj in self.current_objects.objects if obj.track_id > 0))
-            
-            cv2.putText(
-                image,
-                f"Objects: {obj_count} (Tracks: {track_count})",
-                (20, y_pos + 3 * line_spacing),
-                font,
-                font_scale * 0.8,
-                (255, 200, 0),
-                thickness
-            )
-        
-        return image
-    
-    def add_fps_display(self, image):
-        """Añadir display de FPS"""
-        # Calcular FPS aproximado
-        current_time = time.time()
-        elapsed = current_time - self.last_fps_time
-        fps = self.frame_count / elapsed if elapsed > 0 else 0
-        
-        # Mostrar en esquina inferior derecha
-        fps_text = f"FPS: {fps:.1f}"
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.7
-        thickness = 1
-        
-        (tw, th), _ = cv2.getTextSize(fps_text, font, font_scale, thickness)
-        pos_x = image.shape[1] - tw - 20
-        pos_y = image.shape[0] - 10
-        
-        # Fondo
-        cv2.rectangle(
-            image,
-            (pos_x - 5, pos_y - th - 5),
-            (pos_x + tw + 5, pos_y + 5),
-            (0, 0, 0),
-            -1
-        )
-        
-        # Texto
-        cv2.putText(
-            image,
-            fps_text,
-            (pos_x, pos_y),
-            font,
-            font_scale,
-            (0, 255, 255),
-            thickness + 1
-        )
-        
+                cv2.circle(image, (x, y), 3, pixel_color, -1)
         return image
     
     def update_fps(self):
-        """Actualizar contador de FPS"""
         self.frame_count += 1
-        current_time = time.time()
-        if current_time - self.last_fps_time >= 2.0:
+        curr = time.time()
+        if curr - self.last_fps_time >= 2.0:
             self.frame_count = 0
-            self.last_fps_time = current_time
-    
-    def destroy_node(self):
-        """Cleanup"""
-        super().destroy_node()
-
+            self.last_fps_time = curr
 
 def main(args=None):
     rclpy.init(args=args)
     node = CombinedVisualizerNode()
-    
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        node.get_logger().info("Visualizador detenido por usuario")
+    try: rclpy.spin(node)
+    except KeyboardInterrupt: pass
     finally:
-        try:
-            node.destroy_node()
-            rclpy.shutdown()
-        except:
-            pass
-
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

@@ -22,9 +22,6 @@ def generate_launch_description():
             launch_arguments={}.items()
         ), 
 
-    ])
-
-""" 
         #Nodo auxiliar para combinar bits de reles
         Node(
             package='system_management',
@@ -32,11 +29,16 @@ def generate_launch_description():
             output='screen'
         ),
         
+        
+    ])
+
+""" 
         #Interfaz Grafica
         Node(
             package='system_management',
             executable='gui',
             output='screen'
         ),
+
 
 """

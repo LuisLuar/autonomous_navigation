@@ -26,11 +26,45 @@ def generate_launch_description():
             output='screen',
         ),
 
+        # ============ Speed limiter nodes =============
+        Node(
+            package='perception_stack',
+            executable='vision_speed_limiter',
+            output='screen',
+        ),
+
+        # ============ VISUALIZADORES =============
+        Node(
+            package='perception_stack',
+            executable='visualizer_camera_front',
+            output='screen',
+        ),
+
         Node(
             package='perception_stack',
             executable='inverse_IPM',
             output='screen',
         ),
+
+        Node(
+            package='perception_stack',
+            executable='inverse_IPM_CL',
+            output='screen',
+        ),
+
+        
+    ])
+
+
+
+"""          
+
+        # ===============================
+        Node(
+            package='perception_stack',
+            executable='object_to_odom',
+            output='screen',
+        ), 
 
         # =========== YOLO V11 ===========
         Node(
@@ -51,31 +85,11 @@ def generate_launch_description():
             output='screen',
         ),
 
-        # ============ Speed limiter nodes =============
         Node(
             package='perception_stack',
-            executable='vision_speed_limiter',
+            executable='object_fusion',
             output='screen',
         ),
 
-        # ============ VISUALIZADORES =============
-        Node(
-            package='perception_stack',
-            executable='visualizer_camera_front',
-            output='screen',
-        ),
-
-    ])
-
-
-
-"""          
-
-        # ===============================
-        Node(
-            package='perception_stack',
-            executable='object_to_odom',
-            output='screen',
-        ), 
     
 """

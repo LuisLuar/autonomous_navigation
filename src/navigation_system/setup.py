@@ -34,6 +34,7 @@ setup(
             'osm_limiter = local_planner.osm_limiter:main',
             'robust_controller = local_planner.robust_controller:main',
             'goal_reached = path_planner.goal_reached:main',
+            'nmpc_controller = local_planner.nmpc_controller:main',
         ],
     },
 )

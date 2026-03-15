@@ -52,9 +52,9 @@ class DataReplayer(Node):
         self.current_image_index = 0
         
         # Publicadores
-        self.odom_pub = self.create_publisher(Odometry, '/odom/microros', 10)
-        self.imu_pub = self.create_publisher(Imu, '/imu/microros', 10)
-        self.gps_pub = self.create_publisher(NavSatFix, '/gps/fix', 10)
+        self.odom_pub = self.create_publisher(Odometry, '/odom/unfiltered1', 10)
+        self.imu_pub = self.create_publisher(Imu, '/imu/unfiltered1', 10)
+        self.gps_pub = self.create_publisher(NavSatFix, '/gps/fix1', 10)
         
         # Publicador para cámara frontal (best effort)
         camera_qos = QoSProfile(

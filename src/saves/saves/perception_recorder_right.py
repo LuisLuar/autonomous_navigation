@@ -374,8 +374,8 @@ class PerceptionRightRecorder(Node):
                         'class_id': int(obj.class_id),
                         'class_name': str(obj.class_name),
                         'confidence': float(obj.confidence),
-                        'bbox': [int(obj.x1), int(obj.y1), int(obj.x2), int(obj.y2)],
-                        'center': [float(obj.center_x), float(obj.center_y)],
+                        'bbox': [int(obj.v1), int(obj.v1), int(obj.v2), int(obj.v2)],
+                        'center': [float(obj.center_u), float(obj.center_v)],
                         'position_3d': {
                             'distance': float(obj.distance),
                             'lateral_offset': float(obj.lateral_offset),

@@ -19,6 +19,10 @@ class QuadraticLaneEstimator(Node):
         self.cluster_tol = 0.4         # Aumentado un poco para curvas
         self.max_yaw_angle = 0.8       # Límite de orientación inicial
 
+        # Filtro temporal
+        self.d_lat_last = 10000
+        self.max_d_lat_change = 1.5  # Máximo cambio permitido en d_lat entre frames (en metros)
+
         # Suscripción
         self.sub = self.create_subscription(PointCloud2, '/lane/meter_candidates', self.cb_points, 10)
         
@@ -119,7 +123,7 @@ class QuadraticLaneEstimator(Node):
         elif best_r:
             self.get_logger().info(f"IZQUIERDA: NO VISTA | DERECHA:{len(best_r['pts'])} c0: {best_r['c0']:.2f} max: {max(best_r['pts'][:, 0]):.2f}")"""
 
-        if best_l and best_r and abs(best_l['c0'] - best_r['c0']) > 4.0:
+        if best_l and best_r and abs(best_l['c0'] - best_r['c0']) > 3.5:
             if abs(best_l['c0']) < abs(best_r['c0']):
                 best_r = None
             else:                
@@ -133,10 +137,27 @@ class QuadraticLaneEstimator(Node):
         c_right = self.get_rgb_uint32(0, 0, 255)
         c_center = self.get_rgb_uint32(255, 0, 0)
 
-        def add_curve_to_debug(c0, c1, c2, color):
-            # Dibujamos una curva suave de 0 a 12 metros
-            for x in np.linspace(0, 12, 30):
+        def add_curve_to_debug(c0, c1, c2, color, max_distance=50, num_points=250):
+            """
+            Dibuja una curva con más puntos cerca de la cámara.
+            
+            Args:
+                c0, c1, c2: Coeficientes de la curva
+                color: Color para el debug
+                max_distance: Distancia máxima en metros
+                num_points: Número total de puntos a generar
+            """
+            # Distribución exponencial: más puntos cerca, menos lejos
+            # Usamos logspace para crear espaciado logarítmico
+            distances = np.logspace(-2, np.log10(max_distance), num_points)
+            
+            # Filtrar distancias que nos interesan (opcional)
+            # distances = distances[distances <= max_distance]
+            
+            for x in distances:
                 y = c2*(x**2) + c1*x + c0
+                # El grosor también podría variar con la distancia si quieres
+                # thickness = max(0.01, 0.1 - x/1000)  # Más grueso cerca
                 line_debug_pts.append([float(x), float(y), 0.05, color])
 
         if best_l and best_r:
@@ -144,7 +165,16 @@ class QuadraticLaneEstimator(Node):
             out.d_lat = float((best_l['c0'] + best_r['c0']) / 2.0)
             # Promediamos el ángulo local y la curvatura para la línea central
             avg_yaw = (best_l['c1'] + best_r['c1']) / 2.0
-            avg_curv = (best_l['c2'] + best_r['c2']) / 2.0
+
+            if best_l['c2'] != 0 and best_r['c2'] != 0:
+                avg_curv = (best_l['c2'] + best_r['c2']) / 2.0
+            elif best_l['c2'] != 0:
+                avg_curv = best_l['c2']
+            elif best_r['c2'] != 0:
+                avg_curv = best_r['c2']
+            else:
+                avg_curv = 0.0
+
             out.curvature = float(2.0 * avg_curv)
             out.yaw = float(np.arctan(avg_yaw))
             out.confidence = 1.0
@@ -152,7 +182,7 @@ class QuadraticLaneEstimator(Node):
             add_curve_to_debug(best_l['c0'], best_l['c1'], best_l['c2'], c_left)
             add_curve_to_debug(best_r['c0'], best_r['c1'], best_r['c2'], c_right)
             # Línea central
-            add_curve_to_debug(out.d_lat, avg_yaw, avg_curv, c_center)
+            #add_curve_to_debug(out.d_lat, avg_yaw, avg_curv, c_center)
             
         elif best_l or best_r:
             ref = best_l if best_l else best_r
@@ -166,11 +196,29 @@ class QuadraticLaneEstimator(Node):
             color = c_left if best_l else c_right
             add_curve_to_debug(ref['c0'], ref['c1'], ref['c2'], color)
             # Línea central asumiendo misma curvatura que la única línea vista
-            add_curve_to_debug(out.d_lat, ref['c1'], ref['c2'], c_center)
+            #add_curve_to_debug(out.d_lat, ref['c1'], ref['c2'], c_center)
 
-        if out.confidence > 0:
-            self.pub_model.publish(out)
-            self.pub_debug_lines.publish(self.create_pc2_msg(msg.header, line_debug_pts))
+        else:
+            out.lane_width = self.expected_width
+            out.d_lat = float(0.0)
+            out.yaw = float(0.0)
+            out.curvature = float(0.0)
+            out.confidence = float(0.0)
+            #add_curve_to_debug(0.0, 0.0, 0.0, c_center)
+
+        if abs(out.d_lat - self.d_lat_last) > self.max_d_lat_change and self.d_lat_last!= 10000:
+            out.lane_width = self.expected_width
+            out.d_lat = float(0.0)
+            out.yaw = float(0.0)
+            out.curvature = float(0.0)
+            out.confidence = float(0.0)
+            #add_curve_to_debug(0.0, 0.0, 0.0, c_center)
+        else:
+            self.d_lat_last = out.d_lat
+
+        self.pub_model.publish(out)
+        self.pub_debug_lines.publish(self.create_pc2_msg(msg.header, line_debug_pts))
+        
 
 def main(args=None):
     rclpy.init(args=args)

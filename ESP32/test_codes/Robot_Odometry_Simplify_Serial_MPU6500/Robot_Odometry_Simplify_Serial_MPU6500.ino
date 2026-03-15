@@ -4,9 +4,7 @@
 #include <motorControl.h>
 
 #include <Wire.h>
-#include "MPU9250.h"
 
-MPU9250 mpu;
 SemaphoreHandle_t i2cMutex;
 
 //___________ENCODER DERECHO_____________
@@ -86,7 +84,7 @@ void recibirDatos();
 void setup() {
   i2cMutex = xSemaphoreCreateMutex();
 
-  Serial.begin(115200);
+  Serial.begin(230400);
   analogReadResolution(12);
   pinMode(led_error, OUTPUT);
   digitalWrite(led_error, HIGH);
@@ -141,8 +139,6 @@ void loop() {
       lastTime_enc = millis();
       encoderPID();
   }
-
-
 }
 
 void ControlLoop(void *parameter) {
@@ -152,9 +148,7 @@ void ControlLoop(void *parameter) {
   while (1) {
     
     if (xSemaphoreTake(i2cMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-      if (mpu.update()) {
         IMU_update();
-      }
       xSemaphoreGive(i2cMutex); // Soltar el bus
     }
 
@@ -164,8 +158,5 @@ void ControlLoop(void *parameter) {
       recibirDatos();
     }
     vTaskDelay(1);
-
-
-
   }
 }

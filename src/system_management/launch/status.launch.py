@@ -11,11 +11,15 @@ def generate_launch_description():
             output='screen'
         ),
 
-        
-
         Node(
             package='system_management',
             executable='system_health',
+            output='screen'
+        ),
+
+        Node(
+            package='system_management',
+            executable='VC_supervisor',
             output='screen'
         ),
         
@@ -48,11 +52,7 @@ def generate_launch_description():
             output='screen'
         ),
 
-        Node(
-            package='system_management',
-            executable='VC_supervisor',
-            output='screen'
-        ),
+        
 
         Node(
             package='system_management',

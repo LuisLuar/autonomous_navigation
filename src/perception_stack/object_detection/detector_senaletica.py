@@ -123,9 +123,9 @@ class YoloDetectorNode(Node):
                     det.class_id = int(boxes.cls[i])
                     det.class_name = self.class_names.get(det.class_id, f"class_{det.class_id}")
                     det.confidence = float(boxes.conf[i])
-                    det.x1, det.y1, det.x2, det.y2 = map(int, xyxy)
-                    det.center_x = float((xyxy[0] + xyxy[2]) / 2.0)
-                    det.center_y = float((xyxy[1] + xyxy[3]) / 2.0)
+                    det.u1, det.v1, det.u2, det.v2 = map(int, xyxy)
+                    det.center_u = float((xyxy[0] + xyxy[2]) / 2.0)
+                    det.center_v = float((xyxy[1] + xyxy[3]) / 2.0)
                     
                     if self.use_tracking and has_tracking_ids:
                         det.track_id = int(boxes.id[i])

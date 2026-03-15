@@ -4,6 +4,7 @@ float voltage = 0.0;
 void setup() {
   Serial.begin(115200);
   analogReadResolution(12);  // Configura ADC de 12 bits
+  analogSetPinAttenuation(SENSOR_PIN, ADC_11db);
   delay(1000);
   Serial.println("Lectura de voltaje con sensor FZ0430 iniciada...");
 }
