@@ -50,6 +50,7 @@ message(STATUS ">>> TensorRT Plugins: ${NVINFER_PLUGIN_LIB}")
 # 4. Ejecutables
 add_executable(camera_node src/camera/camera.cpp)
 add_executable(segmenter_node src/camera/segmenter.cpp)
+add_executable(segmenter_twin_node src/camera/segmenter_twin.cpp)
 add_executable(detect_node src/camera/detect.cpp)
 add_executable(extractor_node src/camera/extractor.cpp)
 add_executable(segmenter_to_meter src/camera/segmenter_to_meter.cpp)
@@ -72,6 +73,14 @@ ament_target_dependencies(segmenter_node
   OpenCV
 )
 
+ament_target_dependencies(segmenter_twin_node
+  rclcpp
+  sensor_msgs
+  cv_bridge
+  custom_interfaces
+  OpenCV
+)
+
 # Detectr_node - dependencias base de ROS
 ament_target_dependencies(detect_node
   rclcpp
@@ -87,6 +96,11 @@ target_include_directories(segmenter_node PRIVATE
   /usr/include/x86_64-linux-gnu
 )
 
+target_include_directories(segmenter_twin_node PRIVATE 
+  ${CUDAToolkit_INCLUDE_DIRS}
+  /usr/include/x86_64-linux-gnu
+)
+
 # Enlace de librerías: Agregamos TENSORRT_LIBS (que ya tiene los plugins)
 target_link_libraries(segmenter_node
   ${TENSORRT_LIBS}
@@ -95,6 +109,15 @@ target_link_libraries(segmenter_node
   dl
   pthread
 )
+
+target_link_libraries(segmenter_twin_node
+  ${TENSORRT_LIBS}
+  CUDA::cudart
+  ${OpenCV_LIBRARIES}
+  dl
+  pthread
+)
+
 
 # 6. CONFIGURACIÓN ESPECÍFICA PARA EL SEGMENTADOR (TensorRT + CUDA)
 target_include_directories(detect_node PRIVATE 
@@ -138,6 +161,7 @@ target_link_libraries(object_to_meter nlohmann_json::nlohmann_json)
 install(TARGETS
   camera_node
   segmenter_node
+  segmenter_twin_node
   detect_node
   extractor_node
   segmenter_to_meter

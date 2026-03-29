@@ -26,7 +26,20 @@ public:
         cudaMallocHost((void**)&input_buffer_, 3 * input_h_ * input_w_ * sizeof(float));
         cudaMallocHost((void**)&output_buffer_, input_h_ * input_w_ * sizeof(float));
 
-        load_engine("/home/raynel/autonomous_navigation/src/perception_stack/semantic_segmentation/pretrained/yolopv2_lane_288_OMEN_TRT10.engine");
+        // 1. Declarar el parámetro con un valor por defecto (opcional)
+        this->declare_parameter<std::string>("engine_path", "");
+        
+        // 2. Obtener el valor del parámetro
+        std::string engine_path = this->get_parameter("engine_path").as_string();
+
+        //load_engine("/home/raynel/autonomous_navigation/src/params/yolopv2_lane_288_OMEN_TRT10.engine");
+        // 3. Usar la variable en lugar de la ruta estática
+        if (engine_path.empty()) {
+            RCLCPP_ERROR(this->get_logger(), " No se proporcionó ruta del engine. Usa el parámetro 'engine_path'");
+        } else {
+            load_engine(engine_path);
+        }
+        
 
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
         subscription_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(

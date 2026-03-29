@@ -13,7 +13,7 @@ using json = nlohmann::json;
 class CameraNode : public rclcpp::Node {
 public:
     CameraNode() : Node("camera_node"), running_(true) {
-        setup_undistortion("/home/raynel/autonomous_navigation/src/perception_stack/params/camera_calibration.json");
+        setup_undistortion("/home/raynel/autonomous_navigation/src/params/camera_calibration.json");
         
         auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
         publisher_ = this->create_publisher<sensor_msgs::msg::CompressedImage>("/image_raw/compressed", qos);

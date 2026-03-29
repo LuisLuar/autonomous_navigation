@@ -40,7 +40,7 @@ class SmokeNode(Node):
         super().__init__('smoke_node')
         
         # 1. Cargar Calibración ORIGINAL (Sin escalar manualmente)
-        calib_path = "/home/raynel/autonomous_navigation/src/perception_stack/params/camera_calibration.json"
+        calib_path = "/home/raynel/autonomous_navigation/src/params/camera_calibration.json"
         with open(calib_path, 'r') as f:
             calib_data = json.load(f)
         

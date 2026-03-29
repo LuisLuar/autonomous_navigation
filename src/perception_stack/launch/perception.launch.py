@@ -26,13 +26,6 @@ def generate_launch_description():
             output='screen',
         ),
 
-        # ============ Speed limiter nodes =============
-        Node(
-            package='perception_stack',
-            executable='vision_speed_limiter',
-            output='screen',
-        ),
-
         # ============ VISUALIZADORES =============
         Node(
             package='perception_stack',

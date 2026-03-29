@@ -4,7 +4,7 @@ from rclpy.node import Node
 import cv2
 import numpy as np
 from sensor_msgs.msg import Image
-from custom_interfaces.msg import PixelPoint, ObjectInfoArray
+from custom_interfaces.msg import PixelPoint
 from cv_bridge import CvBridge
 import time
 

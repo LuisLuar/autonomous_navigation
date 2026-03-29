@@ -21,11 +21,7 @@ def generate_launch_description():
             output='screen',
         ),
 
-        Node(
-            package='saves',
-            executable='path_global_recorder',
-            output='screen',
-        ),
+        
 
         Node(
             package='saves',
@@ -58,6 +54,12 @@ def generate_launch_description():
         Node(
             package='saves',
             executable='perception_recorder_right',
+            output='screen',
+        ),
+
+        Node(
+            package='saves',
+            executable='path_global_recorder',
             output='screen',
         ),
 """

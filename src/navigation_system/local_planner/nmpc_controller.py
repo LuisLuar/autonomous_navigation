@@ -5,7 +5,7 @@ import numpy as np
 import casadi as ca
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float32
 from custom_interfaces.msg import LaneModel
 
 class LaneControllerNMPC(Node):
@@ -13,53 +13,38 @@ class LaneControllerNMPC(Node):
     def __init__(self):
         super().__init__('lane_controller_nmpc')
 
-        # ================= NMPC =================
-        # N: si reacciona tarde en curvas -> aumentar
-        # dt: si vibra o es inestable -> bajar ligeramente
-        # v_ref: velocidad crucero en rectas
+        # Declarar y obtener parámetros del YAML
+        # Si no existen en el YAML, tomarán el valor por defecto (segundo argumento)
+        self.N = self.declare_parameter('N', 10).value
+        self.dt = self.declare_parameter('dt', 0.1).value
+        self.v_ref = self.declare_parameter('v_ref', 1.5).value
+        self.k_curve = self.declare_parameter('k_curve', 2.5).value
 
-        self.N = 10
-        self.dt = 0.1
-        self.v_ref = 1.5
+        self.Q_ey = self.declare_parameter('Q_ey', 10.0).value
+        self.Q_epsi = self.declare_parameter('Q_epsi', 12.5).value
+        self.R_accel = self.declare_parameter('R_accel', 1.0).value
+        self.R_omega = self.declare_parameter('R_omega', 2.5).value
+        self.S_accel = self.declare_parameter('S_accel', 2.0).value
+        self.S_omega = self.declare_parameter('S_omega', 3.0).value
+        self.W_v_follow = self.declare_parameter('W_v_follow', 5.0).value
+        self.Q_terminal = self.declare_parameter('Q_terminal', 15.0).value
 
-        # ================= PESOS =================
-        # Q_ey: subir si se abre en curvas / bajar si oscila lateralmente
-        self.Q_ey = 10.0
-
-        # Q_epsi: subir si entra torcido a curvas / bajar si gira demasiado agresivo
-        self.Q_epsi = 12.5
-
-        # R_accel: subir si acelera/frena brusco
-        self.R_accel = 1.0
-
-        # R_omega: subir si satura mucho ω / bajar si no gira suficiente
-        self.R_omega = 2.5
-
-        # S_accel: subir si hay tirones entre pasos (jerk longitudinal)
-        self.S_accel = 2.0
-
-        # S_omega: subir si vibra el giro / bajar si responde lento
-        self.S_omega = 3.0
-
-        # W_v_follow: subir si entra muy rápido en curvas
-        self.W_v_follow = 5.0
-
-        # Q_terminal: subir si corrige muy tarde dentro del horizonte
-        self.Q_terminal = 15.0
-
-        # Límites físicos
+        # Límites físicos 
         self.declare_parameter('max_lin_accel', 0.05)
         self.declare_parameter('max_lin_decel', 0.5)
         self.declare_parameter('v_max', 1.7)
         self.declare_parameter('w_max', 0.6)
-        self.declare_parameter('min_v_start', 0.1) #para evitar que el robot se quede atascado al iniciar desde parado
-        self.declare_parameter('max_v_start', 0.2) #para evitar que el robot gire bruscamente al iniciar desde parado
+        self.declare_parameter('min_v_start', 0.1)
+        self.declare_parameter('max_v_start', 0.2)
 
         # Subs/Pubs
         self.create_subscription(LaneModel, '/lane/model_filtered', self.lane_cb, 10)
         self.create_subscription(Odometry, '/odometry/local', self.odom_cb, 10)
         self.create_subscription(Bool, '/emergency', self.emergency_cb, 10)
+        self.create_subscription(Float32, '/alpha/vision', self.vision_alpha_cb, 10)
         self.pub_cmd = self.create_publisher(Twist, '/cmd_vel', 10)
+
+        self.alpha_vision = 1.0
 
         # Estado [ey, epsi, v]
         self.state = np.zeros(3)
@@ -71,6 +56,10 @@ class LaneControllerNMPC(Node):
 
         self.setup_nmpc()
         self.create_timer(0.033, self.control_loop)
+    
+    # ============ CONTROL DE VELOCIDAD LINEAL POR DETECCION DE OBJETOS =====================
+    def vision_alpha_cb(self, msg):
+        self.alpha_vision = msg.data
 
     # ============================================================
     # SETUP NMPC
@@ -95,8 +84,8 @@ class LaneControllerNMPC(Node):
         U = ca.SX.sym('U', nu, self.N)
         X = ca.SX.sym('X', nx, self.N + 1)
 
-        # P = [ey0, epsi0, v0, kappa, u_prev_accel, u_prev_omega]
-        P = ca.SX.sym('P', nx + 1 + nu)
+        # P = [ey0, epsi0, v0, kappa, u_prev_accel, u_prev_omega, velocidad_lineal]
+        P = ca.SX.sym('P', nx + 1 + nu + 1)
 
         cost = 0
         X[:, 0] = P[0:3]
@@ -110,7 +99,8 @@ class LaneControllerNMPC(Node):
             cost += self.Q_epsi * st[1]**2
 
             # 2. Velocidad adaptativa
-            v_target = self.v_ref / (1.0 + 2.5 * ca.fabs(P[3]))
+            v_ref_dinamica = self.v_ref * P[6] 
+            v_target = v_ref_dinamica / (1.0 + self.k_curve * ca.fabs(P[3]))
             cost += self.W_v_follow * (st[2] - v_target)**2
 
             # 3. Magnitud de control
@@ -164,7 +154,8 @@ class LaneControllerNMPC(Node):
         p = np.concatenate([
             self.state,
             [self.kappa],
-            self.u_prev
+            self.u_prev,
+            [self.alpha_vision] #para velocidad lineal
         ])
 
         # Warm start simple
@@ -215,7 +206,7 @@ class LaneControllerNMPC(Node):
         v_max = self.get_parameter('v_max').value
         v_threshold = self.get_parameter('max_v_start').value
 
-        if 0.001 < v < v_min:
+        if 0.001 < v < v_min and self.alpha_vision != 0.0:
             v = v_min
 
         if v <= v_threshold:

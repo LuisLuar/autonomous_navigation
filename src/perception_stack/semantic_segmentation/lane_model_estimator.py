@@ -17,7 +17,7 @@ class QuadraticLaneEstimator(Node):
         self.expected_width = 3.0      
         self.min_points = 15           
         self.cluster_tol = 0.4         # Aumentado un poco para curvas
-        self.max_yaw_angle = 0.8       # Límite de orientación inicial
+        self.max_yaw_angle = 0.69       # Límite de orientación inicial
 
         # Filtro temporal
         self.d_lat_last = 10000
@@ -116,12 +116,14 @@ class QuadraticLaneEstimator(Node):
         best_l = min(l_cands, key=lambda x: abs(x['mean'])) if l_cands else None
         best_r = min(r_cands, key=lambda x: abs(x['mean'])) if r_cands else None
 
+        #self.get_logger().info(f"lineas: {len(candidates)}")
+
         """if best_l and best_r:
-            self.get_logger().info(f"IZQUIERDA: puntos: {len(best_l['pts'])} c0: {best_l['c0']:.2f} max: {max(best_l['pts'][:, 0]):.2f} | DERECHA:{len(best_r['pts'])} c0: {best_r['c0']:.2f} max: {max(best_r['pts'][:, 0]):.2f} | ANCHO: {abs(best_l['c0'] - best_r['c0']):.2f}")
+            self.get_logger().info(f"IZQUIERDA: puntos: {len(best_l['pts'])} c0: {best_l['c0']:.2f} c1: {best_l['c1']:.2f} | DERECHA:{len(best_r['pts'])} c0: {best_r['c0']:.2f} max: {max(best_r['pts'][:, 0]):.2f} | ANCHO: {abs(best_l['c0'] - best_r['c0']):.2f}")
         elif best_l:
-            self.get_logger().info(f"IZQUIERDA:{len(best_l['pts'])} c0: {best_l['c0']:.2f} max: {max(best_l['pts'][:, 0]):.2f} | DERECHA: NO VISTA")
+            self.get_logger().info(f"IZQUIERDA:{len(best_l['pts'])} c0: {best_l['c0']:.2f} c1: {best_l['c1']:.2f} | DERECHA: NO VISTA")
         elif best_r:
-            self.get_logger().info(f"IZQUIERDA: NO VISTA | DERECHA:{len(best_r['pts'])} c0: {best_r['c0']:.2f} max: {max(best_r['pts'][:, 0]):.2f}")"""
+            self.get_logger().info(f"IZQUIERDA: NO VISTA | DERECHA:{len(best_r['pts'])} c0: {best_r['c0']:.2f} c1: {best_r['c1']:.2f}")"""
 
         if best_l and best_r and abs(best_l['c0'] - best_r['c0']) > 3.5:
             if abs(best_l['c0']) < abs(best_r['c0']):

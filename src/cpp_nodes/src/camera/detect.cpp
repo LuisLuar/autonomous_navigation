@@ -35,7 +35,7 @@ public:
         cudaMallocHost((void**)&input_host_, 3 * input_h_ * input_w_ * sizeof(float));
         cudaMallocHost((void**)&output_host_, (4 + num_classes_) * num_anchors_ * sizeof(float));
 
-        load_engine("/home/raynel/Documents/SEGMENTACION_LIGERA/DETECCION/Robot_Perception/yolo11_robot_v12/weights/212x588_deteccion_TRT10.engine");
+        load_engine("/home/raynel/autonomous_navigation/src/params/212x588_deteccion_TRT10.engine");
 
         pub_ = create_publisher<custom_interfaces::msg::DetectionArray>("/detection/results", 10);
         sub_ = create_subscription<sensor_msgs::msg::CompressedImage>(
