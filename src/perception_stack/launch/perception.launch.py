@@ -12,17 +12,7 @@ def generate_launch_description():
             executable='visualizer_camera_front',
             output='screen',
         ),
-        
-        
 
-        
-        
-
-    ])
-
-
-
-"""       
         # ===============PAPER =============
         Node(
             package='perception_stack',
@@ -35,6 +25,20 @@ def generate_launch_description():
             executable='lane_model_tracking',
             output='screen',
         ),
+        
+        
+
+        
+        
+
+    ])
+
+
+
+"""       
+        
+
+        
 
         Node(
             package='perception_stack',

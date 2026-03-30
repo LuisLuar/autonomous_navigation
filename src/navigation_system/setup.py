@@ -30,10 +30,9 @@ setup(
         'console_scripts': [
             # Aquí registrarás tus ejecutables
             'global_planner = path_planner.global_planner:main',
-            'information_osm = path_planner.information_osm:main',
-            'osm_limiter = local_planner.osm_limiter:main',
             'robust_controller = local_planner.robust_controller:main',
             'goal_reached = path_planner.goal_reached:main',
+            'nmpc_controller = local_planner.nmpc_controller:main',
         ],
     },
 )

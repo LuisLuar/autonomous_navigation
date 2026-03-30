@@ -32,11 +32,5 @@ def generate_launch_description():
             output='screen'
         ),
         
-        #Interfaz Grafica
-        Node(
-            package='system_management',
-            executable='gui',
-            output='screen'
-        ),
 
 """

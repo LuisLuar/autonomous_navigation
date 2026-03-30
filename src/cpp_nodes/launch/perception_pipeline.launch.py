@@ -17,9 +17,8 @@ def generate_launch_description():
     speed_yaml = os.path.join(global_params_path, 'speed_table.yaml')
 
     # Definimos la ruta del engine de TwinLite
-    twinlite_engine_path = os.path.join(global_params_path, 'twinlite_512x288_lines_chunks.engine')
-    yolopv2_engine_path = os.path.join(global_params_path, 'yolopv2_lane_288_OMEN_TRT10.engine')
-    yolov11_engine_path = os.path.join(global_params_path, 'yolopv2_lane_288_OMEN_TRT10.engine')
+    twinlite_engine_path = os.path.join(global_params_path, 'twinlite_FAST_32bit_ORIN.engine')
+    yolov11_engine_path = os.path.join(global_params_path, 'detect_yolo_512x288_ORIN.engine')
 
     return LaunchDescription([
         # 1. CAMERA NODE (Captura y Redimensión)
@@ -31,25 +30,39 @@ def generate_launch_description():
             output='screen'
         ),
 
-        # 2. SEGMENTER NODE (YOLOPv2 Inferencia)
+        # 2. SEGMENTER NODE modificado
         Node(
             package='cpp_nodes',
             executable='segmenter_node',
             name='segmenter_node',
+            parameters=[{
+                'engine_path': twinlite_engine_path
+            }],
             output='screen'
-        ),        
+        ),       
 
         # 4. IPM NODE (Transformación a Metros / PointCloud2)
         Node(
             package='cpp_nodes',
-            executable='ipm_node',
-            name='ipm_node',
+            executable='segmenter_to_meter',
+            name='segmenter_to_meter',
             parameters=[
                 {'min_distance': 0.0},
                 {'max_distance': 30.0}
             ],
             output='screen'
         ), 
+
+        # 5. DETECT NODE (YOLOv11n Inferencia)
+        Node(
+            package='cpp_nodes',
+            executable='detect_node',
+            name='detect_node',
+            parameters=[{
+                'engine_path': yolov11_engine_path
+            }],
+            output='screen'
+        ),
 
         # 5. ESP32 CONTROL NODE (Comunicación con microcontrolador)
         Node(
@@ -59,26 +72,26 @@ def generate_launch_description():
             output='screen'
         ), 
 
+        # 6. IPM NODE object (Transformación a Metros / PointCloud2)
+        Node(
+            package='cpp_nodes',
+            executable='object_to_meter',
+            name='ipm_object',
+            parameters=[
+                {'min_distance': 0.0},
+                {'max_distance': 10.0},
+                {'config_path': global_params_path},
+                speed_yaml    # La ruta del archivo va sola en la lista
+            ],
+            output='screen'
+        ), 
+
         
 
         
     ])
 
-"""
-        # 3. EXTRACTOR NODE (Puntos candidatos de carril/calzada)
-        Node(
-            package='cpp_nodes',
-            executable='extractor_node',
-            name='extractor_node',
-            parameters=[
-                {'row_step': 2},
-                {'min_width': 2},
-                {'road_kernel': 5}
-            ],
-            output='screen'
-        ),
-
-          
+"""          
 
          
         

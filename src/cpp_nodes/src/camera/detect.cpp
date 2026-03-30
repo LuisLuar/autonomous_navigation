@@ -1,5 +1,6 @@
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/compressed_image.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
 #include <NvInfer.h>
 #include <NvInferPlugin.h>
@@ -11,67 +12,52 @@
 #include "custom_interfaces/msg/detection_array.hpp"
 #include "custom_interfaces/msg/detection.hpp"
 
-struct TrackedObject {
-    int id;
-    int class_id;
-    cv::Rect bbox;
-    cv::Point2f center;
-    int lost_frames;
-};
-
 class Logger : public nvinfer1::ILogger {
     void log(Severity severity, const char* msg) noexcept override {
-        if (severity <= Severity::kWARNING) std::cout << "[TRT] " << msg << std::endl;
+        if (severity <= Severity::kWARNING)
+            std::cout << "[TRT] " << msg << std::endl;
     }
 } gLogger;
 
-class Yolo11UltraNode : public rclcpp::Node {
+struct TrackedObject {
+    int id; int class_id; cv::Rect bbox; cv::Point2f center; int lost_frames;
+};
+class YoloFinalNode : public rclcpp::Node {
 public:
-    Yolo11UltraNode() : Node("yolo11_ultra_node") {
+    YoloFinalNode() : Node("detect_node") {
+        this->declare_parameter<std::string>("engine_path", "/home/robot/Downloads/detect_yolo_512x288_ORIN.engine");
+        
+        // Parámetros de dimensiones
         input_h_ = 288; input_w_ = 512;
         num_classes_ = 10; num_anchors_ = 3024;
         conf_threshold_ = 0.35f; nms_threshold_ = 0.45f;
 
-        cudaMallocHost((void**)&input_host_, 3 * input_h_ * input_w_ * sizeof(float));
-        cudaMallocHost((void**)&output_host_, (4 + num_classes_) * num_anchors_ * sizeof(float));
+        // 1. MEMORIA PINNED (Como en la laptop)
+        cudaMallocHost((void**)&input_host_ptr_, 3 * input_h_ * input_w_ * sizeof(float));
+        cudaMallocHost((void**)&output_host_ptr_, (4 + num_classes_) * num_anchors_ * sizeof(float));
 
-        // 1. Declarar el parámetro con un valor por defecto (opcional)
-        this->declare_parameter<std::string>("engine_path", "");
-        
-        // 2. Obtener el valor del parámetro
-        std::string engine_path = this->get_parameter("engine_path").as_string();
-
-        //load_engine("/home/raynel/autonomous_navigation/src/params/twinlite_512x288_lines_chunks.engine");
-        // 3. Usar la variable en lugar de la ruta estática
-        if (engine_path.empty()) {
-            RCLCPP_ERROR(this->get_logger(), " No se proporcionó ruta del engine. Usa el parámetro 'engine_path'");
-        } else {
-            load_engine(engine_path);
-        }
-
-        //load_engine("/home/raynel/autonomous_navigation/src/params/212x588_deteccion_TRT10.engine");
+        load_engine(this->get_parameter("engine_path").as_string());
 
         pub_ = create_publisher<custom_interfaces::msg::DetectionArray>("/detection/results", 10);
-        sub_ = create_subscription<sensor_msgs::msg::CompressedImage>(
-            "/image_raw/compressed", rclcpp::QoS(1).best_effort(),
-            std::bind(&Yolo11UltraNode::callback, this, std::placeholders::_1));
-
-        RCLCPP_INFO(this->get_logger(), " YOLO11 Ultra-Industrial");
+        sub_ = create_subscription<sensor_msgs::msg::Image>(
+            "/image_raw", rclcpp::QoS(1).best_effort(),
+            std::bind(&YoloFinalNode::callback, this, std::placeholders::_1));
+        
+        //RCLCPP_INFO(this->get_logger(), " YOLO JETSON ORIN: Robustez Industrial Activa");
     }
 
-    ~Yolo11UltraNode() {
-        if (context_) delete context_; if (engine_) delete engine_; if (runtime_) delete runtime_;
+    ~YoloFinalNode() {
         cudaStreamDestroy(stream_);
         cudaFree(dev_buffers_[0]); cudaFree(dev_buffers_[1]);
-        cudaFreeHost(input_host_); cudaFreeHost(output_host_);
+        cudaFreeHost(input_host_ptr_); cudaFreeHost(output_host_ptr_);
     }
 
 private:
+    // --- TRACKING ROBUSTO ---
     std::vector<TrackedObject> active_tracks_;
     int next_id_ = 1;
-    const int MAX_LOST_FRAMES = 8;
+    const int MAX_LOST_FRAMES = 10; // Tolera 10 frames de "desaparición"
 
-    // Tracker Híbrido: IOU + Centroide
     int update_tracker(const cv::Rect& box, int class_id) {
         int best_idx = -1;
         float best_score = 0.0f;
@@ -79,11 +65,8 @@ private:
 
         for (size_t i = 0; i < active_tracks_.size(); ++i) {
             if (active_tracks_[i].class_id != class_id) continue;
-
             float iou = (float)(box & active_tracks_[i].bbox).area() / (box | active_tracks_[i].bbox).area();
             float dist = cv::norm(current_center - active_tracks_[i].center);
-            
-            // Score combinado: IOU + Proximidad inversa (normalizada)
             float score = (iou * 0.7f) + (1.0f / (1.0f + dist) * 0.3f);
 
             if (score > 0.4f && score > best_score) {
@@ -98,9 +81,8 @@ private:
             active_tracks_[best_idx].lost_frames = 0;
             return active_tracks_[best_idx].id;
         } else {
-            int id = next_id_++;
-            active_tracks_.push_back({id, class_id, box, current_center, 0});
-            return id;
+            active_tracks_.push_back({next_id_++, class_id, box, current_center, 0});
+            return active_tracks_.back().id;
         }
     }
 
@@ -108,108 +90,127 @@ private:
         std::ifstream file(path, std::ios::binary);
         file.seekg(0, file.end); size_t size = file.tellg(); file.seekg(0, file.beg);
         std::vector<char> data(size); file.read(data.data(), size);
+
         initLibNvInferPlugins(&gLogger, "");
         runtime_ = nvinfer1::createInferRuntime(gLogger);
         engine_ = runtime_->deserializeCudaEngine(data.data(), size);
         context_ = engine_->createExecutionContext();
+
         cudaMalloc(&dev_buffers_[0], 3 * input_h_ * input_w_ * sizeof(float));
         cudaMalloc(&dev_buffers_[1], (4 + num_classes_) * num_anchors_ * sizeof(float));
         cudaStreamCreate(&stream_);
+        
+        context_->setTensorAddress("images", dev_buffers_[0]);
+        context_->setTensorAddress("output0", dev_buffers_[1]);
     }
 
-    void callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg) {
-        auto t_start = std::chrono::high_resolution_clock::now();
-        cv::Mat frame = cv::imdecode(cv::Mat(msg->data), cv::IMREAD_COLOR);
+    void callback(const sensor_msgs::msg::Image::SharedPtr msg) {
+        auto t0 = std::chrono::high_resolution_clock::now();
+
+        cv::Mat frame = cv_bridge::toCvShare(msg, "bgr8")->image;
         if (frame.empty()) return;
 
-        // 1. Letterbox Centrado (Puntaje 10/10)
+        // 1. LETTERBOX
         float scale = std::min((float)input_w_ / frame.cols, (float)input_h_ / frame.rows);
-        int nw = frame.cols * scale, nh = frame.rows * scale;
-        int dx = (input_w_ - nw) / 2, dy = (input_h_ - nh) / 2;
+        int nw = frame.cols * scale; int nh = frame.rows * scale;
+        int dx = (input_w_ - nw) / 2; int dy = (input_h_ - nh) / 2;
 
-        cv::Mat canvas = cv::Mat(input_h_, input_w_, CV_8UC3, cv::Scalar(114, 114, 114));
+        cv::Mat canvas(input_h_, input_w_, CV_8UC3, cv::Scalar(114,114,114));
         cv::Mat resized; cv::resize(frame, resized, cv::Size(nw, nh));
         resized.copyTo(canvas(cv::Rect(dx, dy, nw, nh)));
 
-        // 2. Pre-proceso Vectorizado (Sin cv::split, más rápido)
-        float* ptr = input_host_;
-        for (int c = 2; c >= 0; --c) { // BGR to RGB bypass manual
+        // 2. PRE-PROCESO (Como en la laptop: Rápido y sin split)
+        float* ptr = input_host_ptr_;
+        for (int c = 2; c >= 0; --c) { // BGR a RGB y Normalización en un solo paso
             for (int i = 0; i < input_h_; ++i) {
+                uchar* row_ptr = canvas.ptr<uchar>(i);
                 for (int j = 0; j < input_w_; ++j) {
-                    *ptr++ = canvas.ptr<uchar>(i)[j * 3 + c] / 255.0f;
+                    *ptr++ = row_ptr[j * 3 + c] / 255.0f;
                 }
             }
         }
 
-        // 3. Inferencia
-        cudaMemcpyAsync(dev_buffers_[0], input_host_, 3*input_h_*input_w_*sizeof(float), cudaMemcpyHostToDevice, stream_);
-        context_->setTensorAddress("images", dev_buffers_[0]);
-        context_->setTensorAddress("output0", dev_buffers_[1]);
+        // 3. INFERENCIA
+        cudaMemcpyAsync(dev_buffers_[0], input_host_ptr_, 3 * input_h_ * input_w_ * sizeof(float), cudaMemcpyHostToDevice, stream_);
         context_->enqueueV3(stream_);
-        cudaMemcpyAsync(output_host_, dev_buffers_[1], (4+num_classes_)*num_anchors_*sizeof(float), cudaMemcpyDeviceToHost, stream_);
+        cudaMemcpyAsync(output_host_ptr_, dev_buffers_[1], (4 + num_classes_) * num_anchors_ * sizeof(float), cudaMemcpyDeviceToHost, stream_);
         cudaStreamSynchronize(stream_);
 
-        // 4. Post-proceso con Clamping & Reservación
-        std::vector<cv::Rect> bboxes; bboxes.reserve(100);
-        std::vector<float> confs; confs.reserve(100);
-        std::vector<int> class_ids; class_ids.reserve(100);
+        // 4. POST-PROCESO
+        std::vector<cv::Rect> boxes;
+        std::vector<float> confs;
+        std::vector<int> class_ids;
 
         for (int i = 0; i < num_anchors_; ++i) {
             float max_s = 0; int id = -1;
             for (int c = 0; c < num_classes_; ++c) {
-                float s = output_host_[(4 + c) * num_anchors_ + i];
+                float s = output_host_ptr_[(4 + c) * num_anchors_ + i];
                 if (s > max_s) { max_s = s; id = c; }
             }
-            if (max_s > conf_threshold_ && id >= 0) {
-                float cx = output_host_[0*num_anchors_+i], cy = output_host_[1*num_anchors_+i];
-                float w = output_host_[2*num_anchors_+i], h = output_host_[3*num_anchors_+i];
-                
-                int x = std::max(0, (int)((cx - w/2.0f - dx) / scale));
-                int y = std::max(0, (int)((cy - h/2.0f - dy) / scale));
-                int width = std::min(frame.cols - x, (int)(w / scale));
-                int height = std::min(frame.rows - y, (int)(h / scale));
+
+            if (max_s > conf_threshold_) {
+                float cx = output_host_ptr_[0*num_anchors_+i];
+                float cy = output_host_ptr_[1*num_anchors_+i];
+                float w  = output_host_ptr_[2*num_anchors_+i];
+                float h  = output_host_ptr_[3*num_anchors_+i];
+
+                int x = static_cast<int>(std::round((cx - w/2.0f - dx) / scale));
+                int y = static_cast<int>(std::round((cy - h/2.0f - dy) / scale));
+                int width  = static_cast<int>(std::round(w / scale));
+                int height = static_cast<int>(std::round(h / scale));
+
+                // Clamp
+                x = std::max(0, std::min(x, frame.cols - 1));
+                y = std::max(0, std::min(y, frame.rows - 1));
+                width  = std::max(0, std::min(width, frame.cols - x));
+                height = std::max(0, std::min(height, frame.rows - y));
 
                 if (width > 5 && height > 5) {
-                    bboxes.push_back(cv::Rect(x, y, width, height));
-                    confs.push_back(max_s); class_ids.push_back(id);
+                    boxes.emplace_back(x, y, width, height);
+                    confs.push_back(max_s);
+                    class_ids.push_back(id);
                 }
             }
         }
 
         std::vector<int> indices;
-        cv::dnn::NMSBoxes(bboxes, confs, conf_threshold_, nms_threshold_, indices);
+        cv::dnn::NMSBoxes(boxes, confs, conf_threshold_, nms_threshold_, indices);
 
         custom_interfaces::msg::DetectionArray det_msg;
         det_msg.header = msg->header;
         for (int idx : indices) {
             custom_interfaces::msg::Detection d;
-            d.class_id = class_ids[idx]; d.confidence = confs[idx];
-            d.u1 = bboxes[idx].x; d.v1 = bboxes[idx].y;
-            d.u2 = bboxes[idx].x + bboxes[idx].width; d.v2 = bboxes[idx].y + bboxes[idx].height;
-            d.track_id = update_tracker(bboxes[idx], d.class_id);
+            d.class_id = class_ids[idx];
+            d.confidence = confs[idx];
+            d.u1 = boxes[idx].x; d.v1 = boxes[idx].y;
+            d.u2 = boxes[idx].x + boxes[idx].width; d.v2 = boxes[idx].y + boxes[idx].height;
+            d.track_id = update_tracker(boxes[idx], d.class_id);
             det_msg.detections.push_back(d);
         }
 
+        // LIMPIEZA DE TRACKS PERDIDOS (Mantenimiento de memoria)
         active_tracks_.erase(std::remove_if(active_tracks_.begin(), active_tracks_.end(),
-            [](TrackedObject& t){ t.lost_frames++; return t.lost_frames > 8; }), active_tracks_.end());
+            [this](TrackedObject& t){ t.lost_frames++; return t.lost_frames > MAX_LOST_FRAMES; }), 
+            active_tracks_.end());
 
-        det_msg.inference_time_ms = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_start).count();
         pub_->publish(det_msg);
     }
 
     int input_h_, input_w_, num_classes_, num_anchors_;
     float conf_threshold_, nms_threshold_;
-    float *input_host_, *output_host_;
+    float *input_host_ptr_, *output_host_ptr_;
     void* dev_buffers_[2];
-    nvinfer1::IRuntime* runtime_; nvinfer1::ICudaEngine* engine_; nvinfer1::IExecutionContext* context_;
+    nvinfer1::IRuntime* runtime_;
+    nvinfer1::ICudaEngine* engine_;
+    nvinfer1::IExecutionContext* context_;
     cudaStream_t stream_;
-    rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr sub_;
+    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_;
     rclcpp::Publisher<custom_interfaces::msg::DetectionArray>::SharedPtr pub_;
 };
 
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<Yolo11UltraNode>());
+    rclcpp::spin(std::make_shared<YoloFinalNode>());
     rclcpp::shutdown();
     return 0;
 }

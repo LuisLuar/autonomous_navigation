@@ -14,7 +14,7 @@ class DataReplayerCircular(Node):
         super().__init__('image_replayer_circular')
         
         # Parámetro de frecuencia: Muy importante para tu comparativa
-        self.declare_parameter('image_rate', 20.0) 
+        self.declare_parameter('image_rate', 30.0) 
         self.image_rate = self.get_parameter('image_rate').value
         
         self.bridge = CvBridge()

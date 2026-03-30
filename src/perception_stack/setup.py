@@ -28,15 +28,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'capture_frame = perception_stack.capture_frame:main',
-            'calibrate_camera = perception_stack.calibrate_camera:main',
-            'detector_yolo = object_detection.detector_yolo:main',        
-            'object_fusion = object_detection.object_fusion:main',        
-            'vision_speed_limiter = object_detection.vision_speed_limiter:main',            
-            'calibrate_ipm = semantic_segmentation.calibrate_ipm:main',
+            'capture_frame = perception_stack.capture_frame:main',                         
             'visualizer_camera_front = perception_stack.visualizer_camera_front:main',            
-            'object_to_odom = object_detection.object_to_odom:main',
-            'detector_senaletica = object_detection.detector_senaletica:main',
             'lane_model_estimator = semantic_segmentation.lane_model_estimator:main',
             'lane_model_tracking = semantic_segmentation.lane_model_tracking:main',
             'inverse_IPM = perception_stack.inverse_IPM:main'
