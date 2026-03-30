@@ -9,17 +9,7 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     return LaunchDescription([
         
-        # Lanzar camara - gps -lidar - websockets
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('robot_drivers'),
-                    'launch',
-                    'drivers_all.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ),
+        
 
         # Lanzar URDF y TF
         IncludeLaunchDescription(
@@ -33,6 +23,50 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
 
+        #Lanza los nodos de percepción
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('perception_stack'),
+                    'launch',
+                    'perception.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
+
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('cpp_nodes'),
+                    'launch',
+                    'perception_pipeline.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
+        
+        
+
+
+        # Lanza los nodos de GUI y rele combiner y rviz
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('system_management'),
+                    'launch',
+                    'others.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ), 
+
+        
+        
+        
+    ])
+
+"""      
         # Lanzar el filtro EKF
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -57,6 +91,22 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
 
+        
+
+        
+
+        # Lanzar - websockets
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('robot_drivers'),
+                    'launch',
+                    'drivers_all.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
+
         # Lanza los nodos de safety
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -69,29 +119,6 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
 
-        #Lanza los nodos de percepción
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('perception_stack'),
-                    'launch',
-                    'perception.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ),
-
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('camera_cpp_nodes'),
-                    'launch',
-                    'perception_pipeline.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ),
-        
         # Lanzar nodo para guardar datos
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -104,26 +131,6 @@ def generate_launch_description():
             launch_arguments={}.items()
         ), 
 
-
-        # Lanza los nodos de GUI y rele combiner
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('system_management'),
-                    'launch',
-                    'others.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ), 
-
-        
-        
-        
-    ])
-
-"""      
-        
         # Micro ROS Agent como Node
         Node(
             package='micro_ros_agent',

@@ -6,13 +6,23 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     return LaunchDescription([
 
-        # ========= Capture frame node ===================
+        # ============ VISUALIZADORES =============
         Node(
             package='perception_stack',
-            executable='capture_frame',
+            executable='visualizer_camera_front',
             output='screen',
         ),
         
+        
+
+        
+        
+
+    ])
+
+
+
+"""       
         # ===============PAPER =============
         Node(
             package='perception_stack',
@@ -29,6 +39,13 @@ def generate_launch_description():
         Node(
             package='perception_stack',
             executable='inverse_IPM',
+            output='screen',
+        ),
+
+        # ========= Capture frame node ===================
+        Node(
+            package='perception_stack',
+            executable='capture_frame',
             output='screen',
         ),
 
@@ -58,18 +75,6 @@ def generate_launch_description():
             output='screen',
         ),
 
-        # ============ VISUALIZADORES =============
-        Node(
-            package='perception_stack',
-            executable='visualizer_camera_front',
-            output='screen',
-        ),
-
-    ])
-
-
-
-"""          
 
         # ===============================
         Node(

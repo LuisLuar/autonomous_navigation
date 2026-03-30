@@ -1,147 +1,127 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import CompressedImage
+from sensor_msgs.msg import Image  # CAMBIADO: Ahora usamos Image Raw
 from std_msgs.msg import String
 from pathlib import Path
 import cv2
 import numpy as np
+from cv_bridge import CvBridge # Necesario para convertir de OpenCV a ROS Image
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 class DataReplayerManual(Node):
     def __init__(self):
         super().__init__('data_replayer_manual')
         
-        # Estado
+        self.bridge = CvBridge()
         self.current_log_path = None
-        self.image_data = []
+        self.image_paths = []
         self.current_image_index = 0
         
-        # Publicador
+        # QoS para Orin Nano: Best Effort para máxima velocidad
         camera_qos = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST
         )
-        self.image_pub = self.create_publisher(CompressedImage, '/image_raw/compressed', camera_qos)
         
-        # Suscriptor para la ruta
+        # Publicador de imagen RAW (Uncompressed)
+        self.image_pub = self.create_publisher(Image, '/image_raw', camera_qos)
+        
+        # Suscriptor para cambiar de carpeta de logs
         self.create_subscription(String, '/replay_log_path', self.replay_path_cb, 10)
         
-        # Parámetros de compresión JPEG
-        self.compression_params = [cv2.IMWRITE_JPEG_QUALITY, 85]
-        
-        # Timer corto solo para refrescar la ventana de OpenCV y capturar teclado
-        # (Sin esto, la ventana de CV2 se congela en ROS2)
+        # Timer para la interfaz de OpenCV (necesario para refrescar ventanas)
         self.ui_timer = self.create_timer(0.01, self.update_ui)
         
-        self.get_logger().info('🚀 Replayer Manual Inicializado')
-        self.get_logger().info('Controles: [Flecha Derecha] Siguiente, [Flecha Izquierda] Anterior, [Q] Salir')
+        self.get_logger().info('🚀 Replayer Manual RAW Inicializado')
+        self.get_logger().info('Controles: [D o Flecha Der] Sig, [A o Flecha Izq] Ant, [Q] Salir')
 
     def replay_path_cb(self, msg):
-        """Callback cuando llega una nueva ruta"""
-        if msg.data == self.current_log_path:
+        path_str = msg.data.strip()
+        if path_str == self.current_log_path:
             return
             
-        self.current_log_path = msg.data
-        self.get_logger().info(f'📁 Nueva ruta recibida: {self.current_log_path}')
-        
-        # Cargar y reiniciar
+        self.current_log_path = path_str
         self._load_images()
         self.current_image_index = 0
         
-        if self.image_data:
+        if self.image_paths:
             self._display_and_publish()
 
     def _load_images(self):
-        self.image_data = []
+        self.image_paths = []
         base_path = Path(self.current_log_path)
         
-        # Rutas según tu estructura
-        possible_paths = [
-            base_path / "perception" / "images",
-            base_path / "perception_frontal" / "images"
-        ]
+        # Buscamos en las carpetas típicas de tus logs
+        search_dirs = [base_path / "perception/images", base_path / "perception_frontal/images"]
         
-        for image_dir in possible_paths:
-            if image_dir.exists():
-                extensions = ['.jpg', '.jpeg', '.png']
-                for ext in extensions:
-                    for img_path in sorted(image_dir.glob(f'*{ext}')):
-                        self.image_data.append(str(img_path))
-                if self.image_data:
-                    break
+        for directory in search_dirs:
+            if directory.exists():
+                for ext in ['.jpg', '.jpeg', '.png']:
+                    self.image_paths.extend(list(directory.glob(f'*{ext}')))
+                if self.image_paths: break
         
-        self.image_data.sort()
-        self.get_logger().info(f'📊 CARGADAS: {len(self.image_data)} imágenes')
+        self.image_paths.sort()
+        self.get_logger().info(f'📊 CARGADAS: {len(self.image_paths)} imágenes de {self.current_log_path}')
 
     def _display_and_publish(self):
-        """Lee la imagen actual, la muestra y la publica"""
-        if not self.image_data:
+        if not self.image_paths:
             return
 
-        img_path = self.image_data[self.current_image_index]
+        img_path = str(self.image_paths[self.current_image_index])
         cv_image = cv2.imread(img_path)
         
         if cv_image is None:
             self.get_logger().warning(f'⚠️ Error al leer: {img_path}')
             return
 
-        # Redimensionar para consistencia
-        cv_image = cv2.resize(cv_image, (640, 360), interpolation=cv2.INTER_AREA)
+        # Redimensionar a la resolución que espera el Segmentador y la Cámara Real (640x360)
+        cv_image = cv2.resize(cv_image, (640, 360), interpolation=cv2.INTER_LINEAR)
 
-        # 1. Mostrar en ventana
-        # Añadir texto informativo en la imagen
+        # 1. Visualización Local (UI)
         display_img = cv_image.copy()
-        info_text = f"Img: {self.current_image_index + 1}/{len(self.image_data)}"
-        cv2.putText(display_img, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-        cv2.imshow("Data Replayer - Manual Mode", display_img)
+        info_text = f"Frame: {self.current_image_index + 1}/{len(self.image_paths)}"
+        cv2.putText(display_img, info_text, (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        cv2.imshow("Jetson Replayer - Manual", display_img)
 
-        # 2. Publicar a ROS2
-        msg = CompressedImage()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = 'camera_link'
-        msg.format = 'jpeg'
-        
-        success, encoded = cv2.imencode('.jpg', cv_image, self.compression_params)
-        if success:
-            msg.data = encoded.tobytes()
-            self.image_pub.publish(msg)
+        # 2. Publicar como Image RAW (sensor_msgs/Image)
+        # Esto evita que el segmentador pierda tiempo descomprimiendo JPEGs
+        try:
+            ros_image = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
+            ros_image.header.stamp = self.get_clock().now().to_msg()
+            ros_image.header.frame_id = 'camera_link'
+            self.image_pub.publish(ros_image)
+        except Exception as e:
+            self.get_logger().error(f'Error publicando imagen: {e}')
 
     def update_ui(self):
-        """Maneja los eventos del teclado"""
         key = cv2.waitKey(1) & 0xFF
-        
-        if not self.image_data:
-            return
+        if not self.image_paths: return
 
-        # Tecla Flecha Derecha (o 'd')
-        if key == 83 or key == ord('d'): # 83 es el código de flecha derecha en muchos sistemas
-            self.current_image_index = (self.current_image_index + 1) % len(self.image_data)
+        # Manejo de teclas (ASCII y códigos comunes)
+        if key in [ord('d'), 83]: # D o Flecha Derecha
+            self.current_image_index = (self.current_image_index + 1) % len(self.image_paths)
             self._display_and_publish()
-            
-        # Tecla Flecha Izquierda (o 'a')
-        elif key == 81 or key == ord('a'): # 81 es flecha izquierda
-            self.current_image_index = (self.current_image_index - 1) % len(self.image_data)
+        elif key in [ord('a'), 81]: # A o Flecha Izquierda
+            self.current_image_index = (self.current_image_index - 1) % len(self.image_paths)
             self._display_and_publish()
-            
-        # Salir con 'q'
         elif key == ord('q'):
-            self.get_logger().info('Cerrando...')
+            self.get_logger().info('Cerrando Replayer...')
             rclpy.shutdown()
 
 def main():
     rclpy.init()
     node = DataReplayerManual()
-    
     try:
         rclpy.spin(node)
-    except (KeyboardInterrupt):
+    except KeyboardInterrupt:
         pass
     finally:
         cv2.destroyAllWindows()
-        node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            node.destroy_node()
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
