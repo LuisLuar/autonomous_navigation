@@ -25,7 +25,7 @@ class SimpleSafetyNode(Node):
         self.create_subscription(Bool, '/light/left',  lambda m: self.set_bit(1, m.data), 10)
         self.create_subscription(Bool, '/light/right', lambda m: self.set_bit(2, m.data), 10)
         self.create_subscription(Bool, '/light/safety',lambda m: self.set_bit(3, m.data), 10)
-        self.create_subscription(Bool, '/start/motor_left', lambda m: self.set_bit(4, m.data), 10)
+        self.create_subscription(Bool, '/start/motors', lambda m: self.set_bit(4, m.data), 10)
         
 
         # --- Publicadores ---
@@ -104,9 +104,14 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        if node.ser: node.ser.close()
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            if node.ser: node.ser.close()
+            node.destroy_node()
+            rclpy.shutdown()
+        except:
+            pass
+
+
 
 if __name__ == '__main__':
     main()

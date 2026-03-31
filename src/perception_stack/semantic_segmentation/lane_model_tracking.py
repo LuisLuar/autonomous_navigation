@@ -51,7 +51,7 @@ class LaneTrackerEKF(Node):
         self.create_subscription(LaneModel, '/lane/model_raw', self.cb_lane_measurement, 10)
 
         self.pub_filtered = self.create_publisher(LaneModel, '/lane/model_filtered', 10)
-        self.pub_centerline_pc = self.create_publisher(PointCloud2,'/lane/centerline_pc',10)
+        #self.pub_centerline_pc = self.create_publisher(PointCloud2,'/lane/centerline_pc',10)
 
         self.timer = self.create_timer(0.033, self.predict_step)
 
@@ -202,9 +202,9 @@ class LaneTrackerEKF(Node):
         m.confidence = 1.0
 
         self.pub_filtered.publish(m)
-        self.publish_centerline_pointcloud()
+        #self.publish_centerline_pointcloud()
 
-    def publish_centerline_pointcloud(self):
+    """"def publish_centerline_pointcloud(self):
 
         header = Header()
         header.stamp = self.get_clock().now().to_msg()
@@ -230,19 +230,21 @@ class LaneTrackerEKF(Node):
 
         self.pub_centerline_pc.publish(
             point_cloud2.create_cloud(header, fields, points)
-        )
+        )"""
 
-
-def main():
-    rclpy.init()
+def main(args=None):
+    rclpy.init(args=args)
     node = LaneTrackerEKF()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            node.destroy_node()
+            rclpy.shutdown()
+        except:
+            pass
 
 
 if __name__ == '__main__':

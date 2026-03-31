@@ -35,14 +35,21 @@ public:
         cudaMallocHost((void**)&input_host_, 3 * input_h_ * input_w_ * sizeof(float));
         cudaMallocHost((void**)&output_host_, (4 + num_classes_) * num_anchors_ * sizeof(float));
 
-        load_engine("/home/raynel/autonomous_navigation/src/params/212x588_deteccion_TRT10.engine");
+        this->declare_parameter<std::string>("engine_path", "");
+        std::string engine_path = this->get_parameter("engine_path").as_string();
+
+        if (engine_path.empty()) {
+            RCLCPP_ERROR(this->get_logger(), "Falta ruta del engine YOLO. Usa 'engine_path'");
+        } else {
+            load_engine(engine_path);
+        }
 
         pub_ = create_publisher<custom_interfaces::msg::DetectionArray>("/detection/results", 10);
         sub_ = create_subscription<sensor_msgs::msg::CompressedImage>(
             "/image_raw/compressed", rclcpp::QoS(1).best_effort(),
             std::bind(&Yolo11UltraNode::callback, this, std::placeholders::_1));
 
-        RCLCPP_INFO(this->get_logger(), "💎 YOLO11 Ultra-Industrial: Latencia ~2.2ms (RTX 4060)");
+        //RCLCPP_INFO(this->get_logger(), " YOLO11 Ultra-Industrial: Latencia ~2.2ms (RTX 4060)");
     }
 
     ~Yolo11UltraNode() {
@@ -101,10 +108,12 @@ private:
         cudaMalloc(&dev_buffers_[0], 3 * input_h_ * input_w_ * sizeof(float));
         cudaMalloc(&dev_buffers_[1], (4 + num_classes_) * num_anchors_ * sizeof(float));
         cudaStreamCreate(&stream_);
+        context_->setTensorAddress("images", dev_buffers_[0]);
+        context_->setTensorAddress("output0", dev_buffers_[1]);
     }
 
     void callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg) {
-        auto t_start = std::chrono::high_resolution_clock::now();
+        //auto t_start = std::chrono::high_resolution_clock::now();
         cv::Mat frame = cv::imdecode(cv::Mat(msg->data), cv::IMREAD_COLOR);
         if (frame.empty()) return;
 
@@ -117,22 +126,27 @@ private:
         cv::Mat resized; cv::resize(frame, resized, cv::Size(nw, nh));
         resized.copyTo(canvas(cv::Rect(dx, dy, nw, nh)));
 
-        // 2. Pre-proceso Vectorizado (Sin cv::split, más rápido)
+        // 2. Pre-proceso Vectorizado
         float* ptr = input_host_;
-        for (int c = 2; c >= 0; --c) { // BGR to RGB bypass manual
+        int vol = input_h_ * input_w_;
+        for (int c = 2; c >= 0; --c) { // YOLO espera RGB, OpenCV da BGR. 2=R, 1=G, 0=B
             for (int i = 0; i < input_h_; ++i) {
+                uchar* row_ptr = canvas.ptr<uchar>(i);
                 for (int j = 0; j < input_w_; ++j) {
-                    *ptr++ = canvas.ptr<uchar>(i)[j * 3 + c] / 255.0f;
+                    *ptr++ = row_ptr[j * 3 + c] / 255.0f;
                 }
             }
         }
 
         // 3. Inferencia
-        cudaMemcpyAsync(dev_buffers_[0], input_host_, 3*input_h_*input_w_*sizeof(float), cudaMemcpyHostToDevice, stream_);
+        cudaMemcpyAsync(dev_buffers_[0], input_host_, 3 * input_h_ * input_w_ * sizeof(float), cudaMemcpyHostToDevice, stream_);
+
+        // Refrescar direcciones para evitar Error Code 3
         context_->setTensorAddress("images", dev_buffers_[0]);
         context_->setTensorAddress("output0", dev_buffers_[1]);
+
         context_->enqueueV3(stream_);
-        cudaMemcpyAsync(output_host_, dev_buffers_[1], (4+num_classes_)*num_anchors_*sizeof(float), cudaMemcpyDeviceToHost, stream_);
+        cudaMemcpyAsync(output_host_, dev_buffers_[1], (4 + num_classes_) * num_anchors_ * sizeof(float), cudaMemcpyDeviceToHost, stream_);
         cudaStreamSynchronize(stream_);
 
         // 4. Post-proceso con Clamping & Reservación
@@ -150,10 +164,10 @@ private:
                 float cx = output_host_[0*num_anchors_+i], cy = output_host_[1*num_anchors_+i];
                 float w = output_host_[2*num_anchors_+i], h = output_host_[3*num_anchors_+i];
                 
-                int x = std::max(0, (int)((cx - w/2.0f - dx) / scale));
-                int y = std::max(0, (int)((cy - h/2.0f - dy) / scale));
-                int width = std::min(frame.cols - x, (int)(w / scale));
-                int height = std::min(frame.rows - y, (int)(h / scale));
+                int x = std::max(0, (int)std::round((cx - w/2.0f - dx) / scale));
+                int y = std::max(0, (int)std::round((cy - h/2.0f - dy) / scale));
+                int width = std::min(frame.cols - x, (int)std::round(w / scale));
+                int height = std::min(frame.rows - y, (int)std::round(h / scale));
 
                 if (width > 5 && height > 5) {
                     bboxes.push_back(cv::Rect(x, y, width, height));
@@ -179,8 +193,12 @@ private:
         active_tracks_.erase(std::remove_if(active_tracks_.begin(), active_tracks_.end(),
             [](TrackedObject& t){ t.lost_frames++; return t.lost_frames > 8; }), active_tracks_.end());
 
-        det_msg.inference_time_ms = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t_start).count();
         pub_->publish(det_msg);
+
+        // Medir tiempo total del ciclo
+        /*auto t_end = std::chrono::high_resolution_clock::now();
+        double ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Ciclo optimizado: %.2f ms", ms);*/
     }
 
     int input_h_, input_w_, num_classes_, num_anchors_;

@@ -8,6 +8,9 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, Float32
 from custom_interfaces.msg import LaneModel
 
+from diagnostic_msgs.msg import DiagnosticStatus
+
+
 class LaneControllerNMPC(Node):
 
     def __init__(self):
@@ -41,15 +44,33 @@ class LaneControllerNMPC(Node):
         self.create_subscription(LaneModel, '/lane/model_filtered', self.lane_cb, 10)
         self.create_subscription(Odometry, '/odometry/local', self.odom_cb, 10)
         self.create_subscription(Bool, '/emergency', self.emergency_cb, 10)
+        self.create_subscription(Bool, '/safe_stop', self.safe_stop_cb, 10)
         self.create_subscription(Float32, '/alpha/vision', self.vision_alpha_cb, 10)
         self.pub_cmd = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.create_subscription(Bool, '/active/vision', self.active_vision_cb, 10)
+        self.create_subscription(Bool, '/manual', self.manual_mode_cb, 10)
+        self.create_subscription(Twist, '/cmd_vel_manual', self.manual_twist_cb, 10)
+        # 2. Suscripción al estado global
+        self.create_subscription(
+            DiagnosticStatus, 
+            '/global_status', 
+            self.global_status_cb, 
+            10)
+
+        self.is_manual = False
+        self.manual_twist = Twist()
+        
+        # Variable para almacenar el estado (0=OK, 1=WARN, 2=ERROR según estándar)
+        self.global_level = 0
 
         self.alpha_vision = 1.0
+        self.active_vision = False
 
         # Estado [ey, epsi, v]
         self.state = np.zeros(3)
         self.kappa = 0.0
         self.emergency = False
+        self.safe_stop = False
 
         # Warm start memory
         self.u_prev = np.zeros(2)
@@ -146,16 +167,27 @@ class LaneControllerNMPC(Node):
     # CONTROL LOOP
     # ============================================================
     def control_loop(self):
-        if self.emergency:
+        if self.emergency or not self.active_vision:
             self.publish_cmd(0.0, 0.0)
             return
+        
+        # 2. Prioridad: Control Manual
+        if self.is_manual:
+            # Dejamos pasar la señal del joystick directamente
+            self.publish_cmd(self.manual_twist.linear.x, self.manual_twist.angular.z)
+            return
+        
+        # 3. PARADA SEGURA: Forzamos alpha_vision a 0 para que el NMPC frene suavemente
+        current_alpha = self.alpha_vision
+        if self.safe_stop:
+            current_alpha = 0.0
 
         # Parámetros del solver
         p = np.concatenate([
             self.state,
             [self.kappa],
             self.u_prev,
-            [self.alpha_vision] #para velocidad lineal
+            [current_alpha] #para velocidad lineal
         ])
 
         # Warm start simple
@@ -199,9 +231,43 @@ class LaneControllerNMPC(Node):
 
     def emergency_cb(self, msg):
         self.emergency = msg.data
+    
+    def safe_stop_cb(self, msg):
+        self.safe_stop = msg.data
+
+    def active_vision_cb(self, msg):
+        self.active_vision = msg.data
+    
+    def global_status_cb(self, msg):
+        # msg.level es un byte: 0=OK, 1=WARN, 2=ERROR
+        self.global_level = ord(msg.level) if isinstance(msg.level, bytes) else msg.level
+        
+        if self.global_level == 1: # WARNING
+            # Si el diagnóstico pide precaución (0.5), pero la visión detecta algo más crítico (ej. 0.2)
+            # nos quedamos con el valor más bajo (más seguro).
+            self.alpha_vision = min(self.alpha_vision, 0.5)
+            
+        elif self.global_level == 2: # ERROR
+            # Frenado total inmediato por diagnóstico
+            self.alpha_vision = 0.0
+    
+    def manual_mode_cb(self, msg):
+        previous_manual = self.is_manual
+        self.is_manual = msg.data
+        
+        # Si acabamos de soltar el control manual (pasamos de True a False)
+        if previous_manual and not self.is_manual:
+            #self.get_logger().info("Retomando control NMPC...")
+            # Limpiamos la memoria del solver para un arranque suave
+            self.u_prev = np.array([0.0, self.manual_twist.angular.z])
+
+    def manual_twist_cb(self, msg):
+        self.manual_twist = msg
 
     def publish_cmd(self, v, w):
-
+        if not rclpy.ok(): 
+            return
+    
         v_min = self.get_parameter('min_v_start').value
         v_max = self.get_parameter('v_max').value
         v_threshold = self.get_parameter('max_v_start').value
@@ -213,6 +279,9 @@ class LaneControllerNMPC(Node):
             scale = max(0.3, v / v_threshold)
             w *= scale
 
+        if self.state[2] == 0.0:
+            w = 0.0
+
         msg = Twist()
         msg.linear.x = float(np.clip(v, 0.0, v_max))
         msg.angular.z = float(w)
@@ -220,13 +289,23 @@ class LaneControllerNMPC(Node):
         self.pub_cmd.publish(msg)
 
 # ============================================================
+    def destroy_node(self):
+        super().destroy_node()
 
-def main():
-    rclpy.init()
+def main(args=None):
+    rclpy.init(args=args)
     node = LaneControllerNMPC()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        try:
+            node.destroy_node()
+            rclpy.shutdown()
+        except:
+            pass
+
 
 if __name__ == '__main__':
     main()

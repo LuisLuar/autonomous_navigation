@@ -3,40 +3,43 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
+
+        # archivo maestro de logging
         Node(
             package='saves',
             executable='logging_manager',
             output='screen',
         ),
 
+        # datos de sensores
         Node(
             package='saves',
             executable='data_recorder',
             output='screen',
         ),
 
+        # datos de los filtros ekf
         Node(
             package='saves',
             executable='ekf_recorder',
             output='screen',
         ),
 
-        
-
+        # datos del modelo del carril
         Node(
             package='saves',
-            executable='params_cmd_vel_recorder',
+            executable='control_signals',
             output='screen',
         ),
 
+        # imagenes de la cámara
         Node(
             package='saves',
             executable='perception_recorder',
             output='screen',
         ),
 
-        
-        
+        # datos de la laptop
         Node(
             package='saves',
             executable='healthy_recorder',
@@ -45,17 +48,7 @@ def generate_launch_description():
     ])
 
 """
-        Node(
-            package='saves',
-            executable='perception_recorder_left',
-            output='screen',
-        ),
 
-        Node(
-            package='saves',
-            executable='perception_recorder_right',
-            output='screen',
-        ),
 
         Node(
             package='saves',

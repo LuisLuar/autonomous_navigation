@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 websocket_bridge.py - Puente WebSocket para control remoto y monitoreo de diagnóstico.
-Versión con manejo correcto del handler.
+Versión mejorada con manejo robusto de conexiones.
 """
 import asyncio
 import json
@@ -19,6 +19,7 @@ from nav_msgs.msg import Odometry
 import threading
 import time
 import functools
+import traceback
 
 LINEAR_SCALE = float(os.environ.get("LINEAR_SCALE", "1.0"))
 ANGULAR_SCALE = float(os.environ.get("ANGULAR_SCALE", "1.0"))
@@ -61,8 +62,7 @@ class WebSocketROSBridge(Node):
         self.ws_port = WS_PORT
         
         # Publishers
-        self.pub_motor_left = self.create_publisher(Bool, '/start/motor_left', 10)
-        self.pub_motor_right = self.create_publisher(Bool, '/start/motor_right', 10)
+        self.pub_motor = self.create_publisher(Bool, '/start/motors', 10)
         self.pub_light_stop = self.create_publisher(Bool, '/light/stop', 10)
         self.pub_light_left = self.create_publisher(Bool, '/light/left', 10)
         self.pub_light_right = self.create_publisher(Bool, '/light/right', 10)
@@ -70,7 +70,8 @@ class WebSocketROSBridge(Node):
         self.pub_capture = self.create_publisher(Bool, '/capture', 10)
         self.pub_manual = self.create_publisher(Bool, '/manual', 10)
         self.pub_emergency = self.create_publisher(Bool, '/emergency', 10)
-        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.pub_stop = self.create_publisher(Bool, '/safe_stop', 10)
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_manual', 10)
 
         # Publicación inicial
         self.pub_manual.publish(Bool(data=False))
@@ -106,11 +107,6 @@ class WebSocketROSBridge(Node):
             '/status/esp32_control',
             '/status/esp32_safety',
             '/status/gps',
-            '/status/microros_agent',
-            '/status/motor_left',
-            '/status/motor_right',
-            '/status/rplidar',
-            '/status/voltage_5v',
             '/status/cpu_temperature',
             '/status/gpu_temperature',
             '/status/battery_laptop',
@@ -132,20 +128,8 @@ class WebSocketROSBridge(Node):
         # Suscripciones adicionales para información de navegación
         additional_topics = [
             ('/goal_reached', Bool, self.goal_reached_callback),
-            ('/omega/lane', Float32, self.omega_lane_callback),
-            ('/active/lane', Bool, self.active_lane_callback),
-            ('/omega/planner', Float32, self.omega_planner_callback),
-            ('/active/planner', Bool, self.active_planner_callback),
-            ('/omega/lidar', Float32, self.omega_lidar_callback),
-            ('/active/lidar_lateral', Bool, self.active_lidar_lateral_callback),
-            ('/alpha/lidar', Float32, self.alpha_lidar_callback),
-            ('/active/lidar_front', Bool, self.active_lidar_front_callback),
             ('/alpha/vision', Float32, self.alpha_vision_callback),
             ('/active/vision', Bool, self.active_vision_callback),
-            ('/alpha/osm', Float32, self.alpha_osm_callback),
-            ('/active/osm', Bool, self.active_osm_callback),
-            ('/alpha/osm_obstacles', Float32, self.alpha_osm_obstacles_callback),
-            ('/active/osm_obstacles', Bool, self.active_osm_obstacles_callback),
             ('/cmd_vel', Twist, self.cmd_vel_callback),
             ('/odom/unfiltered', Odometry, self.odom_unfiltered_callback),
             ('/odometry/local', Odometry, self.odometry_local_callback),
@@ -174,8 +158,7 @@ class WebSocketROSBridge(Node):
             # Ejecutar el servidor
             self.server_loop.run_until_complete(self.websocket_server_main())
         except Exception as e:
-            #self.get_logger().error(f"Error en servidor WebSocket: {e}")
-            pass
+            self.get_logger().error(f"Error en servidor WebSocket: {e}")
 
     async def websocket_server_main(self):
         """Función principal del servidor WebSocket"""
@@ -192,17 +175,19 @@ class WebSocketROSBridge(Node):
                 # Crear handler con functools.partial para bindear 'self'
                 handler = functools.partial(self.websocket_handler)
                 
-                # Configurar servidor
+                # Configurar servidor con parámetros optimizados
                 async with websockets.serve(
                     handler, 
                     self.ws_host, 
                     port,
-                    ping_interval=30,
-                    ping_timeout=30
+                    ping_interval=20,
+                    ping_timeout=10,
+                    close_timeout=5,
+                    max_size=10_000_000  # 10 MB máximo
                 ) as server:
                     
                     self.ws_port = port
-                    #self.get_logger().info(f"✅ Servidor WebSocket iniciado en ws://{ip_local}:{port}")
+                    #self.get_logger().info(f" Servidor WebSocket iniciado en ws://{ip_local}:{port}")
                     
                     # Tarea para procesar cola de mensajes
                     asyncio.create_task(self.process_message_queue())
@@ -213,14 +198,14 @@ class WebSocketROSBridge(Node):
                     
             except OSError as e:
                 if "address already in use" in str(e) and attempt < max_attempts - 1:
-                    #self.get_logger().warn(f"Puerto {port} ocupado. Probando puerto {port + 1}...")
+                    self.get_logger().warn(f"Puerto {port} ocupado, probando {port + 1}")
                     port += 1
                     await asyncio.sleep(1)
                 else:
-                    #self.get_logger().error(f"❌ No se pudo iniciar servidor WebSocket: {e}")
+                    self.get_logger().error(f"No se pudo iniciar servidor: {e}")
                     return
             except Exception as e:
-                #self.get_logger().error(f"❌ Error inesperado: {e}")
+                self.get_logger().error(f"Error inesperado: {e}")
                 return
 
     async def websocket_handler(self, websocket, path=None):
@@ -232,29 +217,33 @@ class WebSocketROSBridge(Node):
             with self.connections_lock:
                 self.connected_websockets.add(websocket)
             
-            #self.get_logger().info(f"👤 Cliente conectado desde {client_ip}")
+            #self.get_logger().info(f" Cliente conectado desde {client_ip} (total: {len(self.connected_websockets)})")
             
-            # Enviar estados iniciales
+            # Enviar estados iniciales con timeout
             await self.send_initial_data(websocket)
             
             # Procesar mensajes entrantes
-            async for message in websocket:
-                await self.handle_websocket_message(websocket, message)
+            try:
+                async for message in websocket:
+                    await self.handle_websocket_message(websocket, message)
+            except asyncio.TimeoutError:
+                self.get_logger().debug(f"Timeout con cliente {client_ip}")
+            except websockets.exceptions.ConnectionClosed as e:
+                self.get_logger().debug(f"Conexión cerrada con {client_ip}: código {e.code}")
                     
         except websockets.exceptions.ConnectionClosed:
-            #self.get_logger().info(f"📴 Cliente desconectado: {client_ip}")
-            pass
+            self.get_logger().debug(f"Cliente desconectado: {client_ip}")
         except Exception as e:
-            #self.get_logger().debug(f"Error en handler: {e}")
-            pass
+            self.get_logger().error(f"Error con cliente {client_ip}: {e}")
         finally:
             # Remover conexión
             with self.connections_lock:
                 if websocket in self.connected_websockets:
                     self.connected_websockets.remove(websocket)
+                    #self.get_logger().info(f"Cliente desconectado: {client_ip} (quedan {len(self.connected_websockets)})")
 
     async def send_initial_data(self, websocket):
-        """Envía datos iniciales al cliente"""
+        """Envía datos iniciales al cliente con timeout"""
         try:
             # Enviar diagnóstico
             diagnostic_data = self.get_diagnostic_data()
@@ -263,7 +252,7 @@ class WebSocketROSBridge(Node):
                     'type': 'diagnostic_status',
                     'data': diagnostic_data
                 }
-                await websocket.send(json.dumps(message))
+                await asyncio.wait_for(websocket.send(json.dumps(message)), timeout=5.0)
             
             # Enviar información adicional
             additional_data = self.get_additional_data()
@@ -273,11 +262,12 @@ class WebSocketROSBridge(Node):
                     'data': additional_data,
                     'timestamp': self.get_clock().now().nanoseconds
                 }
-                await websocket.send(json.dumps(message))
+                await asyncio.wait_for(websocket.send(json.dumps(message)), timeout=5.0)
                 
+        except asyncio.TimeoutError:
+            self.get_logger().warning("Timeout enviando datos iniciales")
         except Exception as e:
-            #self.get_logger().debug(f"Error enviando datos iniciales: {e}")
-            pass
+            self.get_logger().debug(f"Error enviando datos iniciales: {e}")
 
     async def handle_websocket_message(self, websocket, message):
         """Procesa un mensaje WebSocket entrante"""
@@ -292,16 +282,14 @@ class WebSocketROSBridge(Node):
         mtype = data.get("type", "")
         
         # Booleanos
-        if mtype in ["motor_left", "motor_right", "light_stop", "light_left", 
-                   "light_right", "light_safety", "capture", "emergency"]:
+        if mtype in ["motor", "light_stop", "light_left", 
+                   "light_right", "light_safety", "capture", "emergency", "safe_stop"]:
             val = bool(data.get("value", False))
             msg = Bool()
             msg.data = val
             
-            if mtype == "motor_left":
-                self.pub_motor_left.publish(msg)
-            elif mtype == "motor_right":
-                self.pub_motor_right.publish(msg)
+            if mtype == "motor":
+                self.pub_motor.publish(msg)
             elif mtype == "light_stop":
                 self.pub_light_stop.publish(msg)
             elif mtype == "light_left":
@@ -314,6 +302,8 @@ class WebSocketROSBridge(Node):
                 self.pub_capture.publish(msg)
             elif mtype == "emergency":
                 self.pub_emergency.publish(msg)
+            elif mtype == "safe_stop":
+                self.pub_stop.publish(msg)
         
         # Joystick
         elif mtype == "joy":
@@ -361,10 +351,11 @@ class WebSocketROSBridge(Node):
                     'type': 'diagnostic_status',
                     'data': diagnostic_data
                 }
-                await websocket.send(json.dumps(message))
+                await asyncio.wait_for(websocket.send(json.dumps(message)), timeout=5.0)
+        except asyncio.TimeoutError:
+            self.get_logger().debug("Timeout enviando diagnóstico")
         except Exception as e:
-            #self.get_logger().debug(f"Error enviando diagnóstico: {e}")
-            pass
+            self.get_logger().debug(f"Error enviando diagnóstico: {e}")
 
     async def send_additional_to_client(self, websocket):
         """Envía datos adicionales a un cliente específico"""
@@ -376,10 +367,11 @@ class WebSocketROSBridge(Node):
                     'data': additional_data,
                     'timestamp': self.get_clock().now().nanoseconds
                 }
-                await websocket.send(json.dumps(message))
+                await asyncio.wait_for(websocket.send(json.dumps(message)), timeout=5.0)
+        except asyncio.TimeoutError:
+            self.get_logger().debug("Timeout enviando adicional")
         except Exception as e:
-            #self.get_logger().debug(f"Error enviando adicional: {e}")
-            pass
+            self.get_logger().debug(f"Error enviando adicional: {e}")
 
     # =====================================================
     # Callbacks - SOLO actualizan datos, NO envían
@@ -404,7 +396,6 @@ class WebSocketROSBridge(Node):
                     'timestamp': self.get_clock().now().nanoseconds
                 }
             except Exception as e:
-                #self.get_logger().debug(f"Error en callback de diagnóstico: {e}")
                 pass
         
         return callback
@@ -412,47 +403,11 @@ class WebSocketROSBridge(Node):
     def goal_reached_callback(self, msg):
         self.additional_status['goal_reached'] = bool(msg.data)
 
-    def omega_lane_callback(self, msg):
-        self.additional_status['omega_lane'] = float(msg.data)
-
-    def active_lane_callback(self, msg):
-        self.additional_status['active_lane'] = bool(msg.data)
-
-    def omega_planner_callback(self, msg):
-        self.additional_status['omega_planner'] = float(msg.data)
-
-    def active_planner_callback(self, msg):
-        self.additional_status['active_planner'] = bool(msg.data)
-
-    def omega_lidar_callback(self, msg):
-        self.additional_status['omega_lidar'] = float(msg.data)
-
-    def active_lidar_lateral_callback(self, msg):
-        self.additional_status['active_lidar_lateral'] = bool(msg.data)
-
-    def alpha_lidar_callback(self, msg):
-        self.additional_status['alpha_lidar'] = float(msg.data)
-
-    def active_lidar_front_callback(self, msg):
-        self.additional_status['active_lidar_front'] = bool(msg.data)
-
     def alpha_vision_callback(self, msg):
         self.additional_status['alpha_vision'] = float(msg.data)
 
     def active_vision_callback(self, msg):
         self.additional_status['active_vision'] = bool(msg.data)
-
-    def alpha_osm_callback(self, msg):
-        self.additional_status['alpha_osm'] = float(msg.data)
-
-    def active_osm_callback(self, msg):
-        self.additional_status['active_osm'] = bool(msg.data)
-    
-    def alpha_osm_obstacles_callback(self, msg):
-        self.additional_status['alpha_osm_obstacles'] = float(msg.data)
-
-    def active_osm_obstacles_callback(self, msg):
-        self.additional_status['active_osm_obstacles'] = bool(msg.data)
 
     def cmd_vel_callback(self, msg):
         self.additional_status['cmd_vel'] = {
@@ -509,7 +464,6 @@ class WebSocketROSBridge(Node):
 
     def get_additional_data(self):
         """Obtiene datos adicionales formateados"""
-        # Crear copia para evitar problemas de concurrencia
         return self.additional_status.copy()
 
     def queue_diagnostic_message(self):
@@ -590,7 +544,6 @@ class WebSocketROSBridge(Node):
                 await asyncio.sleep(0.005)
                 
             except Exception as e:
-                #self.get_logger().debug(f"Error procesando cola: {e}")
                 await asyncio.sleep(0.1)
 
     def destroy_node(self):

@@ -16,7 +16,9 @@ def generate_launch_description():
     speed_yaml = os.path.join(global_params_path, 'speed_table.yaml')
 
     # Definimos la ruta del engine de TwinLite
-    twinlite_engine_path = os.path.join(global_params_path, 'twinlite_512x288_lines_chunks.engine')
+    twinlite_engine_path = os.path.join(global_params_path, 'twinlite_FAST_32bit_RTX4060.engine')
+    yolov11_engine_path = os.path.join(global_params_path, 'detect_yolo_512x288_RTX4060.engine')
+    camera_calibration_path = os.path.join(global_params_path, 'camera_calibration.json')
     yolopv2_engine_path = os.path.join(global_params_path, 'yolopv2_lane_288_OMEN_TRT10.engine')
 
     return LaunchDescription([
@@ -40,17 +42,6 @@ def generate_launch_description():
             output='screen'
         ),       
 
-        # 3. EXTRACTOR NODE (Puntos candidatos de carril/calzada)
-        Node(
-            package='cpp_nodes',
-            executable='extractor_node',
-            name='extractor_node',
-            parameters=[
-                {'min_width': 2}
-            ],
-            output='screen'
-        ),
-
         # 4. IPM NODE segmentation (Transformación a Metros / PointCloud2)
         Node(
             package='cpp_nodes',
@@ -58,7 +49,8 @@ def generate_launch_description():
             name='ipm_segmentation',
             parameters=[
                 {'min_distance': 0.0},
-                {'max_distance': 30.0}
+                {'max_distance': 30.0},
+                {'config_path': camera_calibration_path}
             ],
             output='screen'
         ),   
@@ -68,8 +60,12 @@ def generate_launch_description():
             package='cpp_nodes',
             executable='detect_node',
             name='detect_node',
+            parameters=[{
+                'engine_path': yolov11_engine_path
+            }],
             output='screen'
         ),
+
 
         # 6. IPM NODE object (Transformación a Metros / PointCloud2)
         Node(
@@ -79,24 +75,24 @@ def generate_launch_description():
             parameters=[
                 {'min_distance': 0.0},
                 {'max_distance': 10.0},
-                {'config_path': global_params_path},
+                {'config_path': camera_calibration_path},
                 speed_yaml    # La ruta del archivo va sola en la lista
             ],
             output='screen'
         ),  
 
+          
+
+        
+    ])
+
+"""
         # 7. ESP32 CONTROL NODE (Comunicación con microcontrolador)
         Node(
             package='cpp_nodes',
             executable='esp32_control',
             name='esp32_control',
             output='screen'
-        ),      
-
-        
-    ])
-
-"""
-        
+        ),    
         
 """

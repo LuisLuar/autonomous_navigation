@@ -25,8 +25,8 @@ public:
         num_classes_ = 2;
 
         // Reservar Pinned Memory usando __half (2 bytes por valor)
-        cudaMallocHost((void**)&input_buffer_, 3 * input_h_ * input_w_ * sizeof(__half));
-        cudaMallocHost((void**)&output_buffer_, num_classes_ * input_h_ * input_w_ * sizeof(__half));
+        cudaMallocHost((void**)&input_buffer_, 3 * input_h_ * input_w_ * sizeof(float));
+        cudaMallocHost((void**)&output_buffer_, num_classes_ * input_h_ * input_w_ * sizeof(float));
 
         // 1. Declarar el parámetro con un valor por defecto (opcional)
         this->declare_parameter<std::string>("engine_path", "");
@@ -47,9 +47,9 @@ public:
             "/image_raw/compressed", qos,
             std::bind(&TwinLiteSegmenter::image_callback, this, std::placeholders::_1));
 
-        publisher_ = this->create_publisher<custom_interfaces::msg::PixelPoint>("/segmentation_data", 10);
+        publisher_ = this->create_publisher<custom_interfaces::msg::PixelPoint>("/lane/pixel_candidates", 10);
         
-        RCLCPP_INFO(this->get_logger(), " TwinLite FP16 listo (512x288)");
+        //RCLCPP_INFO(this->get_logger(), " TwinLite FP16 listo (512x288)");
     }
 
     ~TwinLiteSegmenter() {
@@ -84,66 +84,85 @@ private:
         }
 
         // Buffers en GPU también en FP16
-        cudaMalloc(&buffers_[0], 3 * input_h_ * input_w_ * sizeof(__half));
-        cudaMalloc(&buffers_[1], num_classes_ * input_h_ * input_w_ * sizeof(__half));
+        cudaMalloc(&buffers_[0], 3 * input_h_ * input_w_ * sizeof(float));
+        cudaMalloc(&buffers_[1], num_classes_ * input_h_ * input_w_ * sizeof(float));
         cudaStreamCreate(&stream_);
     }
 
+    // En el callback:
     void image_callback(const sensor_msgs::msg::CompressedImage::SharedPtr msg) {
+        //auto t_start = std::chrono::high_resolution_clock::now();
+        // 1. Decodificar y Pre-procesar (Rápido)
         cv::Mat frame = cv::imdecode(cv::Mat(msg->data), cv::IMREAD_COLOR);
         if (frame.empty()) return;
 
-        // 1. Pre-procesamiento
-        cv::Mat resized;
+        cv::Mat resized, float_img;
         cv::resize(frame, resized, cv::Size(input_w_, input_h_));
         cv::cvtColor(resized, resized, cv::COLOR_BGR2RGB);
         
-        // Convertir a FP32 primero para normalizar, luego a FP16 para el buffer
-        cv::Mat float_img;
+        // Normalización directa a Float32
         resized.convertTo(float_img, CV_32FC3, 1.0f / 255.0f);
 
+        // HWC a CHW (Copia rápida sin conversión manual a half)
         int vol = input_h_ * input_w_;
-        std::vector<cv::Mat> channels;
+        std::vector<cv::Mat> channels(3);
         cv::split(float_img, channels);
-
-        // Convertir cada canal a FP16 y copiar al buffer
-        for (int c = 0; c < 3; ++c) {
-            for (int i = 0; i < vol; ++i) {
-                input_buffer_[c * vol + i] = __float2half(channels[c].at<float>(i));
-            }
+        for (int i = 0; i < 3; ++i) {
+            memcpy(input_buffer_ + i * vol, channels[i].data, vol * sizeof(float));
         }
 
         // 2. Inferencia
-        cudaMemcpyAsync(buffers_[0], input_buffer_, 3 * vol * sizeof(__half), cudaMemcpyHostToDevice, stream_);
-        context_->setTensorAddress(input_name.c_str(), buffers_[0]); 
+        cudaMemcpyAsync(buffers_[0], input_buffer_, 3 * vol * sizeof(float), cudaMemcpyHostToDevice, stream_);
+
+        // --- AÑADE ESTAS DOS LÍNEAS AQUÍ ---
+        context_->setTensorAddress(input_name.c_str(), buffers_[0]);
         context_->setTensorAddress(output_name.c_str(), buffers_[1]);
+        // -----------------------------------
+
         context_->enqueueV3(stream_);
-        cudaMemcpyAsync(output_buffer_, buffers_[1], num_classes_ * vol * sizeof(__half), cudaMemcpyDeviceToHost, stream_);
+        cudaMemcpyAsync(output_buffer_, buffers_[1], num_classes_ * vol * sizeof(float), cudaMemcpyDeviceToHost, stream_);
         cudaStreamSynchronize(stream_);
 
-        // 3. Post-procesamiento (Argmax en FP16)
-        __half* ptr_bg = output_buffer_;
-        __half* ptr_lane = output_buffer_ + vol;
+        // 3. Post-proceso con Filtro de Robustez (Igual que en la Jetson)
+        float* lane_ptr = output_buffer_ + vol; // Canal de carril
+        cv::Mat mask_raw(input_h_, input_w_, CV_32FC1, lane_ptr);
         
+        cv::Mat mask_bin;
+        cv::threshold(mask_raw, mask_bin, 0.5, 255, cv::THRESH_BINARY);
+        mask_bin.convertTo(mask_bin, CV_8UC1);
+
         custom_interfaces::msg::PixelPoint out_msg;
         out_msg.header = msg->header;
         float scale_x = (float)frame.cols / input_w_;
         float scale_y = (float)frame.rows / input_h_;
 
-        for (int i = 0; i < vol; ++i) {
-            // Comparamos usando __half2float o directamente si el compilador lo permite
-            if (__half2float(ptr_lane[i]) > __half2float(ptr_bg[i])) {
-                out_msg.u.push_back(static_cast<int>((i % input_w_) * scale_x));
-                out_msg.v.push_back(static_cast<int>((i / input_w_) * scale_y));
+        for (int y = 0; y < mask_bin.rows; y++) {
+            const uint8_t* row = mask_bin.ptr<uint8_t>(y);
+            int start_x = -1;
+            for (int x = 0; x < mask_bin.cols; ++x) {
+                if (row[x] > 0) {
+                    if (start_x == -1) start_x = x;
+                } else if (start_x != -1) {
+                    int width = x - start_x;
+                    // FILTRO DE ROBUSTEZ: Solo acepta anchos lógicos de carril
+                    if ( width <= 30) {
+                        out_msg.u.push_back(static_cast<int>((start_x + width / 2) * scale_x));
+                        out_msg.v.push_back(static_cast<int>(y * scale_y));
+                    }
+                    start_x = -1;
+                }
             }
         }
-
-        if (!out_msg.u.empty()) publisher_->publish(out_msg);
+        publisher_->publish(out_msg);
+        // Medir tiempo total del ciclo
+        /*auto t_end = std::chrono::high_resolution_clock::now();
+        double ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Ciclo optimizado: %.2f ms", ms);*/
     }
 
     int input_h_, input_w_, num_classes_;
     std::string input_name, output_name;
-    __half *input_buffer_, *output_buffer_; // Punteros FP16
+    float *input_buffer_, *output_buffer_;// Punteros FP16
     nvinfer1::IRuntime* runtime_{nullptr};
     nvinfer1::ICudaEngine* engine_{nullptr};
     nvinfer1::IExecutionContext* context_{nullptr};

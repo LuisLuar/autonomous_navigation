@@ -39,12 +39,6 @@ def generate_launch_description():
             output='screen',
         ),
 
-        Node(
-            package='perception_stack',
-            executable='inverse_IPM_CL',
-            output='screen',
-        ),
-
         
     ])
 
@@ -52,35 +46,17 @@ def generate_launch_description():
 
 """          
 
-        # ===============================
         Node(
             package='perception_stack',
-            executable='object_to_odom',
+            executable='inverse_IPM_CL',
             output='screen',
-        ), 
+        ),
+
 
         # =========== YOLO V11 ===========
         Node(
             package='perception_stack',
             executable='detector_yolo',
-            output='screen',
-        ),
-
-        Node(
-            package='perception_stack',
-            executable='detector_senaletica',
-            output='screen',
-        ),
-
-        Node(
-            package='perception_stack',
-            executable='object_fusion',
-            output='screen',
-        ),
-
-        Node(
-            package='perception_stack',
-            executable='object_fusion',
             output='screen',
         ),
 

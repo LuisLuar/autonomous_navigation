@@ -34,7 +34,6 @@ setup(
             'logging_manager = saves.logging_manager:main',
             'path_global_recorder = saves.path_global_recorder:main',
             'trajectory_plotter = saves.trajectory_plotter:main',
-            'params_cmd_vel_recorder = saves.params_cmd_vel_recorder:main',
             'perception_recorder = saves.perception_recorder:main',
             'healthy_recorder = saves.healthy_recorder:main',
             'perception_recorder_left = saves.perception_recorder_left:main',

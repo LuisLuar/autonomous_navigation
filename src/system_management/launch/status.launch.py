@@ -17,9 +17,11 @@ def generate_launch_description():
             output='screen'
         ),
 
+        
+
         Node(
             package='system_management',
-            executable='VC_supervisor',
+            executable='camera_supervisor',
             output='screen'
         ),
         
@@ -30,7 +32,7 @@ def generate_launch_description():
 """
         Node(
             package='system_management',
-            executable='camera_supervisor',
+            executable='VC_supervisor',
             output='screen'
         ),
 

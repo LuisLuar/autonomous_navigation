@@ -88,7 +88,6 @@ class YoloDetectorNode(Node):
         detection_array = DetectionArray()
         detection_array.header.stamp = self.get_clock().now().to_msg()
         detection_array.header.frame_id = "camera_link"
-        detection_array.inference_time_ms = inference_time
 
         # ---------- PROCESAR RESULTADOS ----------
         if results and len(results) > 0:

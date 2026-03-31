@@ -52,14 +52,12 @@ add_executable(camera_node src/camera/camera.cpp)
 add_executable(segmenter_node src/camera/segmenter.cpp)
 add_executable(segmenter_twin_node src/camera/segmenter_twin.cpp)
 add_executable(detect_node src/camera/detect.cpp)
-add_executable(extractor_node src/camera/extractor.cpp)
 add_executable(segmenter_to_meter src/camera/segmenter_to_meter.cpp)
 add_executable(esp32_control src/esp32.cpp)
 add_executable(object_to_meter src/camera/object_to_meter.cpp)
 
 # 5. Dependencias de ROS (ament_target_dependencies)
 ament_target_dependencies(camera_node rclcpp sensor_msgs cv_bridge OpenCV)
-ament_target_dependencies(extractor_node rclcpp sensor_msgs cv_bridge custom_interfaces OpenCV)
 ament_target_dependencies(segmenter_to_meter rclcpp sensor_msgs custom_interfaces)
 ament_target_dependencies(esp32_control rclcpp sensor_msgs nav_msgs geometry_msgs diagnostic_msgs tf2 tf2_geometry_msgs Boost)
 ament_target_dependencies(object_to_meter rclcpp sensor_msgs custom_interfaces)
@@ -152,7 +150,7 @@ set_target_properties(detect_node PROPERTIES
 # 7. Configuración para otros nodos
 target_include_directories(segmenter_to_meter PRIVATE ${EIGEN3_INCLUDE_DIRS})
 target_link_libraries(segmenter_to_meter nlohmann_json::nlohmann_json)
-target_link_libraries(extractor_node ${OpenCV_LIBRARIES})
+
 target_link_libraries(camera_node ${OpenCV_LIBRARIES})
 target_include_directories(object_to_meter PRIVATE ${EIGEN3_INCLUDE_DIRS})
 target_link_libraries(object_to_meter nlohmann_json::nlohmann_json)
@@ -163,7 +161,6 @@ install(TARGETS
   segmenter_node
   segmenter_twin_node
   detect_node
-  extractor_node
   segmenter_to_meter
   esp32_control
   object_to_meter

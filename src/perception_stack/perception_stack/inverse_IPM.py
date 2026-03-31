@@ -5,9 +5,7 @@ import numpy as np
 import json
 import math
 
-from custom_interfaces.msg import PixelPoint
-from sensor_msgs.msg import PointCloud2
-from sensor_msgs_py import point_cloud2
+from custom_interfaces.msg import LaneModel, PixelPoint
 
 class IPMInverseNode(Node):
     def __init__(self):
@@ -61,86 +59,76 @@ class IPMInverseNode(Node):
         cam_position = np.array([self.cam_x, self.cam_y, self.cam_z])
         translation = -rotation_matrix @ cam_position
 
-        # Homografía Directa (Mundo Z=0 -> Imagen)
         self.H = K @ np.column_stack((rotation_matrix[:, 0], 
                                       rotation_matrix[:, 1], 
                                       translation))
 
         # =================== COMUNICACIONES ===================
-        self.create_subscription(
-            PointCloud2,
-            '/lane/debug_fitted_lines', #/lane/centerline_pc
-            self.centerline_callback,
-            rclpy.qos.qos_profile_sensor_data
-        )
+        self.create_subscription(LaneModel, '/lane/model_filtered', self.lane_model_callback, 10)
+        self.pub_pixel_points = self.create_publisher(PixelPoint, '/lane/ipm_inverse_pixel_points', 10)
 
-        self.pub_pixel_points = self.create_publisher(
-            PixelPoint,
-            '/lane/ipm_inverse_pixel_points',
-            10
-        )
+        self.get_logger().info("IPM Inverse Node (Modo Bordes) iniciado")
 
-    def centerline_callback(self, msg: PointCloud2):
-        # 1. Extraer puntos de forma segura
-        # Usamos list() para sacar los datos del generador de ROS
-        pts_list = list(point_cloud2.read_points(msg, field_names=("x", "y"), skip_nans=True))
-        
-        if not pts_list:
-            return
-
-        # --- CORRECCIÓN CRUCIAL ---
-        # En lugar de pasar la lista directo a np.array, extraemos los valores
-        # Esto elimina cualquier rastro del dtype estructurado ('x', 'y')
-        try:
-            # Convertimos la lista de tuplas/objetos a una matriz de floats pura
-            pts = np.array([ [p[0], p[1]] for p in pts_list ], dtype=np.float64)
-        except (IndexError, TypeError):
-            # Fallback en caso de que la estructura sea distinta
-            return
-
-        # Aseguramos que sea (N, 2)
-        if pts.ndim == 1:
-            pts = pts.reshape(-1, 2)
-        
-        # 2. Preparar matriz homogénea (3, N)
-        n_points = pts.shape[0]
+    def project_points(self, xs, ys):
+        """Proyecta puntos del mundo (x, y) a píxeles de imagen (u, v)"""
+        n_points = xs.shape[0]
         input_pts = np.ones((3, n_points))
-        input_pts[0, :] = pts[:, 0]  # Coordenada X
-        input_pts[1, :] = pts[:, 1]  # Coordenada Y
+        input_pts[0, :] = xs
+        input_pts[1, :] = ys
 
-        # 3. Proyección a Imagen usando la Homografía
-        # [u_hom, v_hom, w] = H @ [X, Y, 1]
         projected = self.H @ input_pts
-
-        # 4. Normalización por W (Coordenadas homogéneas a píxeles)
         w = projected[2, :]
         
-        # Filtro de seguridad: Solo puntos delante de la cámara (W positivo)
         mask_valid = w > 0.1
-        if not np.any(mask_valid):
-            return
-
         u_pixels = projected[0, mask_valid] / w[mask_valid]
         v_pixels = projected[1, mask_valid] / w[mask_valid]
 
-        # 5. Filtrar puntos que caen dentro de la resolución de la imagen
-        img_mask = (u_pixels >= 0) & (u_pixels < self.img_width) & \
-                   (v_pixels >= 0) & (v_pixels < self.img_height)
+        return u_pixels, v_pixels
 
-        final_u = u_pixels[img_mask].astype(int)
-        final_v = v_pixels[img_mask].astype(int)
+    def lane_model_callback(self, msg: LaneModel):
+        # 1. Parámetros del modelo central
+        d_lat = msg.d_lat
+        tan_yaw = math.tan(msg.yaw)
+        c2 = 0.5 * msg.curvature
+        half_width = msg.lane_width / 2.0
 
-        # 6. Publicar mensaje PixelPoint
-        if final_u.size > 0:
+        # Generamos distancias (X) de forma logarítmica (más densidad cerca)
+        xs = np.logspace(-2, np.log10(15.0), 250) # de ~0.5m a 15m
+
+        # 2. Generar Línea IZQUIERDA (y = y_centro + half_width)
+        ys_left = c2 * (xs**2) + tan_yaw * xs + (d_lat + half_width)
+        u_left, v_left = self.project_points(xs, ys_left)
+
+        # 3. Generar Línea DERECHA (y = y_centro - half_width)
+        ys_right = c2 * (xs**2) + tan_yaw * xs + (d_lat - half_width)
+        u_right, v_right = self.project_points(xs, ys_right)
+
+        # 4. Filtrar puntos dentro de la imagen
+        final_u = []
+        final_v = []
+
+        # Función auxiliar para filtrar y añadir a la lista
+        def collect_valid(u_pts, v_pts):
+            for u, v in zip(u_pts, v_pts):
+                if 0 <= u < self.img_width and 0 <= v < self.img_height:
+                    final_u.append(int(u))
+                    final_v.append(int(v))
+
+        # El visualizador usa fillPoly, así que enviamos primero una línea 
+        # y luego la otra (el visualizador se encarga del resto)
+        collect_valid(u_left, v_left)
+        collect_valid(u_right, v_right)
+
+        # 5. Publicar
+        if final_u:
             out_msg = PixelPoint()
             out_msg.header = msg.header
-            # ROS2 no acepta numpy.int64, convertimos a int de Python
-            out_msg.u = [int(u) for u in final_u]
-            out_msg.v = [int(v) for v in final_v]
+            out_msg.u = final_u
+            out_msg.v = final_v
             self.pub_pixel_points.publish(out_msg)
 
-def main():
-    rclpy.init()
+def main(args=None):
+    rclpy.init(args=args)
     node = IPMInverseNode()
     try:
         rclpy.spin(node)
@@ -152,6 +140,7 @@ def main():
             rclpy.shutdown()
         except:
             pass
+
 
 if __name__ == '__main__':
     main()

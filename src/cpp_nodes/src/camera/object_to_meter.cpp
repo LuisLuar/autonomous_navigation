@@ -11,15 +11,17 @@
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 #include <std_msgs/msg/float32.hpp>
 
+#include <std_msgs/msg/bool.hpp>
+
 using json = nlohmann::json;
 
 class DetectorToCloudNode : public rclcpp::Node {
 public:
     DetectorToCloudNode() : Node("detector_to_cloud_transform") {        
         // Carga de calibración dinámica mediante parámetro
-        this->declare_parameter("config_path", "/home/raynel/autonomous_navigation/src/params");
+        this->declare_parameter("config_path", "");
         std::string config_path = this->get_parameter("config_path").as_string();
-        load_calibration(config_path + "/camera_calibration.json");
+        load_calibration(config_path);
 
         // --- CARGA DE TABLA DE VELOCIDADES ---
         for (int i = 0; i <= 9; ++i) {
@@ -51,10 +53,14 @@ public:
                 last_lane_ = msg;
             });
 
-        pub_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/detection/meter_clouds", 10);
+        //pub_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/detection/meter_clouds", 10);
         pub_speed_ = this->create_publisher<std_msgs::msg::Float32>("/alpha/vision", 10);
-        
-        RCLCPP_INFO(this->get_logger(), " IPM + Lane Tracker Debug Integrado");
+        pub_active_ = this->create_publisher<std_msgs::msg::Bool>("/active/vision", 10);
+
+        // 2. Publicar estado activo (Añadir esto)
+        auto active_msg = std_msgs::msg::Bool();
+        active_msg.data = false; 
+        pub_active_->publish(active_msg);
     }
 
 private:
@@ -77,7 +83,6 @@ private:
                     warning_occupancy(0.0), speed_percentage(1.0), distance(0.0) {}
     };
 
-    // ... (project_pixel y get_class_color se mantienen igual)
     Eigen::Vector2d project_pixel(double u, double v) {
         Eigen::Vector3d pixel(u, v, 1.0);
         Eigen::Vector3d ground = homography_matrix_ * pixel;
@@ -85,7 +90,7 @@ private:
         return Eigen::Vector2d(ground.x() / ground.z(), ground.y() / ground.z());
     }
 
-    uint32_t get_class_color(int class_id) {
+    /*uint32_t get_class_color(int class_id) {
         uint8_t r = 0, g = 0, b = 0;
         switch (class_id) {
             case 0: r = 0;   g = 0;   b = 255; break; // Person: Azul
@@ -101,7 +106,7 @@ private:
             default: r = 255; g = 255; b = 255;      
         }
         return ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
-    }
+    }*/
 
     // --- CÁLCULO DE INTERSECCIÓN ---
     ObjectInfo calculate_occupancy_percentages(const Eigen::Vector2d& center, double radius, int class_id, int tracking_id = -1) {
@@ -182,7 +187,7 @@ private:
     }
 
     void process_callback(const custom_interfaces::msg::DetectionArray::SharedPtr msg) {
-        auto cloud_msg = std::make_shared<sensor_msgs::msg::PointCloud2>();
+        /*auto cloud_msg = std::make_shared<sensor_msgs::msg::PointCloud2>();
         cloud_msg->header = msg->header;
         cloud_msg->header.frame_id = "base_footprint";
         
@@ -197,14 +202,14 @@ private:
         sensor_msgs::PointCloud2Iterator<float> iter_z(*cloud_msg, "z");
         sensor_msgs::PointCloud2Iterator<uint32_t> iter_rgb(*cloud_msg, "rgb");
 
-        size_t total_points = 0;
+        size_t total_points = 0;*/
 
         // Vector para almacenar información de todos los objetos detectados
         std::vector<ObjectInfo> objects_info;
 
 
         // --- DEBUG: ZONA DE PRECAUCIÓN (BORDES DINÁMICOS DEL CARRIL) ---
-        if (last_lane_) {
+        /*if (last_lane_) {
             uint32_t lane_color = ((uint32_t)0 << 16 | (uint32_t)255 << 8 | (uint32_t)0); // Verde para el carril
             double half_w = last_lane_->lane_width / 2.0;
 
@@ -236,12 +241,29 @@ private:
             // Línea Izquierda
             *iter_x = static_cast<float>(x); *iter_y = -0.5f; *iter_z = 0.0f; *iter_rgb = danger_color;
             ++iter_x; ++iter_y; ++iter_z; ++iter_rgb; total_points++;
-        }
+        }*/
 
         // --- DETECCIONES EXISTENTES ---
         for (const auto& det : msg->detections) {
-            uint32_t color = get_class_color(det.class_id);
-            if (det.class_id == 6 || det.class_id == 7) {
+            //uint32_t color = get_class_color(det.class_id);
+            if (det.class_id == 8 || det.class_id == 9) {
+                ObjectInfo info;
+                info.class_id = det.class_id;
+                info.tracking_id = det.track_id;
+                info.distance = 0.0; // No nos importa la distancia física exacta para la velocidad
+
+                auto it = speed_map_.find(det.class_id);
+                if (it != speed_map_.end()) {
+                    const SpeedConfig& cfg = it->second;
+                    // Asignamos directamente la velocidad mínima configurada (ej. 0.9)
+                    info.speed_percentage = cfg.v_min_p; 
+                } else {
+                    info.speed_percentage = 1.0;
+                }
+                
+                objects_info.push_back(info);
+            }
+            else if (det.class_id == 6 || det.class_id == 7) {
                 std::vector<Eigen::Vector2d> corners = {
                     project_pixel(det.u1, det.v1), project_pixel(det.u2, det.v1),
                     project_pixel(det.u2, det.v2), project_pixel(det.u1, det.v2)
@@ -267,7 +289,7 @@ private:
                 
                 objects_info.push_back(info);
 
-                corners.push_back(corners[0]);
+                /*corners.push_back(corners[0]);
                 for (int i = 0; i < 4; ++i) {
                     for (int j = 0; j < 4; ++j) {
                         double t = static_cast<double>(j) / 4.0;
@@ -276,7 +298,7 @@ private:
                         *iter_z = 0.01f; *iter_rgb = color;
                         ++iter_x; ++iter_y; ++iter_z; ++iter_rgb; total_points++;
                     }
-                }
+                }*/
             } 
             else {
                 Eigen::Vector2d center = project_pixel((det.u1 + det.u2)/2.0, det.v2);
@@ -294,72 +316,80 @@ private:
                 auto it = speed_map_.find(det.class_id);
                 if (it != speed_map_.end()) {
                     const SpeedConfig& cfg = it->second;
-                    
-                    // La velocidad final es la más restrictiva según la ocupación
                     info.speed_percentage = 1.0;
-                    if (info.danger_occupancy > cfg.ocup_min_p) {
-                        double speed_danger = compute_speed_percentage(
-                            center.x(), cfg.d_min_p, cfg.d_max_p, cfg.v_min_p);
-                        info.speed_percentage = speed_danger;
-                    }else if (info.warning_occupancy > 0.01) {
-                        double impact_precaution = 1.0 -  compute_ratio(
-                        center.x(), cfg.d_min_pre, cfg.d_max_pre); // valor ya normalziados entre 1 y 0 no hace falta clam
 
-                        double speed_precaution = 1.0 - impact_precaution * info.warning_occupancy; // Si la zona de precaución está parcialmente ocupada, reduce la velocidad proporcionalmente    
-                        speed_precaution = std::max(cfg.v_min_pre, std::min(1.0, speed_precaution));
-                        info.speed_percentage = speed_precaution;
+                    if (info.danger_occupancy > cfg.ocup_min_p) {
+                        // ZONA DE PELIGRO: Clamping estándar
+                        info.speed_percentage = compute_speed_percentage(
+                            center.x(), cfg.d_min_p, cfg.d_max_p, cfg.v_min_p);
+                    } 
+                    else if (info.warning_occupancy > 0.01) {
+                        // ZONA DE PRECAUCIÓN:
+                        // 1. Calculamos qué velocidad le tocaría por distancia (de v_min_pre a 1.0)
+                        double ratio_distancia = compute_ratio(center.x(), cfg.d_min_pre, cfg.d_max_pre);
+                        double velocidad_por_distancia = cfg.v_min_pre + (ratio_distancia * (1.0 - cfg.v_min_pre));
+
+                        // 2. Aplicamos la ocupación como un factor de mezcla (Lerp)
+                        // Si ocupación es 0 -> Vel = 1.0
+                        // Si ocupación es 1.0 -> Vel = velocidad_por_distancia
+                        info.speed_percentage = 1.0 - (info.warning_occupancy * (1.0 - velocidad_por_distancia));
+                        
+                        // Garantizar que no baje de v_min_pre por errores de precisión
+                        info.speed_percentage = std::max(cfg.v_min_pre, info.speed_percentage);
                     }
-                } else {
-                    info.speed_percentage = 1.0;
                 }
                 
                 objects_info.push_back(info);
 
-                for (int i = 0; i < 8; ++i) {
+                /*for (int i = 0; i < 8; ++i) {
                     double angle = i * (2.0 * M_PI / 8.0);
                     *iter_x = center.x() + radius * std::cos(angle);
                     *iter_y = center.y() + radius * std::sin(angle);
                     *iter_z = 0.0f; *iter_rgb = color;
                     ++iter_x; ++iter_y; ++iter_z; ++iter_rgb; total_points++;
-                }
+                }*/
             }
         }
 
         double velocidad = 1.0; // Velocidad por defecto (100%)
         // --- MOSTRAR INFORMACIÓN DE TODOS LOS OBJETOS ---
-        /*RCLCPP_INFO(this->get_logger(), "===== OBJETOS DETECTADOS (%zu) =====", objects_info.size());
+        //RCLCPP_INFO(this->get_logger(), "===== OBJETOS DETECTADOS (%zu) =====", objects_info.size());
         for (const auto& obj : objects_info) {
-            std::string zone_status = "FUERA";
+            /*std::string zone_status = "FUERA";
             if (obj.danger_occupancy > 0.01 && obj.warning_occupancy > 0.01) {
                 zone_status = "PELIGRO+PRECAUCION";
             } else if (obj.danger_occupancy > 0.01) {
                 zone_status = "PELIGRO";
             } else if (obj.warning_occupancy > 0.01) {
                 zone_status = "PRECAUCION";
-            }
+            }*/
             velocidad = std::min(velocidad, obj.speed_percentage); // Convertir a porcentaje para mostrar
-            RCLCPP_INFO(this->get_logger(), 
+            /*RCLCPP_INFO(this->get_logger(), 
                 "Class %d | Track %d | Dist: %.2f m | Danger: %.1f%% | Warning: %.1f%% | Vel: %.2f | Zona: %s", 
                 obj.class_id, obj.tracking_id, obj.distance, 
-                obj.danger_occupancy, obj.warning_occupancy, 
-                obj.speed_percentage, zone_status.c_str());
+                obj.danger_occupancy*100, obj.warning_occupancy*100, 
+                obj.speed_percentage, zone_status.c_str());*/
 
         }
 
-        RCLCPP_INFO(this->get_logger(), 
+        /*RCLCPP_INFO(this->get_logger(), 
                 "=====  Velocidad FINAL: %.2f%% ===== " , 
                 velocidad);*/
         
-        // Publicar velocidad
+        // 1. Publicar velocidad
         auto speed_msg = std_msgs::msg::Float32();
         speed_msg.data = static_cast<float>(velocidad);
         pub_speed_->publish(speed_msg);
 
-        modifier.resize(total_points);
-        pub_cloud_->publish(*cloud_msg);
+        // 2. Publicar estado activo (Añadir esto)
+        auto active_msg = std_msgs::msg::Bool();
+        active_msg.data = true; // Si entró al callback, la detección está funcionando
+        pub_active_->publish(active_msg);
+
+        /*modifier.resize(total_points);
+        pub_cloud_->publish(*cloud_msg);*/
     }
-    
-    // ... (load_calibration se mantiene igual)
+ 
     void load_calibration(const std::string& path) {
         std::ifstream f(path);
         if (!f.is_open()) {
@@ -394,8 +424,9 @@ private:
     // Almacenamiento del carril
     custom_interfaces::msg::LaneModel::SharedPtr last_lane_;
     
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_cloud_;
+    //rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_cloud_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pub_speed_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_active_;
 };
 
 int main(int argc, char** argv) {

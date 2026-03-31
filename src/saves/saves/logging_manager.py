@@ -55,9 +55,6 @@ class LoggingManager(Node):
         # Timer para chequeo periódico
         self.timer = self.create_timer(0.1, self.check_conditions)  # 10 Hz
         
-        ##self.get_logger().info(f'Logging Manager inicializado. Directorio base: {self.base_log_dir}')
-        #self.get_logger().info('Esperando condiciones para iniciar logging...')
-        
     def _get_next_route_number(self):
         """Obtiene el siguiente número de ruta basado en carpetas existentes"""
         if not self.base_log_dir.exists():
@@ -88,8 +85,7 @@ class LoggingManager(Node):
         
         return max_num + 1
     
-    def _generate_route_name(self):
-        """Genera un nombre único para la carpeta de ruta"""
+    """def _generate_route_name(self):
         if not self.enable_auto_naming and self.manual_route_name:
             base_name = self.manual_route_name
         else:
@@ -110,7 +106,22 @@ class LoggingManager(Node):
             if counter > 100:  # Límite de seguridad
                 raise RuntimeError("No se pudo generar nombre único para la carpeta")
         
-        return candidate_name
+        return candidate_name"""
+    
+    def _generate_route_name(self):
+        """Genera un nombre único para la carpeta de ruta"""
+        if not self.enable_auto_naming and self.manual_route_name:
+            base_name = self.manual_route_name
+        else:
+            # Simplemente devolver el siguiente número disponible
+            while True:
+                candidate_name = f"{self.log_prefix}{self.route_counter}"
+                full_path = self.base_log_dir / candidate_name
+                
+                if not full_path.exists():
+                    return candidate_name
+                else:
+                    self.route_counter += 1
     
     def _create_log_directory(self, route_name):
         """Crea la carpeta de logging con subcarpetas si es necesario"""
@@ -130,14 +141,13 @@ class LoggingManager(Node):
                 f.write(f"  active_osm: {self.active_osm}\n")
                 f.write(f"  goal_reached: {self.goal_reached}\n")
             
-            #self.get_logger().info(f'Directorio de logging creado: {log_dir}')
             return log_dir
             
         except FileExistsError:
-            #self.get_logger().error(f'El directorio {log_dir} ya existe')
+            self.get_logger().error(f'El directorio {log_dir} ya existe')
             return None
         except Exception as e:
-            #self.get_logger().error(f'Error creando directorio: {e}')
+            self.get_logger().error(f'Error creando directorio: {e}')
             return None
     
     def lid_closed_callback(self, msg):
@@ -147,9 +157,7 @@ class LoggingManager(Node):
         # Detectar transición de False a True
         if not self.previous_lid_closed and new_value:
             self.lid_closed_transition = True
-            #self.get_logger().info('📈 Transición detectada: lid_closed False -> True')
         elif self.previous_lid_closed and not new_value:
-            #self.get_logger().info('📉 Transición detectada: lid_closed True -> False')
             pass
         
         # Actualizar estados
@@ -193,10 +201,6 @@ class LoggingManager(Node):
             # Resetear flag de transición
             self.lid_closed_transition = False
             
-            #self.get_logger().info('=== LOGGING INICIADO ===')
-            #self.get_logger().info(f'Ruta: {route_name}')
-            #self.get_logger().info(f'Directorio: {self.current_log_dir}')
-            
             return True
             
         except Exception as e:
@@ -224,11 +228,6 @@ class LoggingManager(Node):
                     f.write(f"  lid_closed: {self.lid_closed}\n")
                     f.write(f"  active_osm: {self.active_osm}\n")
                     f.write(f"  goal_reached: {self.goal_reached}\n")
-            
-            #self.get_logger().info('=== LOGGING DETENIDO ===')
-            if self.current_log_dir:
-                #self.get_logger().info(f'Datos guardados en: {self.current_log_dir}')
-                pass
             
             self.current_log_dir = None
             return True
@@ -270,11 +269,6 @@ class LoggingManager(Node):
         
         # Lógica de transición de estados
         if start_condition:
-            #self.get_logger().info('🚀 Condiciones de inicio cumplidas:')
-            #self.get_logger().info(f'   - Transición lid_closed F->T: {self.lid_closed_transition}')
-            #self.get_logger().info(f'   - active_osm: {self.active_osm}')
-            #self.get_logger().info(f'   - lid_closed actual: {self.lid_closed}')
-            #self.get_logger().info('Iniciando logging...')
             self.start_logging()
             
         elif self.is_logging and stop_condition:
@@ -286,7 +280,6 @@ class LoggingManager(Node):
             if self.goal_reached:
                 reason.append('goal_reached=True')
             
-            #self.get_logger().info(f'🛑 Condición de parada detectada: {", ".join(reason)}')
             self.stop_logging()
     
     def destroy_node(self):

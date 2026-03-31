@@ -21,7 +21,7 @@ from flask_cors import CORS
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage, Image
 from cv_bridge import CvBridge
 
 import sys
@@ -44,8 +44,7 @@ for lib in ['aioice', 'werkzeug', 'websockets', 'av']:
 
 class StreamType(Enum):
     CAMERA = "camera"
-    DETECTION = "detection" 
-    SEGMENTATION = "segmentation"
+    DEBUG = "debug" 
 
 # ---------------- ROS2 multi-stream subscriber ----------------
 class RosMultiStream(Node):
@@ -56,30 +55,37 @@ class RosMultiStream(Node):
         # Almacenar frames más recientes para cada stream
         self.latest_frames = {
             StreamType.CAMERA: None,
-            StreamType.DETECTION: None,
-            StreamType.SEGMENTATION: None
+            StreamType.DEBUG: None,
         }
         
         self.frame_counts = {
             StreamType.CAMERA: 0,
-            StreamType.DETECTION: 0,
-            StreamType.SEGMENTATION: 0
+            StreamType.DEBUG: 0,
         }
 
-        # Suscriptor para cámara RGB original
-        self.subscription_camera = self.create_subscription(Image,"/debug/camera_left",self.camera_listener,10) #/camera/rgb/image_raw              /debug/camera_front
+        # QoS BEST_EFFORT para coincidir con el publisher (camera_node)
+        best_effort_qos = rclpy.qos.QoSProfile(
+            reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
+            durability=rclpy.qos.DurabilityPolicy.VOLATILE,
+            depth=10
+        )
 
-        # Suscriptor para detecciones
-        self.subscription_detection = self.create_subscription(Image,"/debug/camera_front",self.detection_listener,10) #/camera/rgb/left       /debug/camera_left
-
-        # Suscriptor para segmentación
-        self.subscription_segmentation = self.create_subscription(Image,"/debug/camera_right",self.segmentation_listener,10) #/camera/rgb/right         /debug/camera_right
-
-        #logger.info("ROS2 multi-stream subscribers created for 3 topics")
+        # Suscriptor para cámara RGB original con QoS BEST_EFFORT
+        self.subscription_camera = self.create_subscription(
+            CompressedImage,
+            "/image_raw/compressed",
+            self.camera_listener,
+            best_effort_qos 
+        )
+        # Suscriptor para debug
+        self.subscription_debug = self.create_subscription(Image,"/debug/camera_front",self.debug_listener,10) 
 
     def camera_listener(self, msg: Image):
         try:
-            self.latest_frames[StreamType.CAMERA] = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            # Descomprimir la imagen
+            np_arr = np.frombuffer(msg.data, np.uint8)
+            cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            self.latest_frames[StreamType.CAMERA] = cv_image#self.bridge.imgmsg_to_cv2(msg, "bgr8")
             self.frame_counts[StreamType.CAMERA] += 1
             #if self.frame_counts[StreamType.CAMERA] % 120 == 0:
                 #logger.info(f"ROS2 camera frames: {self.frame_counts[StreamType.CAMERA]}")
@@ -87,24 +93,11 @@ class RosMultiStream(Node):
             #logger.exception("Error converting camera image: %s", e)
             pass
 
-    def detection_listener(self, msg: Image):
+    def debug_listener(self, msg: Image):
         try:
-            self.latest_frames[StreamType.DETECTION] = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            self.frame_counts[StreamType.DETECTION] += 1
-            #if self.frame_counts[StreamType.DETECTION] % 120 == 0:
-                #logger.info(f"ROS2 detection frames: {self.frame_counts[StreamType.DETECTION]}")
+            self.latest_frames[StreamType.DEBUG] = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            self.frame_counts[StreamType.DEBUG] += 1
         except Exception as e:
-            #logger.exception("Error converting detection image: %s", e)
-            pass
-
-    def segmentation_listener(self, msg: Image):
-        try:
-            self.latest_frames[StreamType.SEGMENTATION] = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            self.frame_counts[StreamType.SEGMENTATION] += 1
-            #if self.frame_counts[StreamType.SEGMENTATION] % 120 == 0:
-                #logger.info(f"ROS2 segmentation frames: {self.frame_counts[StreamType.SEGMENTATION]}")
-        except Exception as e:
-            #logger.exception("Error converting segmentation image: %s", e)
             pass
 
     def get_latest_frame(self, stream_type: StreamType):
@@ -134,8 +127,7 @@ class RosVideoTrack(VideoStreamTrack):
             # Mensajes según tipo de stream
             messages = {
                 "CAMERA": "NO EXISTE FRAME DE CAMARA",
-                "DETECTION": "NO EXISTE FRAME DE DETECCION",
-                "SEGMENTATION": "NO EXISTE FRAME DE SEGMENTACION"
+                "DEBUG": "NO EXISTE FRAME DE DETECCION",
             }
             
             stream_upper = self.stream_type.value.upper()
@@ -211,7 +203,7 @@ def health():
         "status": "healthy",
         "ros_connected": ros_node is not None,
         "webrtc_loop_running": webrtc_loop is not None,
-        "streams_available": ["camera", "detection", "segmentation"]
+        "streams_available": ["camera", "debug", "segmentation"]
     })
 
 # Endpoint para stream de cámara original
@@ -221,13 +213,8 @@ def offer_camera():
 
 # Endpoint para stream de detección
 @app.route("/offer/detection", methods=["POST", "OPTIONS"])
-def offer_detection():
-    return handle_offer(StreamType.DETECTION)
-
-# Endpoint para stream de segmentación  
-@app.route("/offer/segmentation", methods=["POST", "OPTIONS"])
-def offer_segmentation():
-    return handle_offer(StreamType.SEGMENTATION)
+def offer_debug():
+    return handle_offer(StreamType.DEBUG)
 
 def handle_offer(stream_type: StreamType):
     if request.method == "OPTIONS":
@@ -264,7 +251,6 @@ def start_flask():
 
 def main():
     global ros_node
-    #logger.info("Initializing rclpy and ROS2 multi-stream node")
     rclpy.init()
     ros_node = RosMultiStream()
 
@@ -272,13 +258,6 @@ def main():
 
     flask_thread = threading.Thread(target=start_flask, daemon=True)
     flask_thread.start()
-
-    #logger.info("Multi-stream server running on http://0.0.0.0:8081")
-    #logger.info("Endpoints:")
-    #logger.info("  - Health: http://0.0.0.0:8081/health")
-    #logger.info("  - Camera: http://0.0.0.0:8081/offer/camera") 
-    #logger.info("  - Detection: http://0.0.0.0:8081/offer/detection")
-    #logger.info("  - Segmentation: http://0.0.0.0:8081/offer/segmentation")
     
     try:
         rclpy.spin(ros_node)

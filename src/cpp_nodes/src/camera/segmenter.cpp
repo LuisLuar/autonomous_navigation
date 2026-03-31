@@ -46,7 +46,7 @@ public:
             "/image_raw/compressed", qos,
             std::bind(&YOLOPv2Segmenter::image_callback, this, std::placeholders::_1));
 
-        publisher_ = this->create_publisher<custom_interfaces::msg::PixelPoint>("/segmentation_data", 10);
+        publisher_ = this->create_publisher<custom_interfaces::msg::PixelPoint>("/lane/pixel_candidates", 10);
     }
 
     ~YOLOPv2Segmenter() {
@@ -166,23 +166,45 @@ private:
         // Quitar padding (ROI útil)
         cv::Mat cropped = mask_bin(cv::Rect(0, 0, input_w_ - pad_w, input_h_ - pad_h));
 
-        // Optimización: Buscar puntos activos con OpenCV (evita bucles for manuales lentos)
-        std::vector<cv::Point> pts;
-        cv::findNonZero(cropped, pts);
+        // NUEVO: FILTRO DE ROBUSTEZ - Buscar segmentos continuos por fila
+        custom_interfaces::msg::PixelPoint out_msg;
+        out_msg.header = msg->header;
 
-        if (!pts.empty()) {
-            custom_interfaces::msg::PixelPoint out_msg;
-            out_msg.header = msg->header;
+        // Calcular escalas correctas considerando el padding
+        float scale_x = (float)ori_w / (input_w_ - pad_w);  // Escala al tamaño original sin padding
+        float scale_y = (float)ori_h / (input_h_ - pad_h);
+
+        // Recorrer cada fila de la máscara recortada
+        for (int y = 0; y < cropped.rows; y++) {
+            const uint8_t* row = cropped.ptr<uint8_t>(y);
+            int start_x = -1;
             
-            // Reservar memoria para evitar reallocs
-            out_msg.u.reserve(pts.size());
-            out_msg.v.reserve(pts.size());
-
-            for (const auto& p : pts) {
-                // Escalar puntos al tamaño original de la cámara
-                out_msg.u.push_back(static_cast<int>(p.x / scale));
-                out_msg.v.push_back(static_cast<int>(p.y / scale));
+            for (int x = 0; x < cropped.cols; ++x) {
+                if (row[x] > 0) {
+                    if (start_x == -1) start_x = x;
+                } else if (start_x != -1) {
+                    int width = x - start_x;
+                    // FILTRO DE ROBUSTEZ: Solo acepta anchos lógicos de carril
+                    if (width >= 2 && width <= 30) {
+                        out_msg.u.push_back(static_cast<int>((start_x + width / 2) * scale_x));
+                        out_msg.v.push_back(static_cast<int>(y * scale_y));
+                    }
+                    start_x = -1;
+                }
             }
+            
+            // Verificar si la fila termina con un segmento activo
+            if (start_x != -1) {
+                int width = cropped.cols - start_x;
+                if (width >= 2 && width <= 30) {
+                    out_msg.u.push_back(static_cast<int>((start_x + width / 2) * scale_x));
+                    out_msg.v.push_back(static_cast<int>(y * scale_y));
+                }
+            }
+        }
+
+        // Publicar solo si hay puntos
+        if (!out_msg.u.empty()) {
             publisher_->publish(out_msg);
         }
     }

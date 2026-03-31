@@ -15,7 +15,9 @@ class PixelToMeterNode : public rclcpp::Node {
 public:
     PixelToMeterNode() : Node("pixel_to_meter_transform") {        
         // Cargar calibración completa
-        load_calibration("/home/raynel/autonomous_navigation/src/params/camera_calibration.json");
+        this->declare_parameter("config_path", "");
+        std::string config_path = this->get_parameter("config_path").as_string();
+        load_calibration(config_path);
 
         this->declare_parameter("min_distance", 1.0);
         this->declare_parameter("max_distance", 50.0);
@@ -31,7 +33,7 @@ public:
 
         pub_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/lane/meter_candidates", 10);
 
-        RCLCPP_INFO(this->get_logger(), "IPM Matricial Iniciado");
+        //RCLCPP_INFO(this->get_logger(), "IPM Matricial Iniciado");
     }
 
 private:

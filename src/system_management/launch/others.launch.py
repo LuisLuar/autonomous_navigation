@@ -22,12 +22,7 @@ def generate_launch_description():
             launch_arguments={}.items()
         ), 
 
-        #Nodo auxiliar para combinar bits de reles
-        Node(
-            package='system_management',
-            executable='rele_combiner',
-            output='screen'
-        ),
+       
         
         
     ])
@@ -38,6 +33,12 @@ def generate_launch_description():
             package='system_management',
             executable='gui',
             output='screen'
+        ),
+
+        Node(
+            package='system_management',
+            executable='esp32_safety',
+            output='screen',
         ),
 
 

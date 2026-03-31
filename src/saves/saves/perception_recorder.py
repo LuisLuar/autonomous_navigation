@@ -50,24 +50,19 @@ class PerceptionRecorder(Node):
         self.csv_file = None
         self.csv_writer = None
         self.current_session_dir = None
-        
-        self.get_logger().info('PerceptionRecorder iniciado - Modo SIMPLE: guarda al llegar')
 
     def recording_enabled_cb(self, msg):
         if msg.data != self.is_recording:
             self.is_recording = msg.data
             if self.is_recording:
-                self.get_logger().info('Grabación HABILITADA')
                 if self.current_log_path:
                     self._start_recording()
             else:
-                self.get_logger().info('Grabación DESHABILITADA')
                 self._stop_recording()
 
     def log_path_cb(self, msg):
         if msg.data != self.current_log_path:
             self.current_log_path = msg.data
-            self.get_logger().info(f'Ruta recibida: {self.current_log_path}')
             if self.is_recording and not self.current_session_dir:
                 self._start_recording()
 
@@ -108,10 +103,6 @@ class PerceptionRecorder(Node):
                 row = [timestamp, frame_id, str(img_filename)]
                 self.csv_writer.writerow(row)
                 self.csv_file.flush()
-            
-            # Log cada 100 frames
-            if self.saved_frames % 100 == 0:
-                self.get_logger().info(f'✅ Guardadas: {self.saved_frames} imágenes')
                 
         except Exception as e:
             self.get_logger().error(f'Error: {e}')
@@ -140,16 +131,13 @@ class PerceptionRecorder(Node):
             self.frame_count = 0
             self.saved_frames = 0
             
-            self.get_logger().info(f'📁 Grabando en: {self.current_session_dir}')
             
         except Exception as e:
             self.get_logger().error(f'Error iniciando: {e}')
 
     def _stop_recording(self):
-        self.get_logger().info('Deteniendo grabación...')
         
         if self.saved_frames > 0:
-            self.get_logger().info(f'✅ Total guardadas: {self.saved_frames} imágenes')
             
             # Resumen simple
             try:
@@ -157,7 +145,6 @@ class PerceptionRecorder(Node):
                 with open(summary_path, 'w') as f:
                     f.write(f"Total imágenes: {self.saved_frames}\n")
                     f.write(f"Fecha: {datetime.now()}\n")
-                self.get_logger().info(f'📊 Resumen: {summary_path}')
             except:
                 pass
         

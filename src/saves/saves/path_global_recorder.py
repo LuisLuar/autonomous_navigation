@@ -39,9 +39,6 @@ class GlobalPathRecorder(Node):
         self.create_subscription(
             String, '/current_log_path', self.log_path_cb, 10)
         
-        #self.get_logger().info('🗺️  GlobalPathRecorder inicializado')
-        #self.get_logger().info('📡 Suscrito a /global_path')
-        #self.get_logger().info('⏳ Esperando path global y señal de logging...')
     
     def path_callback(self, msg):
         """Almacena la última versión completa del path"""
@@ -73,45 +70,27 @@ class GlobalPathRecorder(Node):
         self.last_path_timestamp = time.time()
         self.path_frame_id = msg.header.frame_id if msg.poses else "unknown"
         self.has_new_path = True
-        
-        #self.get_logger().debug(f'📥 Path recibido: {len(path_data)} puntos en frame {self.path_frame_id}')
-        
-        # Si ya estamos logging y recibimos un nuevo path, podemos guardarlo inmediatamente
-        # (opcional, dependiendo de si quieres múltiples versiones)
-        #if self.is_logging_enabled and self.current_log_path:
-            #self.get_logger().info('🔄 Path actualizado durante logging activo')
-            # Opción 1: Guardar inmediatamente (crea nuevo archivo o sobrescribe)
-            # Opción 2: Mantener el último y guardar al final (implementado abajo)
     
     def logging_enabled_cb(self, msg):
         """Callback para habilitar/deshabilitar logging"""
         if msg.data != self.is_logging_enabled:
             self.is_logging_enabled = msg.data
             
-            if self.is_logging_enabled:
-                #self.get_logger().info('🚀 Logging HABILITADO - Preparado para guardar path...')
-                # No guardamos inmediatamente, esperamos a que se active el logging
-                # El path se guardará cuando se reciba la ruta de logging
-            #else:
-                #self.get_logger().info('🛑 Logging DESHABILITADO')
-                # Podríamos guardar el path final aquí si es necesario
+            if not self.is_logging_enabled:
                 self._save_final_path()
     
     def log_path_cb(self, msg):
         """Callback para recibir la ruta de logging"""
         if msg.data != self.current_log_path:
             self.current_log_path = msg.data
-            #self.get_logger().info(f'📁 Ruta de logging recibida: {self.current_log_path}')
             
             # Si tenemos datos de path y el logging está habilitado, guardamos
             if self.is_logging_enabled and self.last_path_data:
-                #self.get_logger().info('💾 Guardando path global actual...')
                 self._save_path_to_csv()
     
     def _save_final_path(self):
         """Guarda el path final cuando se detiene el logging"""
         if self.current_log_path and self.last_path_data:
-            #self.get_logger().info('💾 Guardando path final...')
             
             # Crear nombre de archivo con sufijo "final"
             log_dir = PathLib(self.current_log_path)
@@ -139,14 +118,13 @@ class GlobalPathRecorder(Node):
             success = self._write_path_to_file(filename, self.last_path_data)
             
             if success:
-                #self.get_logger().info(f'✅ Path guardado: {filename} ({len(self.last_path_data)} puntos)')
                 self.has_new_path = False
                 
                 # Opcional: también guardar un archivo de metadatos del path
                 self._save_path_metadata(log_dir)
             
         except Exception as e:
-            #self.get_logger().error(f'❌ Error guardando path: {e}')
+            self.get_logger().error(f' Error guardando path: {e}')
             pass
     
     def _write_path_to_file(self, filename, path_data, suffix=""):
@@ -167,7 +145,7 @@ class GlobalPathRecorder(Node):
             return True
             
         except Exception as e:
-            #self.get_logger().error(f'Error escribiendo archivo {filename}: {e}')
+            self.get_logger().error(f'Error escribiendo archivo {filename}: {e}')
             return False
     
     def _create_summary_file(self, csv_filename, path_data, suffix=""):
@@ -215,10 +193,9 @@ class GlobalPathRecorder(Node):
                 f.write(f"  CSV detallado: {PathLib(csv_filename).name}\n")
                 f.write(f"  Resumen: {PathLib(summary_filename).name}\n")
             
-            #self.get_logger().debug(f'Resumen creado: {summary_filename}')
             
         except Exception as e:
-            #self.get_logger().error(f'Error creando resumen: {e}')
+            self.get_logger().error(f'Error creando resumen: {e}')
             pass
     
     def _save_path_metadata(self, log_dir):
@@ -244,13 +221,12 @@ class GlobalPathRecorder(Node):
                 f.write(f"  pose_id: ID único de la pose\n")
             
         except Exception as e:
-            #self.get_logger().error(f'Error guardando metadatos: {e}')
+            self.get_logger().error(f'Error guardando metadatos: {e}')
             pass
     
     def _check_and_save_on_shutdown(self):
         """Verifica si hay datos pendientes y los guarda"""
         if self.last_path_data and self.current_log_path:
-            #self.get_logger().info('🔄 Guardando path pendiente al apagar...')
             self._save_path_to_csv()
     
     def destroy_node(self):
@@ -265,10 +241,6 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        #node.get_logger().info('Apagando GlobalPathRecorder...')
-        pass
-    except Exception as e:
-        #node.get_logger().error(f'Error en GlobalPathRecorder: {e}')
         pass
     finally:
         try:

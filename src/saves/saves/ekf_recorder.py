@@ -120,8 +120,6 @@ class EKFRecorder(Node):
             'velocity_uncertainty'  # Incertidumbre en velocidad
         ]
 
-        #self.get_logger().info('📥 EKFRecorder inicializado - Esperando señal de logging...')
-        #self.get_logger().info('🗺️  Suscrito a: /odometry/local y /odometry/global')
 
     def logging_enabled_cb(self, msg):
         """Callback para habilitar/deshabilitar logging"""
@@ -129,23 +127,17 @@ class EKFRecorder(Node):
             self.is_logging_enabled = msg.data
             
             if self.is_logging_enabled:
-                #self.get_logger().info('🚀 Logging EKF HABILITADO - Comenzando grabación...')
                 if self.current_log_path:
                     self._start_logging()
                 else:
-                    #self.get_logger().warning('Ruta de logging no recibida aún')
                     pass
             else:
-                #self.get_logger().info('🛑 Logging EKF DESHABILITADO - Deteniendo grabación...')
                 self._stop_logging()
-                # Mostrar estadísticas
-                self._log_statistics()
 
     def log_path_cb(self, msg):
         """Callback para recibir la ruta de logging"""
         if msg.data != self.current_log_path:
             self.current_log_path = msg.data
-            #self.get_logger().info(f'📁 Ruta de logging EKF recibida: {self.current_log_path}')
             
             # Resetear contadores para nueva sesión
             self.local_msg_count = 0
@@ -183,7 +175,6 @@ class EKFRecorder(Node):
     def _start_logging(self):
         """Inicia el logging creando los archivos CSV"""
         if not self.current_log_path:
-            #self.get_logger().error('No hay ruta de logging definida para EKF')
             return
             
         try:
@@ -214,16 +205,11 @@ class EKFRecorder(Node):
             self.local_buffer.clear()
             self.global_buffer.clear()
             
-            #self.get_logger().info(f'💾 Archivos EKF creados:')
-            #self.get_logger().info(f'   Local: {filename_local}')
-            #self.get_logger().info(f'   Global: {filename_global}')
-            
             # Resetear contadores
             self.local_msg_count = 0
             self.global_msg_count = 0
             
         except Exception as e:
-            #self.get_logger().error(f'Error al iniciar logging EKF: {e}')
             self.csv_file_local = None
             self.csv_writer_local = None
             self.csv_file_global = None
@@ -238,18 +224,14 @@ class EKFRecorder(Node):
         if self.csv_file_local:
             try:
                 self.csv_file_local.close()
-                #self.get_logger().info('📂 Archivo EKF local cerrado correctamente')
             except Exception as e:
-                #self.get_logger().error(f'Error al cerrar archivo local: {e}')
                 pass
         
         # Cerrar archivo global
         if self.csv_file_global:
             try:
                 self.csv_file_global.close()
-                #self.get_logger().info('📂 Archivo EKF global cerrado correctamente')
             except Exception as e:
-                #self.get_logger().error(f'Error al cerrar archivo global: {e}')
                 pass
         
         # Resetear variables
@@ -271,7 +253,6 @@ class EKFRecorder(Node):
                 self.csv_file_local.flush()
                 self.local_buffer.clear()
             except Exception as e:
-                #self.get_logger().error(f'Error al escribir en CSV local: {e}')
                 pass
         
         # Flush buffer global
@@ -281,7 +262,6 @@ class EKFRecorder(Node):
                 self.csv_file_global.flush()
                 self.global_buffer.clear()
             except Exception as e:
-                #self.get_logger().error(f'Error al escribir en CSV global: {e}')
                 pass
         
         self.last_flush_time = current_time
@@ -412,12 +392,7 @@ class EKFRecorder(Node):
         
         self._write_global_data(row)
 
-    def _log_statistics(self):
-        """Muestra estadísticas de la sesión de logging"""
-        #self.get_logger().info('📊 Estadísticas EKF de la sesión:')
-        #self.get_logger().info(f'   Mensajes EKF local: {self.local_msg_count}')
-        #self.get_logger().info(f'   Mensajes EKF global: {self.global_msg_count}')
-        #self.get_logger().info(f'   Total mensajes: {self.local_msg_count + self.global_msg_count}')
+
 
     def destroy_node(self):
         """Cleanup al destruir el nodo"""

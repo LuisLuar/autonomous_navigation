@@ -85,9 +85,6 @@ class SystemHealthRecorder(Node):
         
         # Timer para guardar datos periódicamente
         self.save_timer = self.create_timer(1.0, self.save_health_data)  # 1 Hz
-        
-        #self.get_logger().info('🩺 SystemHealthRecorder inicializado')
-        #self.get_logger().info('⏳ Esperando señal de logging...')
 
     def logging_enabled_cb(self, msg):
         """Callback para habilitar/deshabilitar logging"""
@@ -95,18 +92,15 @@ class SystemHealthRecorder(Node):
             self.is_logging_enabled = msg.data
             
             if self.is_logging_enabled:
-                #self.get_logger().info('🚀 Logging salud sistema HABILITADO')
                 if self.current_log_path:
                     self._start_logging()
             else:
-                #self.get_logger().info('🛑 Logging salud sistema DESHABILITADO')
                 self._stop_logging()
 
     def log_path_cb(self, msg):
         """Callback para recibir la ruta de logging"""
         if msg.data != self.current_log_path:
             self.current_log_path = msg.data
-            #self.get_logger().info(f'📁 Ruta recibida: {self.current_log_path}')
             
             if self.is_logging_enabled and not self.current_session_dir:
                 self._start_logging()
@@ -234,10 +228,8 @@ class SystemHealthRecorder(Node):
             # Resetear valores
             self._reset_values()
             
-            #self.get_logger().info(f'💾 Archivo creado: {filename}')
-            
         except Exception as e:
-            #self.get_logger().error(f'Error al iniciar logging: {e}')
+            self.get_logger().error(f'Error al iniciar logging: {e}')
             self.csv_file = None
             self.csv_writer = None
 
@@ -254,9 +246,8 @@ class SystemHealthRecorder(Node):
         if self.csv_file:
             try:
                 self.csv_file.close()
-                #self.get_logger().info('📂 Archivo CSV cerrado correctamente')
             except Exception as e:
-                #self.get_logger().error(f'Error al cerrar archivo: {e}')
+                self.get_logger().error(f'Error al cerrar archivo: {e}')
                 pass
         
         self.csv_file = None

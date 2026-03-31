@@ -52,7 +52,7 @@ public:
             }
         });
 
-        RCLCPP_INFO(this->get_logger(), "Nodo Laptop (Sincronía Directa) iniciado.");
+        //RCLCPP_INFO(this->get_logger(), "Nodo Laptop (Sincronía Directa) iniciado.");
     }
 
     ~CameraNode() {
@@ -103,7 +103,7 @@ private:
         cv::initUndistortRectifyMap(K, D, cv::Mat(), newK, image_size, CV_32FC1, map1_, map2_);
         
         use_undistortion_ = true;
-        RCLCPP_INFO(this->get_logger(), "Mapas de rectificación calculados.");
+        //RCLCPP_INFO(this->get_logger(), "Mapas de rectificación calculados.");
     }
 
     void process_and_publish_direct(const cv::Mat & raw_frame) {
