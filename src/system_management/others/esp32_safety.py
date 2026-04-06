@@ -9,9 +9,12 @@ import threading
 class SimpleSafetyNode(Node):
     def __init__(self):
         super().__init__('safety_unifier_simple')
+        self.declare_parameter('serial_port', '/dev/ttyESP32Safety')
+
+
+        self.port = self.get_parameter('serial_port').get_parameter_value().string_value
 
         # --- Configuración Serial ---
-        self.port = '/dev/ttyESP32Safety' # <-- Asegúrate que este sea tu puerto
         self.ser = None
         self.connect_serial()
         

@@ -66,6 +66,8 @@ class LaneControllerNMPC(Node):
         self.alpha_vision = 1.0
         self.active_vision = False
 
+        self.alpha_system = 1.0  # Lo que dice el sistema global (seguridad)
+
         # Estado [ey, epsi, v]
         self.state = np.zeros(3)
         self.kappa = 0.0
@@ -74,6 +76,8 @@ class LaneControllerNMPC(Node):
 
         # Warm start memory
         self.u_prev = np.zeros(2)
+
+        self.current_alpha = 1.0
 
         self.setup_nmpc()
         self.create_timer(0.033, self.control_loop)
@@ -162,32 +166,35 @@ class LaneControllerNMPC(Node):
 
         # Guardamos último control aplicado
         self.u_prev = np.zeros(2)
+        
 
     # ============================================================
     # CONTROL LOOP
     # ============================================================
     def control_loop(self):
-        if self.emergency or not self.active_vision:
-            self.publish_cmd(0.0, 0.0)
-            return
-        
-        # 2. Prioridad: Control Manual
+        # 1. Prioridad: Control Manual
         if self.is_manual:
             # Dejamos pasar la señal del joystick directamente
             self.publish_cmd(self.manual_twist.linear.x, self.manual_twist.angular.z)
             return
+
+        # 2. Emergencia
+        if self.emergency or not self.active_vision:
+            self.publish_cmd(0.0, 0.0)
+            return
         
         # 3. PARADA SEGURA: Forzamos alpha_vision a 0 para que el NMPC frene suavemente
-        current_alpha = self.alpha_vision
+        self.current_alpha = min(self.alpha_vision, self.alpha_system)
         if self.safe_stop:
-            current_alpha = 0.0
+            self.current_alpha = 0.0
 
+        #self.get_logger().info(f'alpha: {self.current_alpha} global: {self.global_level} system: {self.alpha_system}')
         # Parámetros del solver
         p = np.concatenate([
             self.state,
             [self.kappa],
             self.u_prev,
-            [current_alpha] #para velocidad lineal
+            [self.current_alpha] #para velocidad lineal
         ])
 
         # Warm start simple
@@ -240,16 +247,14 @@ class LaneControllerNMPC(Node):
     
     def global_status_cb(self, msg):
         # msg.level es un byte: 0=OK, 1=WARN, 2=ERROR
-        self.global_level = ord(msg.level) if isinstance(msg.level, bytes) else msg.level
-        
+        self.global_level = int.from_bytes(msg.level, byteorder='little', signed=False)#ord(msg.level) if isinstance(msg.level, bytes) else msg.level
+        #self.get_logger().info(f'msg: {msg.level} global: {self.global_level}')
         if self.global_level == 1: # WARNING
-            # Si el diagnóstico pide precaución (0.5), pero la visión detecta algo más crítico (ej. 0.2)
-            # nos quedamos con el valor más bajo (más seguro).
-            self.alpha_vision = min(self.alpha_vision, 0.5)
-            
+            self.alpha_system  = 0.5            
         elif self.global_level == 2: # ERROR
-            # Frenado total inmediato por diagnóstico
-            self.alpha_vision = 0.0
+            self.alpha_system  = 0.0
+        else: 
+            self.alpha_system = 1.0
     
     def manual_mode_cb(self, msg):
         previous_manual = self.is_manual
@@ -272,16 +277,18 @@ class LaneControllerNMPC(Node):
         v_max = self.get_parameter('v_max').value
         v_threshold = self.get_parameter('max_v_start').value
 
-        if 0.001 < v < v_min and self.alpha_vision != 0.0:
-            v = v_min
-
-        if v <= v_threshold:
+        #self.get_logger().info(f'current alpha: {self.current_alpha}')
+        if v <= 1.0e-04 and self.current_alpha == 0.0:
+            v = 0.0
+            w = 0.0
+        elif v <= v_threshold:
             scale = max(0.3, v / v_threshold)
             w *= scale
 
-        if self.state[2] == 0.0:
-            w = 0.0
+        if 0.001 < v < v_min and self.current_alpha != 0.0:
+            v = v_min
 
+        #self.get_logger().info(f'alpha: {self.current_alpha} V: {v}  W: {w} ')
         msg = Twist()
         msg.linear.x = float(np.clip(v, 0.0, v_max))
         msg.angular.z = float(w)
@@ -290,6 +297,10 @@ class LaneControllerNMPC(Node):
 
 # ============================================================
     def destroy_node(self):
+        self.alpha_vision = 0.0
+        self.alpha_system = 0.0  # Lo que dice el sistema global (seguridad)
+        self.current_alpha = 0.0
+        self.publish_cmd(0.0, 0.0)
         super().destroy_node()
 
 def main(args=None):

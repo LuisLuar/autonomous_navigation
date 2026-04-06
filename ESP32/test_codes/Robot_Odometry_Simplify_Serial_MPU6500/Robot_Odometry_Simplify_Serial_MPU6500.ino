@@ -105,10 +105,10 @@ void setup() {
   //____________IMU______________
   while (!Serial) {}
 
-  if (!IMU_begin()) {
+  /*if (!IMU_begin()) {
     Serial.println("Error al inicializar el IMU");
     while (1);
-  }
+  }*/
   //_______________________________
 
   //_____________CONTROL PID_______________
@@ -147,10 +147,10 @@ void ControlLoop(void *parameter) {
 
   while (1) {
     
-    if (xSemaphoreTake(i2cMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    /*if (xSemaphoreTake(i2cMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         IMU_update();
       xSemaphoreGive(i2cMutex); // Soltar el bus
-    }
+    }*/
 
     if (millis() - lastTime_serial > sampleTime_serial) {
       lastTime_serial = millis();

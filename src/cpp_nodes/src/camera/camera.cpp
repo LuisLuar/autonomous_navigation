@@ -98,7 +98,7 @@ private:
             calib["distortion"]["p1"], calib["distortion"]["p2"], 
             calib["distortion"]["k3"]);
 
-        cv::Size image_size(640, 360);
+        cv::Size image_size(512, 288);
         cv::Mat newK = cv::getOptimalNewCameraMatrix(K, D, image_size, 0, image_size);
         cv::initUndistortRectifyMap(K, D, cv::Mat(), newK, image_size, CV_32FC1, map1_, map2_);
         
@@ -108,15 +108,15 @@ private:
 
     void process_and_publish_direct(const cv::Mat & raw_frame) {
         // 1. Redimensionar (CPU en la laptop)
-        cv::resize(raw_frame, resized_frame_, cv::Size(640, 360), 0, 0, cv::INTER_AREA);
+        cv::resize(raw_frame, resized_frame_, cv::Size(512, 288), 0, 0, cv::INTER_AREA);
 
         // 2. Rectificar
-        cv::Mat final_frame;
+        /*cv::Mat final_frame;
         if (use_undistortion_) {
             cv::remap(resized_frame_, final_frame, map1_, map2_, cv::INTER_LINEAR);
         } else {
             final_frame = resized_frame_;
-        }
+        }*/
 
         // 3. Comprimir y Publicar
         auto msg = std::make_unique<sensor_msgs::msg::CompressedImage>();
@@ -124,7 +124,7 @@ private:
         msg->header.frame_id = "camera_link";
         msg->format = "jpeg";
         
-        cv::imencode(".jpg", final_frame, msg->data, compression_params_);
+        cv::imencode(".jpg", resized_frame_, msg->data, compression_params_);
         publisher_->publish(std::move(msg));
     }
 

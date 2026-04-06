@@ -31,8 +31,6 @@ class QuadraticLaneEstimator(Node):
         #self.pub_debug_clusters = self.create_publisher(PointCloud2, '/lane/debug_clusters', 10)
         #self.pub_debug_lines = self.create_publisher(PointCloud2, '/lane/debug_fitted_lines', 10)
 
-        self.get_logger().info("Estimador Parabólico (Grado 2) Iniciado")
-
     def create_pc2_msg(self, header, points_rgb):
         fields = [
             PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),

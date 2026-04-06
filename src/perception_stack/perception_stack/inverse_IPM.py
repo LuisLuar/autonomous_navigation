@@ -67,8 +67,6 @@ class IPMInverseNode(Node):
         self.create_subscription(LaneModel, '/lane/model_filtered', self.lane_model_callback, 10)
         self.pub_pixel_points = self.create_publisher(PixelPoint, '/lane/ipm_inverse_pixel_points', 10)
 
-        self.get_logger().info("IPM Inverse Node (Modo Bordes) iniciado")
-
     def project_points(self, xs, ys):
         """Proyecta puntos del mundo (x, y) a píxeles de imagen (u, v)"""
         n_points = xs.shape[0]

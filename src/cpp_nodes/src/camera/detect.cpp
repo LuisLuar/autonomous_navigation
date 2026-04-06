@@ -44,6 +44,18 @@ public:
             load_engine(engine_path);
         }
 
+        class_thresholds_.resize(10, 0.35f);  // Valor por defecto 0.35
+        this->declare_parameter<std::vector<double>>("class_thresholds", std::vector<double>());
+        auto thresholds_param = this->get_parameter("class_thresholds").as_double_array();
+        
+        if (thresholds_param.size() == 10) {
+            for (int i = 0; i < 10; i++) {
+                class_thresholds_[i] = static_cast<float>(thresholds_param[i]);
+            }
+        } else {
+            RCLCPP_WARN(this->get_logger(), "No se cargaron 10 thresholds, usando valores por defecto (0.35)");
+        }
+
         pub_ = create_publisher<custom_interfaces::msg::DetectionArray>("/detection/results", 10);
         sub_ = create_subscription<sensor_msgs::msg::CompressedImage>(
             "/image_raw/compressed", rclcpp::QoS(1).best_effort(),
@@ -60,6 +72,7 @@ public:
     }
 
 private:
+    std::vector<float> class_thresholds_;
     std::vector<TrackedObject> active_tracks_;
     int next_id_ = 1;
     const int MAX_LOST_FRAMES = 8;
@@ -160,7 +173,7 @@ private:
                 float s = output_host_[(4 + c) * num_anchors_ + i];
                 if (s > max_s) { max_s = s; id = c; }
             }
-            if (max_s > conf_threshold_ && id >= 0) {
+            if (id >= 0 && max_s > class_thresholds_[id]) {
                 float cx = output_host_[0*num_anchors_+i], cy = output_host_[1*num_anchors_+i];
                 float w = output_host_[2*num_anchors_+i], h = output_host_[3*num_anchors_+i];
                 

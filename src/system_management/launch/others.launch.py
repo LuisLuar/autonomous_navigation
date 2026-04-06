@@ -21,9 +21,6 @@ def generate_launch_description():
             ]),
             launch_arguments={}.items()
         ), 
-
-       
-        
         
     ])
 
@@ -35,11 +32,7 @@ def generate_launch_description():
             output='screen'
         ),
 
-        Node(
-            package='system_management',
-            executable='esp32_safety',
-            output='screen',
-        ),
+        
 
 
 """

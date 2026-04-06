@@ -32,6 +32,20 @@ class CombinedVisualizerNode(Node):
             8: (0, 128, 255),   #8: speed_bump_signage - Azul claro
             9: (128, 128, 0)    #9: crosswalk_signage - Verde oliva
         }
+
+        self.class_names = {
+            0: "person",
+            1: "bicycle", 
+            2: "car",
+            3: "motorcycle",
+            4: "bus",
+            5: "truck",
+            6: "speed_bump",
+            7: "crosswalk",
+            8: "speed_bump_signage",
+            9: "crosswalk_signage"
+        }
+
         
         # Estado actual
         self.current_image = None
@@ -183,12 +197,28 @@ class CombinedVisualizerNode(Node):
             if self.current_detections is not None:
                 for det in self.current_detections:
                     color = self.class_colors.get(det.class_id, (255, 255, 255))
-                    # Dibujar bounding box
+                    label_class = self.class_names.get(det.class_id, f"class_{det.class_id}")
+                    
+                    # 1. Dibujar el bounding box principal
                     cv2.rectangle(display_image, (det.u1, det.v1), (det.u2, det.v2), color, 2)
-                    # Etiqueta ID
-                    label = f"ID:{det.track_id}"
-                    cv2.putText(display_image, label, (det.u1, det.v1 - 10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                    
+                    # 2. Preparar el texto de la etiqueta
+                    label = f"{label_class}: {det.track_id} || {det.confidence:.2f}%"
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    font_scale = 0.5
+                    thickness = 1 # Grosor del texto (1 suele verse mejor en etiquetas pequeñas)
+
+                    # 3. Calcular el tamaño del texto para el fondo
+                    (w, h), baseline = cv2.getTextSize(label, font, font_scale, thickness)
+                    
+                    # 4. Dibujar el rectángulo relleno (Fondo de la etiqueta)
+                    # El rectángulo va desde la esquina superior izquierda (u1, v1) 
+                    # hacia arriba para no tapar el objeto
+                    cv2.rectangle(display_image, (det.u1, det.v1 - h - baseline - 5), (det.u1 + w, det.v1), color, -1)
+                    
+                    # 5. Dibujar el texto en color NEGRO (0, 0, 0) sobre el recuadro
+                    cv2.putText(display_image, label, (det.u1, det.v1 - 5), 
+                                font, font_scale, (0, 0, 0), thickness, cv2.LINE_AA)
             
             # Publicar imagen visualizada
             viz_msg = self.bridge.cv2_to_imgmsg(display_image, 'bgr8')
@@ -198,23 +228,28 @@ class CombinedVisualizerNode(Node):
             self.get_logger().error(f"Error en visualización: {e}")
 
     def draw_lane_selection_overlay(self, image):
-        """Dibuja overlay de selección de carril"""
+        """Dibuja overlay de selección de carril con blend 50/50 solo en la intersección"""
         if self.current_lane_selection_pixels is None or len(self.current_lane_selection_pixels) < 2:
             return image
+        
         height, width = image.shape[:2]
         points_by_v = defaultdict(list)
+        
         for u, v in self.current_lane_selection_pixels:
             v_int, u_int = int(v), int(u)
             if 0 <= v_int < height:
                 u_clamped = max(0, min(u_int, width - 1))
                 points_by_v[v_int].append(u_clamped)
+        
         if not points_by_v: 
             return image
+        
         sorted_vs = sorted(points_by_v.keys())
         min_v_detected = sorted_vs[0]
         left_side, right_side = [], []
         last_min_u = min(points_by_v[min_v_detected])
         last_max_u = max(points_by_v[min_v_detected])
+        
         for v in range(min_v_detected, height):
             if v in points_by_v:
                 curr_min, curr_max = min(points_by_v[v]), max(points_by_v[v])
@@ -230,8 +265,23 @@ class CombinedVisualizerNode(Node):
                     last_max_u = width - 1
             left_side.append([last_min_u, v])
             right_side.append([last_max_u, v])
+        
         polygon_points = np.array(left_side + right_side[::-1], dtype=np.int32)
-        cv2.fillPoly(image, [polygon_points], (235, 183, 0)) 
+        
+        # Crear máscara binaria
+        mask = np.zeros((height, width), dtype=np.uint8)
+        cv2.fillPoly(mask, [polygon_points], 255)
+        
+        # Crear overlay color
+        overlay = np.full_like(image, (235, 183, 0), dtype=np.uint8)
+        
+        # Blend 50/50 usando operaciones vectorizadas
+        alpha = 0.6
+        mask_3ch = mask[:, :, np.newaxis] / 255.0  # Expandir a 3 canales y normalizar
+        
+        # Aplicar blend solo donde máscara es 1
+        image = (image * (1 - alpha * mask_3ch) + overlay * (alpha * mask_3ch)).astype(np.uint8)
+        
         return image
     
     def draw_pixels(self, image, pixels, color=(255, 255, 0)):

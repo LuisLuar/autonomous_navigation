@@ -6,7 +6,7 @@ class Constants:
     WINDOW_HEIGHT = 1100
 
     # Battery mapping (configurable)
-    BATTERY_12V_MIN = -11.0   # 0%
+    BATTERY_12V_MIN = 11.0   # 0%
     BATTERY_12V_MAX = 13.0   # 100%  (ajustable)
 
     BATTERY_PERCENTAGE_MIN = 20

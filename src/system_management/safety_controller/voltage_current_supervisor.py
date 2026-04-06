@@ -2,13 +2,21 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray, Bool
 from diagnostic_msgs.msg import DiagnosticStatus, KeyValue
-from gui.config.constants import Constants
 import time
 
 class VoltageCurrentSupervisor(Node):
     def __init__(self):
-        super().__init__('supervisor_voltage_current')
-        
+        super().__init__('supervisor_voltage')
+        self.declare_parameter('battery_12v_min', 11.0)
+        self.declare_parameter('battery_12v_max', 13.0)
+        self.declare_parameter('battery_percentage_min', 20.0)
+        self.declare_parameter('battery_percentage_limit', 30.0)
+
+        self.battery_12v_min = self.get_parameter('battery_12v_min').get_parameter_value().double_value
+        self.battery_12v_max = self.get_parameter('battery_12v_max').get_parameter_value().double_value
+        self.battery_percentage_min = self.get_parameter('battery_percentage_min').get_parameter_value().double_value
+        self.battery_percentage_limit = self.get_parameter('battery_percentage_limit').get_parameter_value().double_value
+
         # Suscriptor único para datos de batería
         self.battery_sub = self.create_subscription(
             Float32MultiArray,
@@ -42,8 +50,6 @@ class VoltageCurrentSupervisor(Node):
         
         # Timer para verificación periódica de timeouts
         self.timeout_timer = self.create_timer(2.0, self.check_timeouts)
-        
-        self.get_logger().info("Supervisor de Voltaje/Corriente iniciado")
 
     def initial_status_publish(self):
         """Publica estados iniciales inmediatamente al iniciar el nodo"""
@@ -54,7 +60,6 @@ class VoltageCurrentSupervisor(Node):
             # Marcar que ya se hicieron las publicaciones iniciales
             self.initial_publications_done = True
             self.initial_publish_timer.cancel()
-            self.get_logger().info("Estados iniciales publicados")
 
     def publish_initial_battery_status(self):
         """Publica estado inicial de batería (ESPERANDO DATOS)"""
@@ -85,7 +90,6 @@ class VoltageCurrentSupervisor(Node):
             
             # Solo procesar si es la primera vez o si se recuperó de timeout
             if not self.battery_connected:
-                self.get_logger().info("Batería: Conexión establecida - Primeros datos recibidos")
                 self.battery_connected = True
             
             self.publish_battery_status()
@@ -100,13 +104,13 @@ class VoltageCurrentSupervisor(Node):
         if self.last_battery_time is not None:
             battery_timeout = current_time - self.last_battery_time > self.TIMEOUT_DURATION
             if battery_timeout and self.battery_connected:
-                self.get_logger().error(f"TIMEOUT Batería: Sin datos por {self.TIMEOUT_DURATION}s")
+                #self.get_logger().error(f"TIMEOUT Batería: Sin datos por {self.TIMEOUT_DURATION}s")
                 self.battery_connected = False
                 battery_timed_out = True
         elif self.last_battery_time is None and self.initial_publications_done:
             # Si ya pasó el tiempo inicial y nunca recibió datos
             if not hasattr(self, '_battery_never_received_logged') or not self._battery_never_received_logged:
-                self.get_logger().warn("Batería: Aún no se recibieron datos iniciales")
+                #self.get_logger().warn("Batería: Aún no se recibieron datos iniciales")
                 self._battery_never_received_logged = True
         
         # Publicar estado de error por timeout
@@ -138,17 +142,17 @@ class VoltageCurrentSupervisor(Node):
             
         # Calcular porcentaje de batería 12V
         battery_percentage = max(0, min(100, 
-            (self.current_voltage_12v - Constants.BATTERY_12V_MIN) / 
-            (Constants.BATTERY_12V_MAX - Constants.BATTERY_12V_MIN) * 100
+            (self.current_voltage_12v - self.battery_12v_min) / 
+            (self.battery_12v_max  - self.battery_12v_min) * 100
         ))
         
         battery_status = DiagnosticStatus()
         battery_status.name = "Voltaje de la bateria"
         
-        if battery_percentage < Constants.BATTERY_PERCENTAGE_MIN:
+        if battery_percentage < self.battery_percentage_min:
             battery_status.level = DiagnosticStatus.ERROR
             battery_status.message = f"CRÍTICO: {self.current_voltage_12v:.2f}V ({battery_percentage:.1f}%)"
-        elif battery_percentage < Constants.BATTERY_PERCENTAGE_LIMIT:
+        elif battery_percentage < self.battery_percentage_limit:
             battery_status.level = DiagnosticStatus.WARN
             battery_status.message = f"BAJO: {self.current_voltage_12v:.2f}V ({battery_percentage:.1f}%)"
         else:
@@ -173,12 +177,12 @@ class VoltageCurrentSupervisor(Node):
             
         # Verificación de emergencia por voltaje bajo
         emergency = Bool()
-        emergency.data = self.current_voltage_12v < Constants.BATTERY_12V_MIN
+        emergency.data = self.current_voltage_12v < self.battery_12v_min
         
         self.motors_relay_pub.publish(emergency)
         
-        if emergency.data:
-            self.get_logger().warn(f"EMERGENCIA ACTIVADA: Voltaje bajo {self.current_voltage_12v:.2f}V")
+        #if emergency.data:
+        #    self.get_logger().warn(f"EMERGENCIA ACTIVADA: Voltaje bajo {self.current_voltage_12v:.2f}V")
 
     def create_key_value(self, key: str, value: str) -> KeyValue:
         """Helper function to create KeyValue objects"""

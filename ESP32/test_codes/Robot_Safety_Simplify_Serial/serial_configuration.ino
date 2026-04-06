@@ -4,7 +4,7 @@ void enviarDatos(float V12) {
   char buffer[50];
   snprintf(buffer, sizeof(buffer), "DATA,%.2f,\n", V12);
   Serial.print(buffer);
-  Serial.flush();
+  //Serial.flush();
 }
 
 void recibirDatos() {

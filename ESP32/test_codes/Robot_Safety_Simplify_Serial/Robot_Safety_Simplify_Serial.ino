@@ -1,10 +1,10 @@
                    //______DEFINICION DE GPIO________________________________-
 #define GPIO_VOLTAJE_12V 34
 
-#define GPIO_RELE_STOP 25
-#define GPIO_RELE_LEFT 26//36
-#define GPIO_RELE_RIGHT 27//39
-#define GPIO_RELE_SAFETY 14
+#define GPIO_RELE_STOP 26
+#define GPIO_RELE_LEFT 27
+#define GPIO_RELE_RIGHT 14
+#define GPIO_RELE_SAFETY 25
 #define GPIO_RELE_MOTOR 13
 //___________________________________________
 

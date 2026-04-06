@@ -3,9 +3,6 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    # Rutas a archivos de parámetros (ajusta si es necesario)
-    calibration_file = "/home/raynel/autonomous_navigation/src/perception_stack/params/calibration_front.json"
-
     home_path = os.path.expanduser("~")
     global_params_path = os.path.join(
         home_path, 
@@ -20,6 +17,8 @@ def generate_launch_description():
     yolov11_engine_path = os.path.join(global_params_path, 'detect_yolo_512x288_RTX4060.engine')
     camera_calibration_path = os.path.join(global_params_path, 'camera_calibration.json')
     yolopv2_engine_path = os.path.join(global_params_path, 'yolopv2_lane_288_OMEN_TRT10.engine')
+    class_thresholds_yaml = os.path.join(global_params_path, 'class_thresholds.yaml')  
+
 
     return LaunchDescription([
         # 1. CAMERA NODE (Captura y Redimensión)
@@ -31,7 +30,7 @@ def generate_launch_description():
             output='screen'
         ),
 
-        # 2. SEGMENTER NODE modificado
+                 # 2. SEGMENTER NODE modificado
         Node(
             package='cpp_nodes',
             executable='segmenter_twin_node',
@@ -61,8 +60,9 @@ def generate_launch_description():
             executable='detect_node',
             name='detect_node',
             parameters=[{
-                'engine_path': yolov11_engine_path
-            }],
+                'engine_path': yolov11_engine_path},
+                class_thresholds_yaml
+                ],
             output='screen'
         ),
 
@@ -81,18 +81,20 @@ def generate_launch_description():
             output='screen'
         ),  
 
-          
-
-        
-    ])
-
-"""
         # 7. ESP32 CONTROL NODE (Comunicación con microcontrolador)
         Node(
             package='cpp_nodes',
             executable='esp32_control',
             name='esp32_control',
             output='screen'
-        ),    
+        ),
+
+       
+
         
+    ])
+
+"""
+          
+  
 """
