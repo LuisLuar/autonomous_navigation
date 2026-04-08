@@ -28,17 +28,14 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'rele_combiner = others.rele_combiner_node:main',
             'VC_supervisor =            safety_controller.voltage_current_supervisor:main',
-            'esp32_supervisor =         safety_controller.esp32_supervisor:main',
-            'components_supervisor =    safety_controller.components_supervisor:main',
             'master_supervisor =        safety_controller.master_supervisor:main',
             'camera_supervisor =        safety_controller.camera_supervisor:main',
             'gps_supervisor =           safety_controller.gps_supervisor:main',            
-            'system_health = safety_controller.system_health_laptop:main',
+            'system_health = safety_controller.system_health:main',
             'test_lazo_abierto =    test_code.test_lazo_abierto:main',
             'test_lazo_cerrado =    test_code.gui_lazo_cerrado:main',
-            'bridge_serial_safety =        others.bridge_serial_safety:main',
+            'esp32_safety = others.esp32_safety:main',
         ],
     },
 )

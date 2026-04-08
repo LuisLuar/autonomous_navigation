@@ -3,10 +3,6 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    # Rutas a archivos de parámetros (ajusta si es necesario)
-     # Rutas a archivos de parámetros (ajusta si es necesario)
-    calibration_file = "/home/raynel/autonomous_navigation/src/perception_stack/params/calibration_front.json"
-
     home_path = os.path.expanduser("~")
     global_params_path = os.path.join(
         home_path, 
@@ -19,6 +15,8 @@ def generate_launch_description():
     # Definimos la ruta del engine de TwinLite
     twinlite_engine_path = os.path.join(global_params_path, 'twinlite_FAST_32bit_ORIN.engine')
     yolov11_engine_path = os.path.join(global_params_path, 'detect_yolo_512x288_ORIN.engine')
+    camera_calibration_path = os.path.join(global_params_path, 'camera_calibration_512x288.json')
+    class_thresholds_yaml = os.path.join(global_params_path, 'class_thresholds.yaml')  
 
     return LaunchDescription([
         # 1. CAMERA NODE (Captura y Redimensión)
@@ -41,38 +39,33 @@ def generate_launch_description():
             output='screen'
         ),       
 
-        # 4. IPM NODE (Transformación a Metros / PointCloud2)
+         # 4. IPM NODE segmentation (Transformación a Metros / PointCloud2)
         Node(
             package='cpp_nodes',
             executable='segmenter_to_meter',
-            name='segmenter_to_meter',
+            name='ipm_segmentation',
             parameters=[
                 {'min_distance': 0.0},
-                {'max_distance': 30.0}
+                {'max_distance': 30.0},
+                {'config_path': camera_calibration_path}
             ],
             output='screen'
-        ), 
+        ),  
 
-        # 5. DETECT NODE (YOLOv11n Inferencia)
+         # 5. DETECT NODE (YOLOv11n Inferencia)
         Node(
             package='cpp_nodes',
             executable='detect_node',
             name='detect_node',
             parameters=[{
-                'engine_path': yolov11_engine_path
-            }],
+                'engine_path': yolov11_engine_path},
+                class_thresholds_yaml
+                ],
             output='screen'
         ),
 
-        # 5. ESP32 CONTROL NODE (Comunicación con microcontrolador)
-        Node(
-            package='cpp_nodes',
-            executable='esp32_control',
-            name='esp32_control',
-            output='screen'
-        ), 
-
-        # 6. IPM NODE object (Transformación a Metros / PointCloud2)
+        
+         # 6. IPM NODE object (Transformación a Metros / PointCloud2)
         Node(
             package='cpp_nodes',
             executable='object_to_meter',
@@ -80,15 +73,20 @@ def generate_launch_description():
             parameters=[
                 {'min_distance': 0.0},
                 {'max_distance': 10.0},
-                {'config_path': global_params_path},
+                {'config_path': camera_calibration_path},
                 speed_yaml    # La ruta del archivo va sola en la lista
             ],
             output='screen'
+        ),  
+
+        # 7. ESP32 CONTROL NODE (Comunicación con microcontrolador)
+        Node(
+            package='cpp_nodes',
+            executable='esp32_control',
+            name='esp32_control',
+            output='screen'
         ), 
 
-        
-
-        
     ])
 
 """          

@@ -2,7 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import CompressedImage  # CAMBIADO: de Image a CompressedImage
+from sensor_msgs.msg import Image  
 from std_msgs.msg import Bool
 import cv2
 from cv_bridge import CvBridge
@@ -21,7 +21,7 @@ class ImageCaptureNode(Node):
         super().__init__('image_capture_node')
         
         # Configuración - CAMBIA ESTA RUTA SEGÚN TUS NECESIDADES
-        self.save_directory = "/home/robot/Documents/calibrate_camera"  # ← CAMBIA ESTA RUTA
+        self.save_directory = "/home/robot/Documents/camera_capture"  
         
         # Crear directorio si no existe
         os.makedirs(self.save_directory, exist_ok=True)
@@ -33,20 +33,13 @@ class ImageCaptureNode(Node):
         self.latest_image = None
         self.image_lock = threading.Lock()
         
-        # QoS Best Effort para la imagen comprimida (como en tu código que funciona)
-        best_effort_qos = rclpy.qos.QoSProfile(
+        # --- SUSCRIPCIONES (QoS adaptado a Orin Nano) ---
+        qos = rclpy.qos.QoSProfile(
             reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
-            durability=rclpy.qos.DurabilityPolicy.VOLATILE,
             depth=1
         )
         
-        # Subscriptores - CAMBIADO: ahora usa CompressedImage
-        self.image_sub = self.create_subscription(
-            CompressedImage,  # CAMBIADO
-            '/image_raw/compressed',  # CAMBIADO
-            self.image_callback,
-            best_effort_qos  # QoS Best Effort
-        )
+        self.create_subscription(Image, '/image_raw', self.image_callback, qos)
         
         self.capture_sub = self.create_subscription(
             Bool,
@@ -97,9 +90,7 @@ class ImageCaptureNode(Node):
     def image_callback(self, msg):
         """Callback para recibir imágenes COMPRIMIDAS de la cámara"""
         try:
-            # CAMBIADO: Decodificar imagen comprimida
-            np_arr = np.frombuffer(msg.data, np.uint8)
-            image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             
             with self.image_lock:
                 self.latest_image = image

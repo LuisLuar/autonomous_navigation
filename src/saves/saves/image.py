@@ -76,9 +76,6 @@ class DataReplayerManual(Node):
             self.get_logger().warning(f'⚠️ Error al leer: {img_path}')
             return
 
-        # Redimensionar a la resolución que espera el Segmentador y la Cámara Real (640x360)
-        cv_image = cv2.resize(cv_image, (640, 360), interpolation=cv2.INTER_LINEAR)
-
         # 1. Visualización Local (UI)
         display_img = cv_image.copy()
         info_text = f"Frame: {self.current_image_index + 1}/{len(self.image_paths)}"

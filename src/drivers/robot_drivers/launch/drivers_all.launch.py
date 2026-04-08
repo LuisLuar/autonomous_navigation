@@ -24,16 +24,13 @@ def generate_launch_description():
             executable='webrtc_streamer',
             output='screen',
             name='webrtc_streamer'
-        ),  
-
-        
-
-        
-
+        ),      
                         
     ])
 
 """
+        
+
         # Lanzar nodo cámara con reconexión
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([

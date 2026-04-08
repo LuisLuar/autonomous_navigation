@@ -51,8 +51,7 @@ class LaneTrackerEKF(Node):
         self.create_subscription(LaneModel, '/lane/model_raw', self.cb_lane_measurement, 10)
 
         self.pub_filtered = self.create_publisher(LaneModel, '/lane/model_filtered', 10)
-        self.pub_centerline_pc = self.create_publisher(PointCloud2,'/lane/centerline_pc',10)
-
+        
         self.timer = self.create_timer(0.033, self.predict_step)
 
     # ==========================================================
@@ -202,47 +201,20 @@ class LaneTrackerEKF(Node):
         m.confidence = 1.0
 
         self.pub_filtered.publish(m)
-        self.publish_centerline_pointcloud()
 
-    def publish_centerline_pointcloud(self):
-
-        header = Header()
-        header.stamp = self.get_clock().now().to_msg()
-        header.frame_id = "base_footprint"
-
-        d_lat, yaw, kappa = self.x[0,0], self.x[1,0], self.x[2,0]
-
-        xs = np.linspace(0.0, 40.0, 30)
-        points = []
-
-        fields = [
-            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
-            PointField(name='rgb', offset=12, datatype=PointField.UINT32, count=1),
-        ]
-
-        rgb = struct.unpack('I', struct.pack('BBBB', 0, 255, 0, 255))[0]
-
-        for x in xs:
-            y = d_lat + math.tan(yaw)*x + 0.5*kappa*x**2
-            points.append([float(x), float(y), 0.0, rgb])
-
-        self.pub_centerline_pc.publish(
-            point_cloud2.create_cloud(header, fields, points)
-        )
-
-
-def main():
-    rclpy.init()
+def main(args=None):
+    rclpy.init(args=args)
     node = LaneTrackerEKF()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            node.destroy_node()
+            rclpy.shutdown()
+        except:
+            pass
 
 
 if __name__ == '__main__':

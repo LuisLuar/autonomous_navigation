@@ -23,7 +23,7 @@ public:
             "jpegparse ! "
             "nvv4l2decoder mjpeg=1 ! "
             "nvvidconv ! "
-            "video/x-raw,width=640,height=360,format=BGRx ! "
+            "video/x-raw,width=512,height=288,format=BGRx ! "
             "videoconvert ! "
             "video/x-raw,format=BGR ! "
             "appsink drop=true max-buffers=1 sync=false";
@@ -35,7 +35,7 @@ public:
             return;
         }
 
-        setup_undistortion("/home/robot/autonomous_navigation/src/perception_stack/params/camera_calibration.json");
+        setup_undistortion("/home/robot/autonomous_navigation/src/params/camera_calibration_512x288.json");
 
         capture_thread_ = std::thread([this]() {
             cv::Mat frame;
@@ -84,14 +84,14 @@ private:
             calib["distortion"]["p2"],
             calib["distortion"]["k3"]);
 
-        cv::Size size(640, 360);
+        cv::Size size(512,288);
         cv::Mat newK = cv::getOptimalNewCameraMatrix(K, D, size, 0);
 
         cv::initUndistortRectifyMap(
             K, D, cv::Mat(), newK, size,
             CV_32FC1, map1_, map2_);
 
-        use_undistortion_ = true;
+        use_undistortion_ = false;
     }
 
     void process_and_publish(const cv::Mat& frame)

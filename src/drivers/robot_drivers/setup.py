@@ -31,7 +31,6 @@ setup(
             'camera = robot_drivers.camera_reconnect:main',
             'websocket_bridge = robot_drivers.websocket_bridge:main',
             'webrtc_streamer = robot_drivers.webrtc_streamer:main',            
-            'image_folder = robot_drivers.image_folder:main', 
         ],
     },
 )

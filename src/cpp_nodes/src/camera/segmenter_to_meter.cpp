@@ -15,7 +15,9 @@ class PixelToMeterNode : public rclcpp::Node {
 public:
     PixelToMeterNode() : Node("pixel_to_meter_transform") {        
         // Cargar calibración completa
-        load_calibration("/home/robot/autonomous_navigation/src/perception_stack/params/camera_calibration.json");
+        this->declare_parameter("config_path", "");
+        std::string config_path = this->get_parameter("config_path").as_string();
+        load_calibration(config_path);
 
         this->declare_parameter("min_distance", 1.0);
         this->declare_parameter("max_distance", 50.0);
@@ -31,7 +33,7 @@ public:
 
         pub_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/lane/meter_candidates", 10);
 
-        RCLCPP_INFO(this->get_logger(), "IPM Matricial Iniciado");
+        //RCLCPP_INFO(this->get_logger(), "IPM Matricial Iniciado");
     }
 
 private:
@@ -93,9 +95,9 @@ private:
     }
 
     void process_callback(const custom_interfaces::msg::PixelPoint::SharedPtr msg) {
-        if (msg->u.size() == 0) return;
+        if (msg->u.empty()) return;
 
-        auto cloud_msg = std::make_unique<sensor_msgs::msg::PointCloud2>();
+        auto cloud_msg = std::make_shared<sensor_msgs::msg::PointCloud2>();
         cloud_msg->header = msg->header;
         cloud_msg->header.frame_id = "base_footprint";
         
@@ -107,22 +109,20 @@ private:
         sensor_msgs::PointCloud2Iterator<float> iter_y(*cloud_msg, "y");
         sensor_msgs::PointCloud2Iterator<float> iter_z(*cloud_msg, "z");
 
-        size_t valid_count = 0; // DECLARACIÓN NECESARIA
+        size_t valid_count = 0;
 
         for (size_t i = 0; i < msg->u.size(); ++i) {
-            Eigen::Vector3d pixel(static_cast<double>(msg->u[i]), 
-                                  static_cast<double>(msg->v[i]), 1.0);
+            Eigen::Vector3d pixel(msg->u[i], msg->v[i], 1.0);
             
-            // Proyección al suelo: P_mundo = H_inv * P_pixel
+            // Suelo = H * Píxel
             Eigen::Vector3d ground_points = homography_matrix_ * pixel;
 
-            // Normalizar coordenadas homogéneas (W)
+            // Normalizar coordenadas homogéneas (dividir por W)
             if (std::abs(ground_points.z()) < 1e-6) continue;
             
             double xw = ground_points.x() / ground_points.z();
             double yw = ground_points.y() / ground_points.z();
             
-            // Filtrar por rango de distancia
             if (xw >= min_dist_ && xw <= max_dist_) {
                 *iter_x = static_cast<float>(xw);
                 *iter_y = static_cast<float>(yw);
@@ -134,8 +134,8 @@ private:
         }
 
         if (valid_count > 0) {
-            modifier.resize(valid_count); // Ajustar al tamaño real de puntos válidos
-            pub_cloud_->publish(std::move(cloud_msg)); // Usar move para máxima eficiencia
+            modifier.resize(valid_count);
+            pub_cloud_->publish(*cloud_msg);
         }
     }
 

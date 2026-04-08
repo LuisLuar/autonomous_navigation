@@ -25,7 +25,7 @@ public:
           serial_(io_),
           work_guard_(boost::asio::make_work_guard(io_))
     {
-        this->declare_parameter("port", "/dev/ttyUSB0");
+        this->declare_parameter("port", "/dev/ttyESP32Control");
         this->declare_parameter("baud", 230400);
         this->declare_parameter("frame_id", "base_footprint");
 
@@ -148,7 +148,7 @@ private:
                     msg_rcv_count_++;
                     last_rx_time_ = this->now();
 
-                    // 🔥 Reiniciar watchdog al recibir datos
+                    //  Reiniciar watchdog al recibir datos
                     start_watchdog();
                 }
 

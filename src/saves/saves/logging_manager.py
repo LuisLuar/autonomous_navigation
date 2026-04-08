@@ -48,14 +48,14 @@ class LoggingManager(Node):
         self.logging_path_pub = self.create_publisher(String, '/current_log_path', 10)
         
         # Subscribers
-        self.create_subscription(Bool, '/lid_closed', self.lid_closed_callback, 10)
+        self.create_subscription(Bool, '/record', self.lid_closed_callback, 10)
         self.create_subscription(Bool, '/active/osm', self.active_osm_callback, 10)
         self.create_subscription(Bool, '/goal_reached', self.goal_reached_callback, 10)
         
         # Timer para chequeo periódico
         self.timer = self.create_timer(0.1, self.check_conditions)  # 10 Hz
         
-        ##self.get_logger().info(f'Logging Manager inicializado. Directorio base: {self.base_log_dir}')
+        #self.get_logger().info(f'Logging Manager inicializado. Directorio base: {self.base_log_dir}')
         #self.get_logger().info('Esperando condiciones para iniciar logging...')
         
     def _get_next_route_number(self):
@@ -93,24 +93,15 @@ class LoggingManager(Node):
         if not self.enable_auto_naming and self.manual_route_name:
             base_name = self.manual_route_name
         else:
-            base_name = f"{self.log_prefix}{self.route_counter}"
-        
-        # Agregar timestamp para unicidad
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        # Verificar si ya existe y agregar sufijo si es necesario
-        candidate_name = f"{base_name}_{timestamp}"
-        full_path = self.base_log_dir / candidate_name
-        
-        counter = 1
-        while full_path.exists():
-            candidate_name = f"{base_name}_{timestamp}_{counter}"
-            full_path = self.base_log_dir / candidate_name
-            counter += 1
-            if counter > 100:  # Límite de seguridad
-                raise RuntimeError("No se pudo generar nombre único para la carpeta")
-        
-        return candidate_name
+            # Simplemente devolver el siguiente número disponible
+            while True:
+                candidate_name = f"{self.log_prefix}{self.route_counter}"
+                full_path = self.base_log_dir / candidate_name
+                
+                if not full_path.exists():
+                    return candidate_name
+                else:
+                    self.route_counter += 1
     
     def _create_log_directory(self, route_name):
         """Crea la carpeta de logging con subcarpetas si es necesario"""
@@ -147,9 +138,9 @@ class LoggingManager(Node):
         # Detectar transición de False a True
         if not self.previous_lid_closed and new_value:
             self.lid_closed_transition = True
-            #self.get_logger().info('📈 Transición detectada: lid_closed False -> True')
+            #self.get_logger().info(' Transición detectada: lid_closed False -> True')
         elif self.previous_lid_closed and not new_value:
-            #self.get_logger().info('📉 Transición detectada: lid_closed True -> False')
+            #self.get_logger().info(' Transición detectada: lid_closed True -> False')
             pass
         
         # Actualizar estados
@@ -270,11 +261,6 @@ class LoggingManager(Node):
         
         # Lógica de transición de estados
         if start_condition:
-            #self.get_logger().info('🚀 Condiciones de inicio cumplidas:')
-            #self.get_logger().info(f'   - Transición lid_closed F->T: {self.lid_closed_transition}')
-            #self.get_logger().info(f'   - active_osm: {self.active_osm}')
-            #self.get_logger().info(f'   - lid_closed actual: {self.lid_closed}')
-            #self.get_logger().info('Iniciando logging...')
             self.start_logging()
             
         elif self.is_logging and stop_condition:
@@ -286,7 +272,7 @@ class LoggingManager(Node):
             if self.goal_reached:
                 reason.append('goal_reached=True')
             
-            #self.get_logger().info(f'🛑 Condición de parada detectada: {", ".join(reason)}')
+
             self.stop_logging()
     
     def destroy_node(self):

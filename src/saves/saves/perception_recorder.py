@@ -2,7 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
-from sensor_msgs.msg import CompressedImage
+from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from pathlib import Path
 import csv
@@ -16,7 +16,7 @@ class PerceptionRecorder(Node):
         super().__init__('perception_recorder')
         
         # Parámetro de muestreo
-        self.declare_parameter('save_every_n', 3)
+        self.declare_parameter('save_every_n', 30)
         
         # Estado
         self.is_recording = False
@@ -27,20 +27,13 @@ class PerceptionRecorder(Node):
         # Bridge
         self.bridge = CvBridge()
         
-        # QoS Best Effort para la imagen
-        best_effort_qos = rclpy.qos.QoSProfile(
+        # --- SUSCRIPCIONES (QoS adaptado a Orin Nano) ---
+        qos = rclpy.qos.QoSProfile(
             reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
-            durability=rclpy.qos.DurabilityPolicy.VOLATILE,
             depth=1
         )
         
-        # ÚNICA SUSCRIPCIÓN: Procesa y guarda directamente cuando llega la imagen
-        self.create_subscription(
-            CompressedImage, 
-            '/image_raw/compressed', 
-            self.image_callback, 
-            best_effort_qos
-        )
+        self.create_subscription(Image, '/image_raw', self.image_callback, qos)
         
         # Señales del manager
         self.create_subscription(Bool, '/logging_enabled', self.recording_enabled_cb, 10)
@@ -51,23 +44,23 @@ class PerceptionRecorder(Node):
         self.csv_writer = None
         self.current_session_dir = None
         
-        self.get_logger().info('PerceptionRecorder iniciado - Modo SIMPLE: guarda al llegar')
+        #self.get_logger().info('PerceptionRecorder iniciado - Modo SIMPLE: guarda al llegar')
 
     def recording_enabled_cb(self, msg):
         if msg.data != self.is_recording:
             self.is_recording = msg.data
             if self.is_recording:
-                self.get_logger().info('Grabación HABILITADA')
+                #self.get_logger().info('Grabación HABILITADA')
                 if self.current_log_path:
                     self._start_recording()
             else:
-                self.get_logger().info('Grabación DESHABILITADA')
+                #self.get_logger().info('Grabación DESHABILITADA')
                 self._stop_recording()
 
     def log_path_cb(self, msg):
         if msg.data != self.current_log_path:
             self.current_log_path = msg.data
-            self.get_logger().info(f'Ruta recibida: {self.current_log_path}')
+            #self.get_logger().info(f'Ruta recibida: {self.current_log_path}')
             if self.is_recording and not self.current_session_dir:
                 self._start_recording()
 
@@ -84,10 +77,8 @@ class PerceptionRecorder(Node):
             save_every_n = self.get_parameter('save_every_n').value
             if self.frame_count % save_every_n != 0:
                 return
-            
-            # Descomprimir imagen AHORA MISMO
-            np_arr = np.frombuffer(msg.data, np.uint8)
-            image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+            image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
             
             if image is None:
                 self.get_logger().error('Imagen decodificada es None')
@@ -109,10 +100,6 @@ class PerceptionRecorder(Node):
                 self.csv_writer.writerow(row)
                 self.csv_file.flush()
             
-            # Log cada 100 frames
-            if self.saved_frames % 100 == 0:
-                self.get_logger().info(f'✅ Guardadas: {self.saved_frames} imágenes')
-                
         except Exception as e:
             self.get_logger().error(f'Error: {e}')
 
@@ -140,16 +127,16 @@ class PerceptionRecorder(Node):
             self.frame_count = 0
             self.saved_frames = 0
             
-            self.get_logger().info(f'📁 Grabando en: {self.current_session_dir}')
+            #self.get_logger().info(f' Grabando en: {self.current_session_dir}')
             
         except Exception as e:
             self.get_logger().error(f'Error iniciando: {e}')
 
     def _stop_recording(self):
-        self.get_logger().info('Deteniendo grabación...')
+        #self.get_logger().info('Deteniendo grabación...')
         
         if self.saved_frames > 0:
-            self.get_logger().info(f'✅ Total guardadas: {self.saved_frames} imágenes')
+            #self.get_logger().info(f' Total guardadas: {self.saved_frames} imágenes')
             
             # Resumen simple
             try:
@@ -157,7 +144,7 @@ class PerceptionRecorder(Node):
                 with open(summary_path, 'w') as f:
                     f.write(f"Total imágenes: {self.saved_frames}\n")
                     f.write(f"Fecha: {datetime.now()}\n")
-                self.get_logger().info(f'📊 Resumen: {summary_path}')
+                #self.get_logger().info(f' Resumen: {summary_path}')
             except:
                 pass
         

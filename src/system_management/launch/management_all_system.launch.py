@@ -9,6 +9,18 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     return LaunchDescription([
 
+        # Lanzar camara - gps -lidar - websockets
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('robot_drivers'),
+                    'launch',
+                    'drivers_all.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
+
         # Lanzar URDF y TF
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -16,6 +28,42 @@ def generate_launch_description():
                     FindPackageShare('robot_description'),
                     'launch',
                     'robot_state_publisher.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
+
+        # Lanzar el filtro EKF
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('filter_ekf'),
+                    'launch',
+                    'dual_ekf_navsat.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
+
+        # Lanza los nodos de navegación
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('navigation_system'),
+                    'launch',
+                    'navigation.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),
+
+         # Lanza los nodos de safety
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('system_management'),
+                    'launch',
+                    'status.launch.py'
                 ])
             ]),
             launch_arguments={}.items()
@@ -44,6 +92,20 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
 
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('saves'),
+                    'launch',
+                    'saves.launch.py'
+                ])
+            ]),
+            launch_arguments={}.items()
+        ),   
+        
+    ])
+
+"""      
         # Lanza los nodos de GUI y rele combiner y rviz
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
@@ -54,43 +116,7 @@ def generate_launch_description():
                 ])
             ]),
             launch_arguments={}.items()
-        ), 
-
-        # Lanza los nodos de navegación
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('navigation_system'),
-                    'launch',
-                    'navigation.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ),
-
-        
-        
-        
-    ])
-
-"""      
-        # Lanzar el filtro EKF
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('filter_ekf'),
-                    'launch',
-                    'dual_ekf_navsat.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ),
-
-        
-
-        
-
-        
+        ),         
 
         # Lanzar - websockets
         IncludeLaunchDescription(
@@ -104,29 +130,9 @@ def generate_launch_description():
             launch_arguments={}.items()
         ),
 
-        # Lanza los nodos de safety
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('system_management'),
-                    'launch',
-                    'status.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ),
 
-        # Lanzar nodo para guardar datos
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                PathJoinSubstitution([
-                    FindPackageShare('saves'),
-                    'launch',
-                    'saves.launch.py'
-                ])
-            ]),
-            launch_arguments={}.items()
-        ), 
+
+        
 
         # Lanzar comunicacion dual con micro-ros y serial
         IncludeLaunchDescription(
